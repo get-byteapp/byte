@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Byte",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "com.byte.app",
   "build": {
     "frontendDist": "../dist",
@@ -44,7 +44,7 @@
         "https://github.com/usebyte/byte/releases/latest/download/update.json"
       ],
       "dialog": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU4QkIyNzg3NDY0QjlFOUYKUldTZm5rdEdoeWU3V0NMRFA3SE8zcjFqNWtIN0hCdFdCRVhSUE5LdnM3TTRydTdSOWVSNEJZcm4K"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdDRDBDNkZGODIwNjlCMDAKUldRQW13YUMvOGJRZkIzay9TbTJWT0h2TlZqaHVlalR5dDZiRklLUzBiNGtOTFpnSE5URTVPOEcK"
     }
   }
 }

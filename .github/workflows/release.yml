@@ -2,7 +2,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   build:
@@ -14,26 +14,27 @@ jobs:
             target: aarch64-apple-darwin
             bundle: Byte_aarch64.dmg
             bundle-path: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            updater-id: darwin-aarch64
 
           - platform: macos-13
             target: x86_64-apple-darwin
             bundle: Byte_x64.dmg
             bundle-path: src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+            updater-id: darwin-x86_64
 
           - platform: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             bundle: byte_amd64.AppImage
             bundle-path: src-tauri/target/release/bundle/appimage/*.AppImage
+            updater-id: linux-x86_64
 
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             bundle: Byte_x64.msi
             bundle-path: src-tauri/target/release/bundle/msi/*.msi
+            updater-id: windows-x86_64
 
     runs-on: ${{ matrix.platform }}
-    outputs:
-      ${{ matrix.target }}-sig: ${{ steps.signature.outputs.sig }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -63,31 +64,78 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      - name: Rename bundle
+      - name: Capture Artifacts
+        shell: bash
         run: |
           mkdir -p artifacts
-          cp ${{ matrix.bundle-path }} artifacts/${{ matrix.bundle }}
 
-      - name: Upload bundle to release
+          # Copy main installer
+          INSTALLER=$(ls ${{ matrix.bundle-path }} | head -n 1)
+          cp "$INSTALLER" "artifacts/${{ matrix.bundle }}"
+
+          # Find updater bundle and signature
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            UPDATER_SRC=$(ls src-tauri/target/release/bundle/msi/*.msi.zip | head -n 1)
+            UPDATER_NAME="Byte_x64.msi.zip"
+          elif [[ "${{ matrix.platform }}" == "ubuntu-latest" ]]; then
+            UPDATER_SRC=$(ls src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz | head -n 1)
+            UPDATER_NAME="byte_amd64.AppImage.tar.gz"
+          else
+            UPDATER_SRC=$(ls src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz | head -n 1)
+            UPDATER_NAME="Byte_${{ matrix.target }}.app.tar.gz"
+          fi
+
+          if [ -f "$UPDATER_SRC" ]; then
+            cp "$UPDATER_SRC" "artifacts/$UPDATER_NAME"
+            if [ -f "$UPDATER_SRC.sig" ]; then
+              cp "$UPDATER_SRC.sig" "artifacts/$UPDATER_NAME.sig"
+              # Also save sig for the manifest job
+              echo "$(cat $UPDATER_SRC.sig)" > "artifacts/${{ matrix.updater-id }}.sig.txt"
+            fi
+          fi
+
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/${{ matrix.bundle }}
+          files: artifacts/*
 
-      - name: Upload signature to release
-        uses: softprops/action-gh-release@v2
+      - name: Upload Signatures for Manifest
+        uses: actions/upload-artifact@v4
         with:
-          files: artifacts/${{ matrix.bundle }}.sig
+          name: sigs-${{ matrix.updater-id }}
+          path: artifacts/*.sig.txt
 
   update-manifest:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Download all signatures
+        uses: actions/download-artifact@v4
+        with:
+          path: sigs
+          pattern: sigs-*
+          merge-multiple: true
+
       - name: Create update manifest
+        shell: bash
         run: |
           TAG=${GITHUB_REF_NAME}
           VERSION=${TAG#v}
           DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           BASE="https://github.com/${{ github.repository }}/releases/download/$TAG"
+
+          get_sig() {
+            if [ -f "sigs/$1.sig.txt" ]; then
+              cat "sigs/$1.sig.txt"
+            else
+              echo ""
+            fi
+          }
+
+          SIG_WIN=$(get_sig "windows-x86_64")
+          SIG_LINUX=$(get_sig "linux-x86_64")
+          SIG_MAC_ARM=$(get_sig "darwin-aarch64")
+          SIG_MAC_X64=$(get_sig "darwin-x86_64")
 
           cat <<MANIFEST > update.json
           {
@@ -95,27 +143,27 @@ jobs:
             "notes": "https://github.com/${{ github.repository }}/releases/tag/$TAG",
             "pub_date": "$DATE",
             "platforms": {
-              "darwin-aarch64": {
-                "signature": "",
-                "url": "$BASE/Byte_aarch64.dmg"
-              },
-              "darwin-x86_64": {
-                "signature": "",
-                "url": "$BASE/Byte_x64.dmg"
+              "windows-x86_64": {
+                "signature": "$SIG_WIN",
+                "url": "$BASE/Byte_x64.msi.zip"
               },
               "linux-x86_64": {
-                "signature": "",
+                "signature": "$SIG_LINUX",
                 "url": "$BASE/byte_amd64.AppImage.tar.gz"
               },
-              "windows-x86_64": {
-                "signature": "",
-                "url": "$BASE/Byte_x64.msi.zip"
+              "darwin-aarch64": {
+                "signature": "$SIG_MAC_ARM",
+                "url": "$BASE/Byte_aarch64-apple-darwin.app.tar.gz"
+              },
+              "darwin-x86_64": {
+                "signature": "$SIG_MAC_X64",
+                "url": "$BASE/Byte_x86_64-apple-darwin.app.tar.gz"
               }
             }
           }
           MANIFEST
 
-      - name: Upload update manifest to release
+      - name: Upload manifest to Release
         uses: softprops/action-gh-release@v2
         with:
           files: update.json
