@@ -49,6 +49,7 @@ export function ChatMenu({ onStar, onRename, onDelete, isSaved }: ChatMenuProps)
             <Pencil size={13} />
             <span>Rename</span>
           </button>
+          <div className="chat-menu-divider" />
           <button
             className="chat-menu-item chat-menu-item-danger"
             onClick={(e) => { e.stopPropagation(); onDelete(); setOpen(false) }}

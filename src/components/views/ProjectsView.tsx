@@ -600,6 +600,7 @@ export function ProjectsView() {
               <Edit2 size={13} />
               <span>Edit</span>
             </button>
+            <div className="chat-menu-divider" />
             {project.status === 'active' ? (
               <button
                 className="chat-menu-item"
