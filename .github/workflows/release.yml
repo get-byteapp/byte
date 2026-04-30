@@ -28,13 +28,13 @@ jobs:
           - platform: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             bundle: byte_amd64.AppImage
-            bundle-path: src-tauri/target/release/bundle/appimage/*.AppImage
+            bundle-path: src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
             updater-id: linux-x86_64
 
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             bundle: Byte_x64.msi
-            bundle-path: src-tauri/target/release/bundle/msi/*.msi
+            bundle-path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
             updater-id: windows-x86_64
 
     runs-on: ${{ matrix.platform }}
@@ -73,15 +73,18 @@ jobs:
           mkdir -p artifacts
 
           # Copy main installer
-          INSTALLER=$(ls ${{ matrix.bundle-path }} | head -n 1)
-          cp "$INSTALLER" "artifacts/${{ matrix.bundle }}"
+          INSTALLER=$(ls ${{ matrix.bundle-path }} 2>/dev/null | head -n 1) || true
+          if [ -n "$INSTALLER" ]; then
+            cp "$INSTALLER" "artifacts/${{ matrix.bundle }}"
+          fi
 
           # Find updater bundle and signature
+          BUNDLE_DIR="src-tauri/target/${{ matrix.target }}/release/bundle"
           if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
-            UPDATER_SRC=$(ls src-tauri/target/release/bundle/msi/*.msi.zip 2>/dev/null | head -n 1) || true
+            UPDATER_SRC=$(ls "$BUNDLE_DIR/msi/"*.msi.zip 2>/dev/null | head -n 1) || true
             UPDATER_NAME="Byte_x64.msi.zip"
           elif [[ "${{ matrix.platform }}" == "ubuntu-latest" ]]; then
-            UPDATER_SRC=$(ls src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz 2>/dev/null | head -n 1) || true
+            UPDATER_SRC=$(ls "$BUNDLE_DIR/appimage/"*.AppImage.tar.gz 2>/dev/null | head -n 1) || true
             UPDATER_NAME="byte_amd64.AppImage.tar.gz"
           else
             APP_BUNDLE_DIR="src-tauri/target/${{ matrix.target }}/release/bundle/macos"
