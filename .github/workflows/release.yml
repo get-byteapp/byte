@@ -35,6 +35,9 @@ jobs:
             updater-id: windows-x86_64
 
     runs-on: ${{ matrix.platform }}
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -60,9 +63,6 @@ jobs:
 
       - name: Build
         run: npm run tauri build -- --target ${{ matrix.target }}
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Capture Artifacts
         shell: bash
@@ -81,8 +81,25 @@ jobs:
             UPDATER_SRC=$(ls src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz | head -n 1)
             UPDATER_NAME="byte_amd64.AppImage.tar.gz"
           else
-            UPDATER_SRC=$(ls src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz | head -n 1)
+            APP_BUNDLE_DIR="src-tauri/target/${{ matrix.target }}/release/bundle/macos"
+            UPDATER_SRC=$(ls "$APP_BUNDLE_DIR"/*.app.tar.gz 2>/dev/null | head -n 1)
             UPDATER_NAME="Byte_${{ matrix.target }}.app.tar.gz"
+
+            # Tauri 2 may not auto-generate .app.tar.gz for updater; create it if missing
+            if [ -z "$UPDATER_SRC" ]; then
+              BUNDLE_APP=$(ls -d "$APP_BUNDLE_DIR"/*.app 2>/dev/null | head -n 1)
+              if [ -n "$BUNDLE_APP" ]; then
+                echo "No .app.tar.gz found. Creating $UPDATER_NAME..."
+                tar czf "$APP_BUNDLE_DIR/$UPDATER_NAME" -C "$APP_BUNDLE_DIR" "$(basename "$BUNDLE_APP")"
+                UPDATER_SRC="$APP_BUNDLE_DIR/$UPDATER_NAME"
+              fi
+            fi
+
+            # Sign the updater archive if no .sig file exists yet
+            if [ -f "$UPDATER_SRC" ] && [ ! -f "$UPDATER_SRC.sig" ] && [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+              echo "Signing updater archive..."
+              npx tauri signer sign "$UPDATER_SRC" > "$UPDATER_SRC.sig"
+            fi
           fi
 
           if [ -f "$UPDATER_SRC" ]; then
