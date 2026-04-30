@@ -128,6 +128,11 @@ jobs:
             fi
           fi
 
+          # Save DMG checksum for Homebrew formula
+          if [ -f "$INSTALLER" ]; then
+            shasum -a 256 "$INSTALLER" | awk '{print $1}' > "artifacts/${{ matrix.updater-id }}.dmg.sha256"
+          fi
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
@@ -137,7 +142,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sigs-${{ matrix.updater-id }}
-          path: artifacts/*.sig.txt
+          path: |
+            artifacts/*.sig.txt
+            artifacts/*.sha256
 
   update-manifest:
     needs: build
@@ -199,8 +206,61 @@ jobs:
           }
           MANIFEST
 
+      - name: Create Homebrew formula
+        shell: bash
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          VERSION=${TAG#v}
+          BASE="https://github.com/${{ github.repository }}/releases/download/$TAG"
+
+          ARM_SHA=$(cat "sigs/darwin-aarch64.dmg.sha256" 2>/dev/null || echo "")
+          INTEL_SHA=$(cat "sigs/darwin-x86_64.dmg.sha256" 2>/dev/null || echo "")
+
+          if [ -n "$ARM_SHA" ]; then
+            python3 -c "
+version = '$VERSION'
+arm_sha = '$ARM_SHA'
+intel_sha = '${INTEL_SHA:-$ARM_SHA}'
+base = '$BASE'
+
+formula = f'''cask \"byte\" do
+  version \"{version}\"
+
+  if Hardware::CPU.arm?
+    sha256 \"{arm_sha}\"
+    url \"{base}/Byte_aarch64.dmg\"
+  else
+    sha256 \"{intel_sha}\"
+    url \"{base}/Byte_x64.dmg\"
+  end
+
+  name \"Byte\"
+  desc \"AI assistant for your desktop\"
+  homepage \"https://github.com/${{ github.repository }}\"
+
+  livecheck do
+    url :url
+    strategy :github_latest
+  end
+
+  auto_updates true
+
+  app \"Byte.app\"
+end
+'''
+
+with open('byte.rb', 'w') as f:
+    f.write(formula.lstrip())
+"
+            echo "Homebrew formula created"
+          else
+            echo "No ARM DMG checksum found, skipping Homebrew formula"
+          fi
+
       - name: Upload manifest to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: update.json
+          files: |
+            update.json
+            byte.rb
           generate_release_notes: true
