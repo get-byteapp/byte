@@ -101,13 +101,10 @@ jobs:
             echo "⚠️ APPLE_DEV_CERT or APPLE_DEV_CERT_PASSWORD not set, skipping sign"
           fi
 
-      - name: Sign macOS app and rebuild DMG
+      - name: Fix macOS app signature
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          KEYCHAIN_PATH=$RUNNER_TEMP/byte-signing.keychain-db
-          KEYCHAIN_PASSWORD=temp
-          DEV_CERT="Apple Development: saini.arnav@gmail.com (9862V38967)"
           APP_BUNDLE="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Byte.app"
           DMG_DIR="src-tauri/target/${{ matrix.target }}/release/bundle/dmg"
           OLD_DMG=$(ls "$DMG_DIR/"*.dmg 2>/dev/null | head -n 1) || true
@@ -115,32 +112,16 @@ jobs:
           if [ -d "$APP_BUNDLE" ]; then
             codesign --remove-signature "$APP_BUNDLE" 2>/dev/null || true
 
-            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" 2>/dev/null || true
-            security default-keychain -s "$KEYCHAIN_PATH" 2>/dev/null || true
-
-            if codesign --force --deep --sign "$DEV_CERT" --keychain "$KEYCHAIN_PATH" "$APP_BUNDLE" 2>&1; then
-              echo "✅ Signed Byte.app with $DEV_CERT"
-
-              if [ -n "$OLD_DMG" ]; then
-                echo "Rebuilding DMG with signed app..."
-                MOUNT_POINT=$(mktemp -d)
-                hdiutil attach "$OLD_DMG" -nobrowse -mountpoint "$MOUNT_POINT"
-                DMG_VOLUME=$(ls "$MOUNT_POINT" | head -n 1)
-                
-                SIGNED_DMG="$DMG_DIR/Byte_aarch64.dmg"
-                rm -f "$SIGNED_DMG"
-                
-                hdiutil create -volname "Byte" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$SIGNED_DMG"
-                hdiutil detach "$MOUNT_POINT" 2>/dev/null || true
-                
-                rm -f "$OLD_DMG"
-                echo "✅ Rebuilt DMG with signed app: $SIGNED_DMG"
-              fi
-            else
-              echo "⚠️ Signing failed, leaving unsigned (unverified developer warning)"
+            if [ -n "$OLD_DMG" ]; then
+              echo "Rebuilding DMG with unsigned (no ad-hoc) app..."
+              SIGNED_DMG="$DMG_DIR/Byte_aarch64.dmg"
+              rm -f "$SIGNED_DMG"
+              hdiutil create -volname "Byte" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$SIGNED_DMG"
+              rm -f "$OLD_DMG"
+              echo "✅ Rebuilt DMG without ad-hoc signature"
             fi
           else
-            echo "⚠️ App bundle not found at $APP_BUNDLE, skipping sign"
+            echo "⚠️ App bundle not found, skipping"
           fi
 
       - name: Capture Artifacts
