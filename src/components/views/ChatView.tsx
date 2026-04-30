@@ -3,7 +3,7 @@ import { useStore } from '../../store/useStore'
 import type { Message, ResponseStyleId, AskQuestionPayload, ToolId } from '../../types'
 import { MessageBubble } from '../shared/MessageBubble'
 import { InputBox } from '../shared/InputBox'
-import { sendChatMessage, streamChat, searchWithLangSearch, fetchPageWithJina } from '../../lib/api'
+import { sendChatMessage, streamChat, searchWithLangSearch, fetchPageWithJina, generateChatTitle } from '../../lib/api'
 import { getSlashCommandPrompt } from '../../lib/slashCommands'
 
 interface ChatViewProps {
@@ -19,6 +19,7 @@ export function ChatView({ onAskQuestionDetected, activeAskQuestion, activeSugge
   const streamAbortRef = useRef<(() => void) | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isSearchingRef = useRef(false)
+  const titleGeneratedRef = useRef<Set<string>>(new Set())
   const chat = chats.find((c) => c.id === activeChatId)
 
   // Build project context for AI prompts
@@ -908,6 +909,44 @@ export function ChatView({ onAskQuestionDetected, activeAskQuestion, activeSugge
     window.addEventListener('byte:continue-chat', handler)
     return () => window.removeEventListener('byte:continue-chat', handler)
   }, [activeChatId, handleContinueFromAnswer])
+
+  // Generate AI title after first meaningful exchange
+  useEffect(() => {
+    if (!chat || !activeChatId) return
+    if (titleGeneratedRef.current.has(activeChatId)) return
+    if (chat.messages.length < 2) return
+
+    const lastMsg = chat.messages[chat.messages.length - 1]
+    if (lastMsg.role !== 'assistant' || lastMsg.status !== 'done') return
+
+    const displayContent = lastMsg.content || ''
+    if (displayContent.startsWith('Asking Question') || displayContent.startsWith('Searching the web') || displayContent === 'Suggesting memory...') return
+
+    titleGeneratedRef.current.add(activeChatId)
+
+    const provider = providers.find((p) => p.models.some((m) => m.id === selectedModelId))
+    const model = provider?.models.find((m) => m.id === selectedModelId)
+    if (!provider || !model) return
+
+    const firstUserMsg = chat.messages.find((m) => m.role === 'user')
+    const firstAssistantMsg = [...chat.messages].reverse().find((m) => m.role === 'assistant' && m.status === 'done')
+    if (!firstUserMsg) return
+
+    const titleMsgs = [
+      { role: 'user', content: firstUserMsg.content.slice(0, 300) },
+    ]
+    if (firstAssistantMsg) {
+      titleMsgs.push({ role: 'assistant', content: firstAssistantMsg.content.slice(0, 300) })
+    }
+
+    generateChatTitle(provider, model, titleMsgs).then((title) => {
+      if (title && title.trim()) {
+        updateChat(activeChatId, { title: title.trim() })
+      }
+    }).catch(() => {
+      // Silently fail, keep existing title
+    })
+  }, [chat?.messages[chat.messages.length - 1]?.status, chat?.messages.length, activeChatId, providers, selectedModelId, updateChat])
 
   if (!chat) {
     return (

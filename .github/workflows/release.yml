@@ -61,6 +61,38 @@ jobs:
       - name: Build
         run: npm run tauri build -- --target ${{ matrix.target }} --no-sign
 
+      - name: Import Apple Development Certificate
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_DEV_CERT: ${{ secrets.APPLE_DEV_CERT }}
+          APPLE_DEV_CERT_PASSWORD: ${{ secrets.APPLE_DEV_CERT_PASSWORD }}
+        run: |
+          if [ -n "$APPLE_DEV_CERT" ] && [ -n "$APPLE_DEV_CERT_PASSWORD" ]; then
+            echo "$APPLE_DEV_CERT" | base64 -d > /tmp/byte_dev_cert.p12
+            security create-keychain -p temp temp.keychain
+            security default-keychain -s temp.keychain
+            security unlock-keychain -p temp temp.keychain
+            security import /tmp/byte_dev_cert.p12 -k temp.keychain -P "$APPLE_DEV_CERT_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple:,/usr/bin/codesign -k temp temp.keychain
+            echo "✅ Certificate imported"
+          else
+            echo "⚠️ APPLE_DEV_CERT or APPLE_DEV_CERT_PASSWORD not set, skipping sign"
+          fi
+
+      - name: Sign macOS app
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          DEV_CERT="Apple Development: saini.arnav@gmail.com (9862V38967)"
+          APP_BUNDLE="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Byte.app"
+          if [ -d "$APP_BUNDLE" ]; then
+            codesign --force --deep --sign "$DEV_CERT" "$APP_BUNDLE"
+            echo "✅ Signed Byte.app with $DEV_CERT"
+          else
+            echo "⚠️ App bundle not found at $APP_BUNDLE, skipping sign"
+          fi
+
       - name: Capture Artifacts
         shell: bash
         run: |

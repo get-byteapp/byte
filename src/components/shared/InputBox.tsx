@@ -32,7 +32,7 @@ export function InputBox({ variant, onSend, isStreaming, onStop, value: external
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const modelChipRef = useRef<HTMLButtonElement>(null)
-  const { selectedModelId, providers, enabledModelIds, langSearchApiKey, projects, activeChatId, addChatToProject, removeChatFromProject, newChat } = useStore()
+  const { selectedModelId, providers, enabledModelIds, langSearchApiKey, projects, activeChatId, addChatToProject, removeChatFromProject, activeProjectId, setActiveProjectId } = useStore()
   const navigateToConnections = () => {
     useStore.getState().setSettingsSection('connections')
     useStore.getState().setActiveView('settings')
@@ -113,8 +113,7 @@ export function InputBox({ variant, onSend, isStreaming, onStop, value: external
     if (activeChatId) {
       addChatToProject(projectId, activeChatId)
     } else {
-      const chatId = newChat()
-      addChatToProject(projectId, chatId)
+      setActiveProjectId(projectId)
     }
   }
   const handleStyleChange = (style: ResponseStyleId) => {
@@ -124,9 +123,14 @@ export function InputBox({ variant, onSend, isStreaming, onStop, value: external
   const [isProjectHovered, setIsProjectHovered] = useState(false)
 
   const activeProject = useMemo(() => {
-    if (!activeChatId) return null
-    return projects.find((p) => p.chatIds.includes(activeChatId)) || null
-  }, [activeChatId, projects])
+    if (activeChatId) {
+      return projects.find((p) => p.chatIds.includes(activeChatId)) || null
+    }
+    if (activeProjectId) {
+      return projects.find((p) => p.id === activeProjectId) || null
+    }
+    return null
+  }, [activeChatId, activeProjectId, projects])
 
   const hasText = text.trim().length > 0
   const webSearchEnabled = extWebSearchEnabled !== undefined ? extWebSearchEnabled : localWebSearch
@@ -191,6 +195,8 @@ export function InputBox({ variant, onSend, isStreaming, onStop, value: external
                 onClick={() => {
                   if (activeChatId) {
                     removeChatFromProject(activeProject.id, activeChatId)
+                  } else if (activeProjectId) {
+                    setActiveProjectId(null)
                   }
                   setIsProjectHovered(false)
                 }}

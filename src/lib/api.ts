@@ -659,6 +659,71 @@ export async function sendChatMessage(
   }
 }
 
+export async function generateChatTitle(
+  provider: Provider,
+  model: Model,
+  messages: { role: string; content: string }[]
+): Promise<string> {
+  const systemPrompt = 'Generate a very short, concise title (3-6 words, under 45 characters) that summarizes this conversation. Return ONLY the title, nothing else.'
+  try {
+    if (provider.id === 'anthropic') {
+      const anthropicMessages = messages.map((m) => ({ role: m.role === 'system' ? 'assistant' : m.role, content: m.content }))
+      const response = await fetch(`${provider.baseUrl}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': provider.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: model.id,
+          system: systemPrompt,
+          messages: anthropicMessages,
+          max_tokens: 20,
+          temperature: 0.3,
+        }),
+      })
+      const data = await response.json()
+      return data.content?.[0]?.text?.trim() || messages[0]?.content?.slice(0, 40) || 'New chat'
+    } else if (provider.id === 'google') {
+      const response = await fetch(`${provider.baseUrl}/v1/models/${model.id}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': provider.apiKey,
+        },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}` }] }],
+          generationConfig: { maxOutputTokens: 20, temperature: 0.3 },
+        }),
+      })
+      const data = await response.json()
+      return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || messages[0]?.content?.slice(0, 40) || 'New chat'
+    } else {
+      const response = await fetch(`${provider.baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${provider.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: model.id,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages,
+          ],
+          max_tokens: 20,
+          temperature: 0.3,
+        }),
+      })
+      const data = await response.json()
+      return data.choices?.[0]?.message?.content?.trim() || messages[0]?.content?.slice(0, 40) || 'New chat'
+    }
+  } catch {
+    return messages[0]?.content?.slice(0, 40) || 'New chat'
+  }
+}
+
 async function sendOpenAICompatibleMessage(
   provider: Provider,
   model: Model,
