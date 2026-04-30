@@ -58,17 +58,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
 
-      # ---------------------------------------------------------------
-      # macOS: import the Developer ID Application certificate into a
-      # temporary keychain so that `tauri build` can sign the .app and
-      # the Tauri CLI can notarize it with Apple's notary service.
-      # ---------------------------------------------------------------
-      - name: Import Apple Developer ID Certificate
+      - name: Import Apple Development Certificate
         if: runner.os == 'macOS'
         shell: bash
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_DEV_CERT }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEV_CERT_PASSWORD }}
         run: |
           CERT_PATH="$RUNNER_TEMP/byte_dev_cert.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/byte-signing.keychain-db"
@@ -94,7 +89,6 @@ jobs:
             -k "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
-          # Make this keychain the default so codesign can find it
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
           security default-keychain -s "$KEYCHAIN_PATH"
 
@@ -102,21 +96,16 @@ jobs:
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           echo "✅ Certificate imported"
 
-      - name: Build (macOS — signed + notarized)
+      - name: Build (macOS — Apple Development signed)
         if: runner.os == 'macOS'
         shell: bash
         env:
-          # Code signing
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_DEV_CERT }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEV_CERT_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # Notarization
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run tauri build -- --target ${{ matrix.target }}
 
-      - name: Build (Linux / Windows — no Apple signing)
+      - name: Build (Linux / Windows)
         if: runner.os != 'macOS'
         run: npm run tauri build -- --target ${{ matrix.target }} --no-sign
 
