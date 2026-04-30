@@ -104,14 +104,16 @@ jobs:
           DEV_CERT="Apple Development: saini.arnav@gmail.com (9862V38967)"
           APP_BUNDLE="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Byte.app"
 
-          echo "=== All available identities ==="
-          security find-identity -v -p codesigning
-
           if [ -d "$APP_BUNDLE" ]; then
+            codesign --remove-signature "$APP_BUNDLE" 2>/dev/null || true
+
+            echo "=== All available identities ==="
+            security find-identity -v -p codesigning
+
             if codesign --force --deep --sign "$DEV_CERT" "$APP_BUNDLE" 2>&1; then
               echo "✅ Signed Byte.app with $DEV_CERT"
             else
-              echo "⚠️ Signing failed, continuing without signature"
+              echo "⚠️ Signing failed, leaving unsigned (unverified developer warning)"
             fi
           else
             echo "⚠️ App bundle not found at $APP_BUNDLE, skipping sign"
