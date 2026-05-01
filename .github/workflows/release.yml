@@ -259,6 +259,8 @@ jobs:
             echo ""
             echo "  auto_updates true"
             echo ""
+            echo "  no_quarantine true"
+            echo ""
             echo "  app \"Byte.app\""
             echo "end"
           } > byte.rb
