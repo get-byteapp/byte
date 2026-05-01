@@ -260,6 +260,11 @@ jobs:
             echo "  auto_updates true"
             echo ""
             echo "  app \"Byte.app\""
+            echo ""
+            echo "  postflight do"
+            echo "    system_command \"/usr/bin/xattr\","
+            echo "      args: [\"-rd\", \"com.apple.quarantine\", \"#{appdir}/Byte.app\"]"
+            echo "  end"
             echo "end"
           } > byte.rb
           echo "Homebrew formula created"
