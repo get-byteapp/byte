@@ -240,10 +240,7 @@ export const useStore = create<AppState>()(
         set((s) => ({
           providers: s.providers.filter((p) => p.id !== id),
           enabledModelIds: s.enabledModelIds.filter(
-            (mid) =>
-              !s.providers
-                .find((p) => p.id === id)
-                ?.models.some((m) => m.id === mid),
+            (mid) => !mid.startsWith(id + "::"),
           ),
         })),
       setProviderModels: (providerId, models) =>
@@ -595,7 +592,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: "byte_store",
-      version: 2,
+      version: 3,
       migrate: (persistedState: any, _version: number) => {
         if (persistedState) {
           const migratedQuickPrompts = migrateQuickPrompts(persistedState);
@@ -609,6 +606,40 @@ export const useStore = create<AppState>()(
               customInstructions: p.customInstructions || "",
               files: p.files || [],
             }));
+          }
+        }
+        // v3: migrate plain model IDs → compound "providerId::modelId" keys
+        const providers: any[] = persistedState.providers || [];
+        const oldEnabled: string[] = persistedState.enabledModelIds || [];
+        if (oldEnabled.length > 0 && providers.length > 0) {
+          persistedState.enabledModelIds = oldEnabled.map((mid: string) => {
+            if (mid.includes("::")) return mid;
+            for (const p of providers) {
+              if (
+                Array.isArray(p.models) &&
+                p.models.some((m: any) => m.id === mid)
+              ) {
+                return `${p.id}::${mid}`;
+              }
+            }
+            return mid;
+          });
+        }
+        const oldSelected: string | null =
+          persistedState.selectedModelId || null;
+        if (
+          oldSelected &&
+          !oldSelected.includes("::") &&
+          providers.length > 0
+        ) {
+          for (const p of providers) {
+            if (
+              Array.isArray(p.models) &&
+              p.models.some((m: any) => m.id === oldSelected)
+            ) {
+              persistedState.selectedModelId = `${p.id}::${oldSelected}`;
+              break;
+            }
           }
         }
         return persistedState as any;

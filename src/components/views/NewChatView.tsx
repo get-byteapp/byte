@@ -1,104 +1,126 @@
-import { useCallback, useState, useRef, useEffect } from 'react'
-import { Copy } from 'lucide-react'
-import { useStore } from '../../store/useStore'
-import type { Message } from '../../types'
-import { InputBox } from '../shared/InputBox'
-import { sendChatMessage } from '../../lib/api'
+import { useCallback, useState, useRef, useEffect } from "react";
+import { Copy } from "lucide-react";
+import { useStore } from "../../store/useStore";
+import type { Message } from "../../types";
+import { InputBox } from "../shared/InputBox";
+import { sendChatMessage, resolveModel } from "../../lib/api";
 
 export function NewChatView() {
-  const { providers, selectedModelId } = useStore()
-  const [isLoading, setIsLoading] = useState(false)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null)
+  const { providers, selectedModelId } = useStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length])
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
 
   const handleStop = useCallback(() => {
-    abortControllerRef.current?.abort()
-    setIsLoading(false)
-    abortControllerRef.current = null
-  }, [])
+    abortControllerRef.current?.abort();
+    setIsLoading(false);
+    abortControllerRef.current = null;
+  }, []);
 
-  const handleSend = useCallback(async (text: string) => {
-    if (!text.trim()) return
+  const handleSend = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
 
-    const chatId = currentChatId || crypto.randomUUID()
-    if (!currentChatId) setCurrentChatId(chatId)
+      const chatId = currentChatId || crypto.randomUUID();
+      if (!currentChatId) setCurrentChatId(chatId);
 
-    const provider = providers.find((p) => p.models.some((m) => m.id === selectedModelId))
-    const model = provider?.models.find((m) => m.id === selectedModelId)
+      const { provider, model } = resolveModel(providers, selectedModelId);
 
-    if (!provider || !model) {
-      const errorMsg: Message = {
+      if (!provider || !model) {
+        const errorMsg: Message = {
+          id: crypto.randomUUID(),
+          role: "system",
+          content:
+            "No model selected. Please add an API key in Settings and select a model.",
+          timestamp: Date.now(),
+          status: "error",
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+        return;
+      }
+
+      const userMsg: Message = {
         id: crypto.randomUUID(),
-        role: 'system',
-        content: 'No model selected. Please add an API key in Settings and select a model.',
+        role: "user",
+        content: text.trim(),
         timestamp: Date.now(),
-        status: 'error',
+        status: "sent",
+      };
+
+      const assistantMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "",
+        timestamp: Date.now(),
+        status: "streaming",
+      };
+
+      const newMessages = [...messages, userMsg, assistantMsg];
+      setMessages(newMessages);
+
+      setIsLoading(true);
+      abortControllerRef.current = new AbortController();
+
+      try {
+        const response = await sendChatMessage(
+          provider,
+          model,
+          newMessages.slice(0, -1),
+          abortControllerRef.current.signal,
+        );
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsg.id
+              ? { ...m, content: response, status: "done" as const }
+              : m,
+          ),
+        );
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          // Request was aborted
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id
+                ? {
+                    ...m,
+                    content: m.content || "Stopped",
+                    status: "done" as const,
+                  }
+                : m,
+            ),
+          );
+        } else {
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error occurred";
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id
+                ? {
+                    ...m,
+                    content: `Error: ${errorMessage}`,
+                    status: "error" as const,
+                  }
+                : m,
+            ),
+          );
+        }
+      } finally {
+        setIsLoading(false);
+        abortControllerRef.current = null;
       }
-      setMessages(prev => [...prev, errorMsg])
-      return
-    }
-
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: text.trim(),
-      timestamp: Date.now(),
-      status: 'sent',
-    }
-
-    const assistantMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now(),
-      status: 'streaming',
-    }
-
-    const newMessages = [...messages, userMsg, assistantMsg]
-    setMessages(newMessages)
-
-    setIsLoading(true)
-    abortControllerRef.current = new AbortController()
-
-    try {
-      const response = await sendChatMessage(
-        provider,
-        model,
-        newMessages.slice(0, -1),
-        abortControllerRef.current.signal
-      )
-
-      setMessages(prev => prev.map((m) =>
-        m.id === assistantMsg.id ? { ...m, content: response, status: 'done' as const } : m
-      ))
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        // Request was aborted
-        setMessages(prev => prev.map((m) =>
-          m.id === assistantMsg.id ? { ...m, content: m.content || 'Stopped', status: 'done' as const } : m
-        ))
-      } else {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-        setMessages(prev => prev.map((m) =>
-          m.id === assistantMsg.id
-            ? { ...m, content: `Error: ${errorMessage}`, status: 'error' as const }
-            : m
-        ))
-      }
-    } finally {
-      setIsLoading(false)
-      abortControllerRef.current = null
-    }
-  }, [messages, currentChatId, providers, selectedModelId])
+    },
+    [messages, currentChatId, providers, selectedModelId],
+  );
 
   return (
-    <div className="view on" style={{ flexDirection: 'column' }}>
+    <div className="view on" style={{ flexDirection: "column" }}>
       <div className="chat-msgs">
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
@@ -114,36 +136,35 @@ export function NewChatView() {
         />
       </div>
     </div>
-  )
+  );
 }
 
 function MessageBubble({ message }: { message: Message }) {
-  if (message.role === 'system') {
+  if (message.role === "system") {
     return (
-      <div className="msg" style={{ justifyContent: 'center' }}>
-        <div className="msg-body" style={{ textAlign: 'center' }}>
-          <div className="msg-txt" style={{ color: 'var(--tx3)', fontSize: 'calc(var(--fs) - 1px)' }}>
+      <div className="msg" style={{ justifyContent: "center" }}>
+        <div className="msg-body" style={{ textAlign: "center" }}>
+          <div
+            className="msg-txt"
+            style={{ color: "var(--tx3)", fontSize: "calc(var(--fs) - 1px)" }}
+          >
             {message.content}
           </div>
         </div>
       </div>
-    )
+    );
   }
 
-  const isUser = message.role === 'user'
+  const isUser = message.role === "user";
 
   return (
-    <div className={`msg${isUser ? ' u' : ''}`}>
+    <div className={`msg${isUser ? " u" : ""}`}>
       {!isUser && <div className="msg-av ai">B</div>}
       <div className="msg-body">
         {!isUser && (
-          <div className="msg-meta">
-            Byte · {formatTime(message.timestamp)}
-          </div>
+          <div className="msg-meta">Byte · {formatTime(message.timestamp)}</div>
         )}
-        <div className="msg-txt">
-          {message.content}
-        </div>
+        <div className="msg-txt">{message.content}</div>
         <div className="msg-acts">
           <button className="msg-act" title="Copy">
             <Copy size={13} />
@@ -151,9 +172,12 @@ function MessageBubble({ message }: { message: Message }) {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function formatTime(ts: number) {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return new Date(ts).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Mic, Send, ChevronDown, Square, Folder, X } from "lucide-react";
 import { useStore } from "../../store/useStore";
-import { getDisplayName } from "../../lib/api";
+import { getDisplayName, makeModelKey, resolveModel } from "../../lib/api";
 import { PlusMenu } from "./PlusMenu";
 import { ModelPicker } from "./ModelPicker";
 import { SlashCommandMenu } from "./SlashCommandMenu";
@@ -69,13 +69,14 @@ export function InputBox({
 
   const enabledModels = useMemo(() => {
     return providers.flatMap((p) =>
-      p.models.filter((m) => enabledModelIds.includes(m.id)),
+      p.models.filter((m) =>
+        enabledModelIds.includes(makeModelKey(p.id, m.id)),
+      ),
     );
   }, [providers, enabledModelIds]);
 
   const model =
-    providers.flatMap((p) => p.models).find((m) => m.id === selectedModelId) ||
-    enabledModels[0];
+    resolveModel(providers, selectedModelId).model || enabledModels[0];
 
   const modelCanWebSearch = model?.capabilities?.webSearch ?? false;
 

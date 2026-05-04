@@ -1,228 +1,285 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { ChevronDown, Sparkles } from 'lucide-react'
-import { useStore } from '../../store/useStore'
-import { InputBox } from '../shared/InputBox'
-import { ICON_MAP } from '../../lib/quickPrompts'
-import type { ResponseStyleId } from '../../types'
-import type { Prompt } from '../../lib/quickPrompts'
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { ChevronDown, Sparkles } from "lucide-react";
+import { useStore } from "../../store/useStore";
+import { InputBox } from "../shared/InputBox";
+import { makeModelKey, resolveModel } from "../../lib/api";
+import { ICON_MAP } from "../../lib/quickPrompts";
+import type { ResponseStyleId } from "../../types";
+import type { Prompt } from "../../lib/quickPrompts";
 
 interface PlaceholderWizardState {
-  prompt: Prompt
-  currentIndex: number
-  values: Record<string, string>
-  inputRef: HTMLInputElement | null
+  prompt: Prompt;
+  currentIndex: number;
+  values: Record<string, string>;
+  inputRef: HTMLInputElement | null;
 }
 
 export function HomeView() {
-  const { newChat, selectedModelId, providers, enabledModelIds, defaultResponseStyle, setDefaultResponseStyle, defaultMemoryEnabled, setDefaultMemoryEnabled, defaultWebSearchEnabled, setDefaultWebSearchEnabled, quickPrompts } = useStore()
-  const [inputValue, setInputValue] = useState('')
-  const [openPill, setOpenPill] = useState<string | null>(null)
-  const [wizardState, setWizardState] = useState<PlaceholderWizardState | null>(null)
-  const [wizardInput, setWizardInput] = useState('')
-  const dropdownRef = useRef<HTMLDivElement>(null)
-  const pillRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const {
+    newChat,
+    selectedModelId,
+    providers,
+    enabledModelIds,
+    defaultResponseStyle,
+    setDefaultResponseStyle,
+    defaultMemoryEnabled,
+    setDefaultMemoryEnabled,
+    defaultWebSearchEnabled,
+    setDefaultWebSearchEnabled,
+    quickPrompts,
+  } = useStore();
+  const [inputValue, setInputValue] = useState("");
+  const [openPill, setOpenPill] = useState<string | null>(null);
+  const [wizardState, setWizardState] = useState<PlaceholderWizardState | null>(
+    null,
+  );
+  const [wizardInput, setWizardInput] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const pillRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   // Filter to only enabled prompts
-  const enabledPrompts = useMemo(() => quickPrompts.filter(c => c.enabled), [quickPrompts])
+  const enabledPrompts = useMemo(
+    () => quickPrompts.filter((c) => c.enabled),
+    [quickPrompts],
+  );
 
   // Update inputValue with live preview when wizard is active
   useEffect(() => {
     if (wizardState) {
-      let preview = wizardState.prompt.prompt
-      
+      let preview = wizardState.prompt.prompt;
+
       // Replace ALL placeholders - already filled + current + unfilled
       wizardState.prompt.placeholders!.forEach((ph, idx) => {
-        let value = ''
+        let value = "";
         if (idx < wizardState.currentIndex) {
           // Already filled - use stored value
-          value = wizardState.values[ph.key] || ''
+          value = wizardState.values[ph.key] || "";
         } else if (idx === wizardState.currentIndex) {
           // Current one being edited - use what user is typing
-          value = wizardInput
+          value = wizardInput;
         } else {
           // Not yet filled - show as {{key}}
-          value = ''
+          value = "";
         }
-        
-        const regex = new RegExp(`\\{\\{${ph.key}\\}\\}`, 'g')
-        preview = preview.replace(regex, value || `{{${ph.key}}}`)
-      })
-      
-      setInputValue(preview)
+
+        const regex = new RegExp(`\\{\\{${ph.key}\\}\\}`, "g");
+        preview = preview.replace(regex, value || `{{${ph.key}}}`);
+      });
+
+      setInputValue(preview);
     }
-  }, [wizardState, wizardInput])
+  }, [wizardState, wizardInput]);
 
   const enabledModels = useMemo(() => {
-    return providers.flatMap(p => p.models.filter(m => enabledModelIds.includes(m.id)))
-  }, [providers, enabledModelIds])
+    return providers.flatMap((p) =>
+      p.models.filter((m) =>
+        enabledModelIds.includes(makeModelKey(p.id, m.id)),
+      ),
+    );
+  }, [providers, enabledModelIds]);
 
-  const selectedModel = enabledModels.find(m => m.id === selectedModelId) || enabledModels[0]
-  const contextWindow = selectedModel?.contextWindow || 128000
+  const selectedModel =
+    resolveModel(providers, selectedModelId).model || enabledModels[0];
+  const contextWindow = selectedModel?.contextWindow || 128000;
 
   const tokenCount = useMemo(() => {
-    if (!inputValue.trim()) return 0
-    return Math.ceil(inputValue.length / 4)
-  }, [inputValue])
+    if (!inputValue.trim()) return 0;
+    return Math.ceil(inputValue.length / 4);
+  }, [inputValue]);
 
-  const tokenPercent = contextWindow > 0 ? (tokenCount / contextWindow) * 100 : 0
-  const greeting = getGreeting()
+  const tokenPercent =
+    contextWindow > 0 ? (tokenCount / contextWindow) * 100 : 0;
+  const greeting = getGreeting();
 
   const handleSend = (text: string) => {
-    if (!text.trim()) return
-    const chatId = newChat(text, defaultWebSearchEnabled ? { enabledTools: ['ASK_QUESTION', 'WEB_SEARCH'] } : undefined)
+    if (!text.trim()) return;
+    const chatId = newChat(
+      text,
+      defaultWebSearchEnabled
+        ? { enabledTools: ["ASK_QUESTION", "WEB_SEARCH"] }
+        : undefined,
+    );
     setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('byte:new-chat-message', { detail: { text, chatId } }))
-    }, 50)
-    setInputValue('')
-  }
+      window.dispatchEvent(
+        new CustomEvent("byte:new-chat-message", { detail: { text, chatId } }),
+      );
+    }, 50);
+    setInputValue("");
+  };
 
-  const handleStyleChange = useCallback((style: ResponseStyleId) => {
-    setDefaultResponseStyle(style)
-  }, [setDefaultResponseStyle])
+  const handleStyleChange = useCallback(
+    (style: ResponseStyleId) => {
+      setDefaultResponseStyle(style);
+    },
+    [setDefaultResponseStyle],
+  );
 
-  const handleMemoryToggle = useCallback((enabled: boolean) => {
-    setDefaultMemoryEnabled(enabled)
-  }, [setDefaultMemoryEnabled])
+  const handleMemoryToggle = useCallback(
+    (enabled: boolean) => {
+      setDefaultMemoryEnabled(enabled);
+    },
+    [setDefaultMemoryEnabled],
+  );
 
-  const handleWebSearchToggle = useCallback((enabled: boolean) => {
-    setDefaultWebSearchEnabled(enabled)
-  }, [setDefaultWebSearchEnabled])
+  const handleWebSearchToggle = useCallback(
+    (enabled: boolean) => {
+      setDefaultWebSearchEnabled(enabled);
+    },
+    [setDefaultWebSearchEnabled],
+  );
 
   const handlePillClick = (pillId: string) => {
     if (openPill === pillId) {
-      setOpenPill(null)
+      setOpenPill(null);
     } else {
-      setOpenPill(pillId)
+      setOpenPill(pillId);
     }
-  }
+  };
 
   const handlePromptSelect = (prompt: Prompt) => {
-    setOpenPill(null)
-    
+    setOpenPill(null);
+
     // If prompt has placeholders, start wizard
     if (prompt.placeholders && prompt.placeholders.length > 0) {
       setWizardState({
         prompt,
         currentIndex: 0,
         values: {},
-        inputRef: null
-      })
-      setWizardInput('')
+        inputRef: null,
+      });
+      setWizardInput("");
       // Focus the wizard input after render
       setTimeout(() => {
-        const input = document.querySelector('.placeholder-wizard-input') as HTMLInputElement
-        if (input) input.focus()
-      }, 0)
+        const input = document.querySelector(
+          ".placeholder-wizard-input",
+        ) as HTMLInputElement;
+        if (input) input.focus();
+      }, 0);
     } else {
       // No placeholders, just set the prompt text
-      setInputValue(prompt.prompt)
+      setInputValue(prompt.prompt);
     }
-  }
+  };
 
   const handleWizardNext = () => {
-    if (!wizardState) return
-    
-    const currentPlaceholder = wizardState.prompt.placeholders![wizardState.currentIndex]
-    const newValues = { ...wizardState.values, [currentPlaceholder.key]: wizardInput }
-    
-    if (wizardState.currentIndex < wizardState.prompt.placeholders!.length - 1) {
+    if (!wizardState) return;
+
+    const currentPlaceholder =
+      wizardState.prompt.placeholders![wizardState.currentIndex];
+    const newValues = {
+      ...wizardState.values,
+      [currentPlaceholder.key]: wizardInput,
+    };
+
+    if (
+      wizardState.currentIndex <
+      wizardState.prompt.placeholders!.length - 1
+    ) {
       // Move to next placeholder
       setWizardState({
         ...wizardState,
         currentIndex: wizardState.currentIndex + 1,
-        values: newValues
-      })
-      setWizardInput('')
+        values: newValues,
+      });
+      setWizardInput("");
       setTimeout(() => {
-        const input = document.querySelector('.placeholder-wizard-input') as HTMLInputElement
-        if (input) input.focus()
-      }, 0)
+        const input = document.querySelector(
+          ".placeholder-wizard-input",
+        ) as HTMLInputElement;
+        if (input) input.focus();
+      }, 0);
     } else {
       // All placeholders filled, just close wizard (input already has final value)
-      setWizardState(null)
-      setWizardInput('')
+      setWizardState(null);
+      setWizardInput("");
       // Focus the textarea
       setTimeout(() => {
-        const ta = document.querySelector('.byte-ta') as HTMLTextAreaElement
+        const ta = document.querySelector(".byte-ta") as HTMLTextAreaElement;
         if (ta) {
-          ta.focus()
-          ta.setSelectionRange(ta.value.length, ta.value.length)
+          ta.focus();
+          ta.setSelectionRange(ta.value.length, ta.value.length);
         }
-      }, 50)
+      }, 50);
     }
-  }
+  };
 
   const handleWizardCancel = () => {
-    setWizardState(null)
-    setWizardInput('')
-  }
+    setWizardState(null);
+    setWizardInput("");
+  };
 
   // Close on escape (also close wizard)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         if (wizardState) {
-          setWizardState(null)
-          setWizardInput('')
+          setWizardState(null);
+          setWizardInput("");
         } else {
-          setOpenPill(null)
+          setOpenPill(null);
         }
       }
-    }
+    };
     if (openPill || wizardState) {
-      document.addEventListener('keydown', handleKeyDown)
-      return () => document.removeEventListener('keydown', handleKeyDown)
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
     }
-  }, [openPill, wizardState])
+  }, [openPill, wizardState]);
 
   const handleWizardKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleWizardNext()
-    } else if (e.key === 'Escape') {
-      handleWizardCancel()
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleWizardNext();
+    } else if (e.key === "Escape") {
+      handleWizardCancel();
     }
-  }
+  };
 
   // Close wizard on escape
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && wizardState) {
-        handleWizardCancel()
+      if (e.key === "Escape" && wizardState) {
+        handleWizardCancel();
       }
-    }
+    };
     if (wizardState) {
-      document.addEventListener('keydown', handleGlobalKeyDown)
-      return () => document.removeEventListener('keydown', handleGlobalKeyDown)
+      document.addEventListener("keydown", handleGlobalKeyDown);
+      return () => document.removeEventListener("keydown", handleGlobalKeyDown);
     }
-  }, [wizardState])
+  }, [wizardState]);
 
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        const target = e.target as HTMLElement
-        const isPill = target.closest('.sug-pill')
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        const target = e.target as HTMLElement;
+        const isPill = target.closest(".sug-pill");
         if (!isPill) {
-          setOpenPill(null)
+          setOpenPill(null);
         }
       }
-    }
+    };
     if (openPill) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [openPill])
+  }, [openPill]);
 
   return (
-    <div className="view on" style={{ flexDirection: 'column' }}>
+    <div className="view on" style={{ flexDirection: "column" }}>
       <div className="home-stage">
         <div className="home-greet">
-          <div className="home-name">{greeting}, <em>friend</em></div>
+          <div className="home-name">
+            {greeting}, <em>friend</em>
+          </div>
           <div className="home-sub">What can Byte help with today?</div>
         </div>
 
-        <div style={{ width: '100%', maxWidth: 680 }}>
+        <div style={{ width: "100%", maxWidth: 680 }}>
           <InputBox
             variant="home"
             onSend={handleSend}
@@ -239,19 +296,28 @@ export function HomeView() {
 
         {/* Placeholder Wizard Overlay */}
         {wizardState && wizardState.prompt.placeholders && (
-          <div className="placeholder-wizard" style={{
-            width: '100%',
-            maxWidth: 680,
-            marginTop: 16,
-            animation: 'up .15s ease'
-          }}>
+          <div
+            className="placeholder-wizard"
+            style={{
+              width: "100%",
+              maxWidth: 680,
+              marginTop: 16,
+              animation: "up .15s ease",
+            }}
+          >
             <div className="placeholder-wizard-header">
-              <span className="placeholder-wizard-title">{wizardState.prompt.name}</span>
-              <span className="placeholder-wizard-progress">
-                {wizardState.currentIndex + 1} of {wizardState.prompt.placeholders.length}
+              <span className="placeholder-wizard-title">
+                {wizardState.prompt.name}
               </span>
-              <button className="placeholder-wizard-close" onClick={handleWizardCancel}>
-                <ChevronDown size={14} style={{ transform: 'rotate(45deg)' }} />
+              <span className="placeholder-wizard-progress">
+                {wizardState.currentIndex + 1} of{" "}
+                {wizardState.prompt.placeholders.length}
+              </span>
+              <button
+                className="placeholder-wizard-close"
+                onClick={handleWizardCancel}
+              >
+                <ChevronDown size={14} style={{ transform: "rotate(45deg)" }} />
               </button>
             </div>
             <div className="placeholder-wizard-label">
@@ -272,82 +338,95 @@ export function HomeView() {
           </div>
         )}
 
-        <div className="tok-bar" style={{ width: '100%', maxWidth: 680 }}>
+        <div className="tok-bar" style={{ width: "100%", maxWidth: 680 }}>
           <div className="tok-track">
             <div
-              className={`tok-fill ${tokenPercent > 90 ? 'danger' : tokenPercent > 75 ? 'warn' : ''}`}
+              className={`tok-fill ${tokenPercent > 90 ? "danger" : tokenPercent > 75 ? "warn" : ""}`}
               style={{ width: `${Math.min(tokenPercent, 100)}%` }}
             ></div>
           </div>
           <div className="tok-labels">
-            <span>{tokenCount.toLocaleString()} / {contextWindow.toLocaleString()} tokens used</span>
+            <span>
+              {tokenCount.toLocaleString()} / {contextWindow.toLocaleString()}{" "}
+              tokens used
+            </span>
           </div>
         </div>
 
-        <div className={`home-suggestions ${inputValue.trim() ? 'hidden' : ''}`} style={{ position: 'relative' }}>
+        <div
+          className={`home-suggestions ${inputValue.trim() ? "hidden" : ""}`}
+          style={{ position: "relative" }}
+        >
           {enabledPrompts.map((cat) => {
-            const Icon = ICON_MAP[cat.icon] || ICON_MAP.Code
+            const Icon = ICON_MAP[cat.icon] || ICON_MAP.Code;
             return (
               <button
                 key={cat.id}
-                ref={(el) => { pillRefs.current[cat.id] = el }}
-                className={`sug-pill${openPill === cat.id ? ' sug-pill-active' : ''}`}
+                ref={(el) => {
+                  pillRefs.current[cat.id] = el;
+                }}
+                className={`sug-pill${openPill === cat.id ? " sug-pill-active" : ""}`}
                 onClick={() => handlePillClick(cat.id)}
               >
                 <Icon size={13} />
                 <span>{cat.label}</span>
                 <ChevronDown size={11} className="sug-pill-chevron" />
               </button>
-            )
+            );
           })}
 
-          {openPill && (() => {
-            const cat = enabledPrompts.find(c => c.id === openPill)
-            if (!cat) return null
-            const btn = pillRefs.current[openPill]
-            const btnRect = btn?.getBoundingClientRect()
-            const parentRect = btn?.parentElement?.getBoundingClientRect()
+          {openPill &&
+            (() => {
+              const cat = enabledPrompts.find((c) => c.id === openPill);
+              if (!cat) return null;
+              const btn = pillRefs.current[openPill];
+              const btnRect = btn?.getBoundingClientRect();
+              const parentRect = btn?.parentElement?.getBoundingClientRect();
 
-            return (
-              <div
-                ref={dropdownRef}
-                className="sug-dropdown"
-                style={{
-                  position: 'absolute',
-                  left: btnRect && parentRect ? btnRect.left - parentRect.left : 0,
-                  bottom: '100%',
-                  marginBottom: 6,
-                }}
-              >
-                <div className="sug-dropdown-header">{cat.label}</div>
-                <div className="sug-dropdown-list">
-                  {cat.prompts.map((prompt) => (
-                    <button
-                      key={prompt.id}
-                      className="sug-dropdown-item"
-                      onClick={() => handlePromptSelect(prompt)}
-                    >
-                      <Sparkles size={12} className="sug-dropdown-arrow" />
-                      <span>{prompt.name}</span>
-                      {prompt.placeholders && prompt.placeholders.length > 0 && (
-                        <span className="sug-dropdown-has-wizard">●</span>
-                      )}
-                    </button>
-                  ))}
+              return (
+                <div
+                  ref={dropdownRef}
+                  className="sug-dropdown"
+                  style={{
+                    position: "absolute",
+                    left:
+                      btnRect && parentRect
+                        ? btnRect.left - parentRect.left
+                        : 0,
+                    bottom: "100%",
+                    marginBottom: 6,
+                  }}
+                >
+                  <div className="sug-dropdown-header">{cat.label}</div>
+                  <div className="sug-dropdown-list">
+                    {cat.prompts.map((prompt) => (
+                      <button
+                        key={prompt.id}
+                        className="sug-dropdown-item"
+                        onClick={() => handlePromptSelect(prompt)}
+                      >
+                        <Sparkles size={12} className="sug-dropdown-arrow" />
+                        <span>{prompt.name}</span>
+                        {prompt.placeholders &&
+                          prompt.placeholders.length > 0 && (
+                            <span className="sug-dropdown-has-wizard">●</span>
+                          )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )
-          })()}
+              );
+            })()}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function getGreeting() {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  if (hour < 21) return 'Good evening'
-  return 'Good night'
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  if (hour < 21) return "Good evening";
+  return "Good night";
 }

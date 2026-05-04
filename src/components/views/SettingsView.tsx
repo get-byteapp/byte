@@ -19,6 +19,7 @@ import {
   fetchModels,
   getDisplayName,
   formatContextWindow,
+  makeModelKey,
 } from "../../lib/api";
 import type { Provider, Model } from "../../types";
 
@@ -699,8 +700,10 @@ function ModelsPanel({
           >
             <input
               type="checkbox"
-              checked={enabledModelIds.includes(m.id)}
-              onChange={() => onToggleModel(m.id)}
+              checked={enabledModelIds.includes(
+                makeModelKey(m.providerId, m.id),
+              )}
+              onChange={() => onToggleModel(makeModelKey(m.providerId, m.id))}
               style={{ width: 16, height: 16, accentColor: "var(--acc)" }}
             />
             <div style={{ flex: 1 }}>

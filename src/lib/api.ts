@@ -55,6 +55,32 @@ export function getDisplayName(modelId: string): string {
   return organizationName ? `${organizationName}: ${displayName}` : displayName;
 }
 
+/** Returns a unique key combining provider and model so same-named models from different providers are distinct. */
+export function makeModelKey(providerId: string, modelId: string): string {
+  return `${providerId}::${modelId}`;
+}
+
+/** Resolves a compound "providerId::modelId" key (or a legacy plain modelId) back to provider+model objects. */
+export function resolveModel(
+  providers: Provider[],
+  key: string | null,
+): { provider: Provider | null; model: Model | null } {
+  if (!key) return { provider: null, model: null };
+  const sepIdx = key.indexOf("::");
+  if (sepIdx > 0) {
+    const providerId = key.slice(0, sepIdx);
+    const modelId = key.slice(sepIdx + 2);
+    const provider = providers.find((p) => p.id === providerId) || null;
+    const model = provider?.models.find((m) => m.id === modelId) || null;
+    return { provider, model };
+  }
+  // Backward compat: legacy plain model ID
+  const provider =
+    providers.find((p) => p.models.some((m) => m.id === key)) || null;
+  const model = provider?.models.find((m) => m.id === key) || null;
+  return { provider, model };
+}
+
 export function modelHasNativeWebSearch(
   providerId: string,
   modelId: string,
@@ -132,17 +158,22 @@ export async function fetchModels(provider: Provider): Promise<Model[]> {
       capabilities: { webSearch: modelHasNativeWebSearch(provider.id, m.id) },
     }));
   } else if (provider.id === "cerebras") {
-    headers["Authorization"] = `Bearer ${provider.apiKey}`;
-    const response = await fetch(`${provider.baseUrl}/models`, { headers });
+    // Cerebras's public endpoint returns full model metadata including context_length.
+    // No API key required — the key is still used for all chat requests.
+    const response = await fetch(
+      "https://api.cerebras.ai/public/v1/models?format=openrouter",
+    );
     if (!response.ok)
-      throw new Error(`Failed to fetch models: ${response.statusText}`);
+      throw new Error(
+        `Failed to fetch Cerebras models: ${response.statusText}`,
+      );
     const data = await response.json();
-    const modelsData = data.data || [];
+    const modelsData: any[] = data.data || [];
     return modelsData.map((m: any) => ({
       id: m.id,
-      name: getDisplayName(m.id),
+      name: m.name || getDisplayName(m.id),
       providerId: provider.id,
-      contextWindow: m.context_window || 128000,
+      contextWindow: m.context_length || 128000,
       enabled: false,
       capabilities: { webSearch: false },
     }));

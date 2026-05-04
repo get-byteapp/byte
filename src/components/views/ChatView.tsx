@@ -21,6 +21,8 @@ import {
   searchWithLangSearch,
   fetchPageWithJina,
   generateChatTitle,
+  makeModelKey,
+  resolveModel,
 } from "../../lib/api";
 import { getSlashCommandPrompt } from "../../lib/slashCommands";
 
@@ -86,7 +88,7 @@ export function ChatView({
 
   // Get enabled models for fallback
   const enabledModels = providers.flatMap((p) =>
-    p.models.filter((m) => enabledModelIds.includes(m.id)),
+    p.models.filter((m) => enabledModelIds.includes(makeModelKey(p.id, m.id))),
   );
 
   const messagesLength = chat?.messages.length ?? 0;
@@ -347,16 +349,11 @@ export function ChatView({
         updateChat(chatId, { messages: withSearchResults });
 
         // Get provider/model for continuing
-        let provider = providers.find((p) =>
-          p.models.some((m) => m.id === selectedModelId),
-        );
-        let model = provider?.models.find((m) => m.id === selectedModelId);
+        let { provider, model } = resolveModel(providers, selectedModelId);
 
         if ((!provider || !model) && enabledModels.length > 0) {
           model = enabledModels[0];
-          provider = providers.find((p) =>
-            p.models.some((m) => m.id === model?.id),
-          );
+          provider = providers.find((p) => p.id === model?.providerId) || null;
         }
 
         if (!provider || !model) {
@@ -505,16 +502,11 @@ export function ChatView({
     if (!currentChat) return;
 
     // Find provider and model, with fallback to first enabled model
-    let provider = providers.find((p) =>
-      p.models.some((m) => m.id === selectedModelId),
-    );
-    let model = provider?.models.find((m) => m.id === selectedModelId);
+    let { provider, model } = resolveModel(providers, selectedModelId);
 
     if ((!provider || !model) && enabledModels.length > 0) {
       model = enabledModels[0];
-      provider = providers.find((p) =>
-        p.models.some((m) => m.id === model?.id),
-      );
+      provider = providers.find((p) => p.id === model?.providerId) || null;
     }
 
     if (!provider || !model) return;
@@ -927,17 +919,12 @@ export function ChatView({
       );
 
       // Find provider and model, with fallback to first enabled model
-      let provider = providers.find((p) =>
-        p.models.some((m) => m.id === selectedModelId),
-      );
-      let model = provider?.models.find((m) => m.id === selectedModelId);
+      let { provider, model } = resolveModel(providers, selectedModelId);
 
       // Fallback to first enabled model if no selection or selection not found
       if ((!provider || !model) && enabledModels.length > 0) {
         model = enabledModels[0];
-        provider = providers.find((p) =>
-          p.models.some((m) => m.id === model?.id),
-        );
+        provider = providers.find((p) => p.id === model?.providerId) || null;
       }
 
       if (!provider || !model) {
@@ -1311,10 +1298,7 @@ export function ChatView({
 
     titleGeneratedRef.current.add(activeChatId);
 
-    const provider = providers.find((p) =>
-      p.models.some((m) => m.id === selectedModelId),
-    );
-    const model = provider?.models.find((m) => m.id === selectedModelId);
+    const { provider, model } = resolveModel(providers, selectedModelId);
     if (!provider || !model) return;
 
     const firstUserMsg = chat.messages.find((m) => m.role === "user");

@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { Search, Check } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useStore } from "../../store/useStore";
-import { getDisplayName } from "../../lib/api";
+import { getDisplayName, makeModelKey } from "../../lib/api";
 import type { Model } from "../../types";
 import { fetchModels } from "../../lib/api";
 
@@ -153,7 +153,7 @@ export function ModelPicker({
   // Only show enabled models
   const allModels = providers.flatMap((p) =>
     p.models
-      .filter((m) => enabledModelIds.includes(m.id))
+      .filter((m) => enabledModelIds.includes(makeModelKey(m.providerId, m.id)))
       .map((m) => ({ ...m, provider: p })),
   );
 
@@ -250,7 +250,7 @@ export function ModelPicker({
               <button
                 key={m.id}
                 onClick={() => {
-                  setSelectedModelId(m.id);
+                  setSelectedModelId(makeModelKey(m.providerId, m.id));
                   onClose();
                 }}
                 style={{
@@ -261,7 +261,7 @@ export function ModelPicker({
                   padding: "9px 14px",
                   border: "none",
                   background:
-                    selectedModelId === m.id
+                    selectedModelId === makeModelKey(m.providerId, m.id)
                       ? "rgba(var(--acc-r),var(--acc-g),var(--acc-b),.1)"
                       : "transparent",
                   cursor: "pointer",
@@ -273,7 +273,7 @@ export function ModelPicker({
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background =
-                    selectedModelId === m.id
+                    selectedModelId === makeModelKey(m.providerId, m.id)
                       ? "rgba(var(--acc-r),var(--acc-g),var(--acc-b),.1)"
                       : "transparent";
                 }}
@@ -297,7 +297,7 @@ export function ModelPicker({
                     {formatContext(m.contextWindow)} ctx
                   </div>
                 </div>
-                {selectedModelId === m.id && (
+                {selectedModelId === makeModelKey(m.providerId, m.id) && (
                   <Check
                     size={16}
                     style={{
