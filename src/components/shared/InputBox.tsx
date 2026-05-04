@@ -50,6 +50,7 @@ export function InputBox({
     providers,
     enabledModelIds,
     langSearchApiKey,
+    langSearchEnabled,
     projects,
     activeChatId,
     addChatToProject,
@@ -57,6 +58,8 @@ export function InputBox({
     activeProjectId,
     setActiveProjectId,
   } = useStore();
+
+  const effectiveLangSearchApiKey = langSearchEnabled ? langSearchApiKey : "";
   const navigateToConnections = () => {
     useStore.getState().setSettingsSection("connections");
     useStore.getState().setActiveView("settings");
@@ -221,7 +224,7 @@ export function InputBox({
               onMemoryToggle={onMemoryToggle}
               direction="up"
               modelCanWebSearch={modelCanWebSearch}
-              langSearchApiKey={langSearchApiKey}
+              langSearchApiKey={effectiveLangSearchApiKey}
               onNavigateToConnections={navigateToConnections}
               projects={projects}
               activeChatId={activeChatId}
