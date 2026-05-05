@@ -64,6 +64,10 @@ interface AppState {
     mode: "changeable" | "vision" | "ocr" | "describe",
   ) => void;
 
+  // Disable attachment mode swap button
+  disableAttachmentSwap: boolean;
+  setDisableAttachmentSwap: (disabled: boolean) => void;
+
   // Quick Prompts
   quickPrompts: QuickPromptCategory[];
 
@@ -235,6 +239,7 @@ export const useStore = create<AppState>()(
       ocrInstalled: false,
       ocrEnabled: false,
       visionDefaultMode: "changeable",
+      disableAttachmentSwap: false,
       memories: [],
       quickPrompts: DEFAULT_QUICK_PROMPTS,
       projects: [],
@@ -393,10 +398,12 @@ export const useStore = create<AppState>()(
       setLangSearchEnabled: (langSearchEnabled) => set({ langSearchEnabled }),
       setImageDescriptionModelId: (imageDescriptionModelId) =>
         set({ imageDescriptionModelId }),
-      setOcrInstalled: (ocrInstalled) => set({ ocrInstalled }),
-      setOcrEnabled: (ocrEnabled) => set({ ocrEnabled }),
-      setVisionDefaultMode: (visionDefaultMode) => set({ visionDefaultMode }),
-      addMemory: (memory) =>
+       setOcrInstalled: (ocrInstalled) => set({ ocrInstalled }),
+       setOcrEnabled: (ocrEnabled) => set({ ocrEnabled }),
+       setVisionDefaultMode: (visionDefaultMode) => set({ visionDefaultMode }),
+       setDisableAttachmentSwap: (disableAttachmentSwap) =>
+         set({ disableAttachmentSwap }),
+       addMemory: (memory) =>
         set((s) => ({
           memories: [
             ...s.memories,

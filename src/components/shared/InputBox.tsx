@@ -77,7 +77,35 @@ export function InputBox({
     visionDefaultMode,
     ocrEnabled,
     imageDescriptionModelId,
+    disableAttachmentSwap,
   } = useStore();
+
+  // Mode color mapping
+  const getModeColor = (mode: ImageMode) => {
+    switch (mode) {
+      case "vision":
+        return "#6366f1"; // Indigo
+      case "ocr":
+        return "#f59e0b"; // Amber
+      case "describe":
+        return "#8b5cf6"; // Violet
+      default:
+        return "#6b7280"; // Gray
+    }
+  };
+
+  const getModeLabel = (mode: ImageMode) => {
+    switch (mode) {
+      case "vision":
+        return "VISION";
+      case "ocr":
+        return "OCR";
+      case "describe":
+        return "DESIGN";
+      default:
+        return mode.toUpperCase();
+    }
+  };
 
   const effectiveLangSearchApiKey = langSearchEnabled ? langSearchApiKey : "";
   const navigateToConnections = () => {
@@ -601,9 +629,11 @@ export function InputBox({
                         height: 96,
                         borderRadius: "var(--r-md)",
                         overflow: "hidden",
-                        border: `2px solid ${borderColor}`,
                         background: "var(--sf2)",
                         transition: "all 0.2s ease",
+                        border: disableAttachmentSwap
+                          ? `2px solid ${getModeColor((att as ImageAttachment).mode)}`
+                          : `2px solid ${borderColor}`,
                       }}
                     >
                       <img
@@ -640,8 +670,38 @@ export function InputBox({
                         <X size={13} />
                       </button>
 
-                      {/* Swap button - only show on hover if changeable and multiple modes available */}
-                      {visionDefaultMode === "changeable" &&
+                      {/* Mode badge or outline */}
+                      {!disableAttachmentSwap && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: 24,
+                            background: getModeColor(
+                              (att as ImageAttachment).mode,
+                            ),
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            color: "#fff",
+                            transition: "opacity 0.2s ease",
+                            opacity: hoveredImageId === att.id ? 0 : 1,
+                            pointerEvents: "none",
+                          }}
+                        >
+                          {getModeLabel(
+                            (att as ImageAttachment).mode,
+                          )}
+                        </div>
+                      )}
+
+                      {/* Swap button - only show on hover if swap enabled and multiple modes available */}
+                      {!disableAttachmentSwap &&
+                        visionDefaultMode === "changeable" &&
                         hoveredImageId === att.id &&
                         (() => {
                           // Determine available modes
@@ -673,24 +733,29 @@ export function InputBox({
                         })() && (
                           <button
                             onClick={() => cycleAttachmentMode(att.id)}
-                            title={`Switch from ${att.mode} mode`}
+                            title={`Switch from ${(att as ImageAttachment).mode} mode`}
                             style={{
                               position: "absolute",
-                              bottom: 6,
-                              left: "50%",
-                              transform: "translateX(-50%)",
-                              padding: "6px 10px",
-                              borderRadius: "var(--r-sm)",
-                              background: "rgba(0,0,0,0.8)",
-                              border: "1px solid rgba(255,255,255,0.3)",
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              height: 24,
+                              padding: "0 8px",
+                              borderRadius: 0,
+                              background: getModeColor(
+                                (att as ImageAttachment).mode,
+                              ),
+                              border: "none",
                               cursor: "pointer",
                               fontSize: "11px",
                               fontWeight: 600,
                               color: "#fff",
                               display: "flex",
                               alignItems: "center",
+                              justifyContent: "center",
                               gap: 4,
-                              animation: "fadeIn 0.15s ease",
+                              animation: "swapButtonFade 0.2s ease",
+                              transition: "all 0.2s ease",
                             }}
                           >
                             <RefreshCw size={12} />

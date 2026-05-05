@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   ChevronDown,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import {
@@ -1315,6 +1316,8 @@ function ConnectionsPanel() {
     setOcrEnabled,
     visionDefaultMode,
     setVisionDefaultMode,
+    disableAttachmentSwap,
+    setDisableAttachmentSwap,
   } = useStore();
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyInput, setKeyInput] = useState("");
@@ -2481,11 +2484,79 @@ function ConnectionsPanel() {
                         }}
                       />
                     )}
-                  </div>
-                </div>
-              </>
-            )}
+                   </div>
+                 </div>
+               </>
+             )}
+           </div>
+         </div>
+
+        {/* Disable Attachment Swap row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "11px 12px",
+            background: "var(--sf)",
+            border: "1px solid var(--bd)",
+            borderRadius: "var(--r-sm)",
+            marginTop: 12,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Icon */}
+            <div
+              style={{
+                position: "relative",
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                background: "var(--sf2)",
+                border: "1px solid var(--bd)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--tx2)",
+                flexShrink: 0,
+              }}
+            >
+              <Lock size={14} />
+            </div>
+            <div>
+              <div className="set-rl" style={{ margin: 0 }}>
+                Lock Attachment Mode
+              </div>
+              <div className="set-rsub">
+                Disable swap button and show mode badge with outline instead
+              </div>
+            </div>
           </div>
+
+          {/* Toggle */}
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              cursor: "pointer",
+              gap: 8,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={disableAttachmentSwap}
+              onChange={(e) => setDisableAttachmentSwap(e.target.checked)}
+              style={{
+                width: 16,
+                height: 16,
+                cursor: "pointer",
+                accentColor: "var(--acc)",
+              }}
+            />
+            <span style={{ fontSize: "12px", color: "var(--tx2)" }}>
+              {disableAttachmentSwap ? "Locked" : "Unlocked"}
+            </span>
+          </label>
         </div>
       </div>
     </div>
