@@ -722,26 +722,26 @@ async function streamGroq(
           ocr: ocrAttachments.length,
           describe: describeAttachments.length,
           attachments: m.attachments.map((a) => ({ type: a.type, mode: (a as any).mode, hasDescription: !!(a as any).description })),
-        });
-      }
-      
-      // Build message content
-      let messageContent = m.content;
-      
-      // Add OCR extracted text
-      for (const att of ocrAttachments) {
-        if (att.description) {
-          messageContent += `\n\n[OCR from ${att.fileName}]\n${att.description}`;
-        }
-      }
-      
-      // Add describe extracted text
-      for (const att of describeAttachments) {
-        if (att.description) {
-          messageContent += `\n\n[Image description of ${att.fileName}]\n${att.description}`;
-        }
-      }
-      
+         });
+       }
+       
+       // Build message content
+       let messageContent = m.content;
+       
+       // Add OCR extracted text
+       for (const att of ocrAttachments) {
+         if (att.description) {
+           messageContent += `\n\nText extracted from image user attached:\n${att.description}`;
+         }
+       }
+       
+       // Add describe extracted text
+       for (const att of describeAttachments) {
+         if (att.description) {
+           messageContent += `\n\n[Image description of ${att.fileName}]\n${att.description}`;
+         }
+       }
+       
       if (m.role === "user" && visionAttachments.length > 0 && model.capabilities?.supportsVision) {
         // Build multimodal content for vision attachments
         const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
@@ -975,21 +975,21 @@ async function streamOpenAICompatible(
       // Separate vision and non-vision attachments (only ImageAttachments have mode)
       const imageAttachments = m.attachments?.filter((a) => a.type === "image") as ImageAttachment[] | undefined || [];
       const visionAttachments = imageAttachments.filter((a) => a.mode === "vision");
-      const ocrAttachments = imageAttachments.filter((a) => a.mode === "ocr");
-      const describeAttachments = imageAttachments.filter((a) => a.mode === "describe");
-      
-      // Build message content
-      let messageContent = m.content;
-      
-      // Add OCR extracted text
-      for (const att of ocrAttachments) {
-        if (att.description) {
-          messageContent += `\n\n[OCR from ${att.fileName}]\n${att.description}`;
-        }
-      }
-      
-      // Add describe extracted text
-      for (const att of describeAttachments) {
+       const ocrAttachments = imageAttachments.filter((a) => a.mode === "ocr");
+       const describeAttachments = imageAttachments.filter((a) => a.mode === "describe");
+       
+       // Build message content
+       let messageContent = m.content;
+       
+       // Add OCR extracted text
+       for (const att of ocrAttachments) {
+         if (att.description) {
+           messageContent += `\n\nText extracted from image user attached:\n${att.description}`;
+         }
+       }
+       
+       // Add describe extracted text
+       for (const att of describeAttachments) {
         if (att.description) {
           messageContent += `\n\n[Image description of ${att.fileName}]\n${att.description}`;
         }
