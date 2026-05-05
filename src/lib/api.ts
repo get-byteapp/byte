@@ -164,8 +164,28 @@ export async function fetchModels(provider: Provider): Promise<Model[]> {
   };
 
   if (provider.id === "anthropic") {
-    headers["x-api-key"] = provider.apiKey;
-    headers["anthropic-version"] = "2023-06-01";
+    // Anthropic doesn't have a public list models endpoint; return known models
+    const knownModels = [
+      { id: "claude-opus-4-20250514", name: "Claude Opus 4", contextWindow: 200000 },
+      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200000 },
+      { id: "claude-haiku-4-20250514", name: "Claude Haiku 4", contextWindow: 200000 },
+      { id: "claude-3-5-sonnet-20241022", name: "Claude Sonnet 3.5", contextWindow: 200000 },
+      { id: "claude-3-5-haiku-20241022", name: "Claude Haiku 3.5", contextWindow: 200000 },
+      { id: "claude-3-opus-20240229", name: "Claude Opus 3", contextWindow: 200000 },
+      { id: "claude-3-sonnet-20240229", name: "Claude Sonnet 3", contextWindow: 200000 },
+      { id: "claude-3-haiku-20240307", name: "Claude Haiku 3", contextWindow: 200000 },
+    ];
+    return knownModels.map((m) => ({
+      id: m.id,
+      name: m.name,
+      providerId: provider.id,
+      contextWindow: m.contextWindow,
+      enabled: false,
+      capabilities: {
+        webSearch: modelHasNativeWebSearch(provider.id, m.id),
+        supportsVision: modelSupportsVision(provider.id, m.id),
+      },
+    }));
   } else if (provider.id === "google") {
     // Always use the correct endpoint regardless of stored baseUrl
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${provider.apiKey}`;
