@@ -220,7 +220,15 @@ function ProviderModal({
   };
 
   const handleAdd = async () => {
-    if (!selectedProvider || !apiKey.trim()) return;
+    if (!selectedProvider) return;
+
+    // Ollama and LM Studio don't require API keys
+    if (
+      selectedProvider !== "ollama" &&
+      selectedProvider !== "lmstudio" &&
+      !apiKey.trim()
+    )
+      return;
 
     const providerInfo = availableProviders.find(
       (p) => p.id === selectedProvider,
@@ -244,7 +252,7 @@ function ProviderModal({
       onAddProvider(newProvider);
       onClose();
     } catch (e) {
-      setError("Failed to fetch models. Please check your API key.");
+      setError("Failed to fetch models. Please check your settings.");
       setLoading(false);
     }
   };
@@ -421,39 +429,78 @@ function ProviderModal({
                 }
               </span>
             </div>
-            {selectedProvider === "ollama" ||
-            selectedProvider === "lmstudio" ? (
-              <div
-                style={{
-                  padding: 16,
-                  background: "var(--sf2)",
-                  borderRadius: "var(--r-sm)",
-                  marginBottom: 16,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "calc(var(--fs) - 1px)",
-                    color: "var(--tx2)",
-                    marginBottom: 8,
-                  }}
-                >
-                  No API key needed for local providers
-                </div>
-                <div
-                  style={{
-                    fontSize: "calc(var(--fs) - 2px)",
-                    color: "var(--tx3)",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {selectedProvider === "ollama" &&
-                    "Make sure Ollama is running with `ollama serve`"}
-                  {selectedProvider === "lmstudio" &&
-                    "Start the local server in LM Studio settings"}
-                </div>
-              </div>
-            ) : (
+             {selectedProvider === "ollama" ||
+             selectedProvider === "lmstudio" ? (
+               <div
+                 style={{
+                   display: "flex",
+                   flexDirection: "column",
+                   gap: 12,
+                 }}
+               >
+                 <div
+                   style={{
+                     padding: 16,
+                     background: "var(--sf2)",
+                     borderRadius: "var(--r-sm)",
+                   }}
+                 >
+                   <div
+                     style={{
+                       fontSize: "calc(var(--fs) - 1px)",
+                       color: "var(--tx2)",
+                       marginBottom: 8,
+                     }}
+                   >
+                     No API key needed for local providers
+                   </div>
+                   <div
+                     style={{
+                       fontSize: "calc(var(--fs) - 2px)",
+                       color: "var(--tx3)",
+                       lineHeight: 1.6,
+                     }}
+                   >
+                     {selectedProvider === "ollama" &&
+                       "Make sure Ollama is running with `ollama serve`"}
+                     {selectedProvider === "lmstudio" &&
+                       "Start the local server in LM Studio settings"}
+                   </div>
+                 </div>
+                 <div style={{ marginBottom: 0 }}>
+                   <div
+                     style={{
+                       fontSize: "calc(var(--fs) - 2px)",
+                       color: "var(--tx3)",
+                       marginBottom: 4,
+                     }}
+                   >
+                     Server address (optional)
+                   </div>
+                   <input
+                     type="text"
+                     placeholder={
+                       selectedProvider === "ollama"
+                         ? "http://localhost:11434"
+                         : "http://localhost:1234"
+                     }
+                     value={baseUrl}
+                     onChange={(e) => setBaseUrl(e.target.value)}
+                     style={{
+                       width: "100%",
+                       padding: "10px 12px",
+                       background: "var(--sf2)",
+                       border: "1px solid var(--bd)",
+                       borderRadius: "var(--r-sm)",
+                       fontSize: "calc(var(--fs) - 1px)",
+                       color: "var(--tx)",
+                       outline: "none",
+                       fontFamily: "var(--font)",
+                     }}
+                   />
+                 </div>
+               </div>
+             ) : (
               <div style={{ position: "relative", marginBottom: 8 }}>
                 <input
                   type={showKey ? "text" : "password"}
