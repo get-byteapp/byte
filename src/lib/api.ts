@@ -430,12 +430,30 @@ export async function fetchModels(provider: Provider): Promise<Model[]> {
     }
 
     return modelsData.map((m: any) => {
-      const modelId = m.id || m.name || "";
+      const modelId = m.id || m.model || m.name || "";
+      const modelName = m.name || m.model || m.id || "";
+      // For Ollama/LM Studio, estimate context window from parameter size if not provided
+      let contextWindow = m.context_window || m.context_length;
+      if (!contextWindow && m.details?.parameter_size) {
+        // Parse parameter_size like "494.03M", "1.2B", "480B"
+        const sizeStr = m.details.parameter_size.trim();
+        if (sizeStr.endsWith("M")) {
+          const num = parseFloat(sizeStr);
+          // ~1000 tokens context per 1M parameters (rough estimate)
+          contextWindow = Math.ceil(num * 1000);
+        } else if (sizeStr.endsWith("B")) {
+          const num = parseFloat(sizeStr);
+          // ~4000 tokens context per 1B parameters (rough estimate)
+          contextWindow = Math.ceil(num * 4000);
+        }
+      }
+      contextWindow = contextWindow || 4096;
+
       return {
         id: modelId,
-        name: m.name || m.id || "",
+        name: modelName,
         providerId: provider.id,
-        contextWindow: m.context_window || m.context_length || 4096,
+        contextWindow,
         enabled: false,
         capabilities: {
           webSearch: false,

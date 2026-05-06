@@ -766,7 +766,7 @@ function ModelsPanel({
                   color: "var(--tx)",
                 }}
               >
-                {m.name || getDisplayName(m.id)}
+                {m.name || m.id}
               </div>
               <div
                 style={{
