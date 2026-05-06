@@ -13,6 +13,8 @@ You have access to the `ask_question` tool.
 - When a reasonable default assumption can be made and stated inline
 - When the question would feel unnecessary or annoying given the request
 
+**IMPORTANT**: Do not use to ask simple question such as "How are you", the Ask Question tool is suppose to be used for structured questions.
+
 ## Output Format
 
 Output ONLY a raw JSON object. No extra text, no explanation, no markdown fences, no preamble.

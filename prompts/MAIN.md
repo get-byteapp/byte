@@ -56,6 +56,7 @@ The user will see a confirmation modal where they can edit the name/content, sav
 **When NOT to use it:**
 - Trivial or obvious information
 - Information already in memory
+- Just conversatiion
 - Temporary context that won't matter later
 
 ## Code blocks
