@@ -26,6 +26,7 @@ import {
   resolveModel,
   describeImage,
 } from "../../lib/api";
+import { assemblePrompt, getDefaultChatConfig } from "../../lib/prompts";
 import { extractTextOCR } from "../../lib/ocr";
 import { getSlashCommandPrompt } from "../../lib/slashCommands";
 
@@ -951,11 +952,26 @@ export function ChatView({
       console.group("[BYTE DEBUG] Sending message");
       console.log("User message:", text.trim());
       console.log("Is slash command:", !!simplifiedSystemPrompt);
-      console.log(
-        "System prompt:",
-        simplifiedSystemPrompt ||
-          "[Using full assembled prompt from chat config]",
-      );
+      
+      // Log the actual system prompt if not using slash command
+      if (!simplifiedSystemPrompt) {
+        const { systemPrompt: actualPrompt } = assemblePrompt(
+          chat?.config || getDefaultChatConfig(),
+          memories,
+          model
+        );
+        console.log("System prompt (first 500 chars):", actualPrompt.substring(0, 500));
+        console.log("System prompt (full length):", actualPrompt.length);
+        // Check if ASK_QUESTION is in the prompt
+        if (actualPrompt.includes("ask_question")) {
+          console.log("✓ ASK_QUESTION tool found in prompt");
+        } else {
+          console.log("✗ ASK_QUESTION tool NOT found in prompt");
+        }
+      } else {
+        console.log("System prompt:", simplifiedSystemPrompt.substring(0, 500));
+      }
+      
       console.log("Chat config:", chat?.config);
       console.log("Enabled tools:", chat?.config?.enabledTools);
       console.log("Memories enabled:", chat?.config?.memoryEnabled);
