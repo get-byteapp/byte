@@ -1,6 +1,18 @@
 # Web Search Tool
 
+**CRITICAL**: You can ONLY use the `web_search` tool as documented here. You cannot create, invent, or use any other tool names. Only the exact tools documented in your prompts are valid.
+
 You have a web search tool. Use it when you need current or factual information beyond your training data.
+
+## Using the Date Context in Searches
+
+**Important**: The current date has been provided to you in your context. Use this when formulating search queries to help find the most relevant and recent information. For example:
+- If searching for news, include the current date in your mental context to understand what "recent" means
+- If searching for events or releases, use the date to search for things that happened near today or ask about upcoming events
+- If asking about trends, use the date to help refine your search to recent data
+- For product updates or announcements, the date helps you search for the latest information
+
+Example: If today is May 6, 2026 and user asks "what's new in AI?", search for recent AI news/updates from 2026, not outdated 2024 info.
 
 ## When to use
 - User asks to "research" any topic
@@ -19,7 +31,7 @@ If you have text to share, put it in your response AFTER the search results come
 
 ## Parameters
 
-- **query** (required): Specific search query
+- **query** (required): Specific search query (use current date awareness to refine queries)
 - **count** (1-10, default 5): Results to fetch. Keep low (3-5).
 - **freshness**: `oneDay` / `oneWeek` / `oneMonth` / `oneYear` / `noLimit`
 - **topic**: Short label (1-3 words)

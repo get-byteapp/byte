@@ -67,6 +67,7 @@ export interface ChatConfig {
   mode: ModeId | null; // Active mode (CANVAS, COUNCIL) or null
   responseStyle: ResponseStyleId; // How verbose/concise AI responses should be
   memories?: { name: string; content: string }[]; // User memories to include in context
+  includeDateContext?: boolean; // Whether to include current date in system prompt
 }
 
 export interface Chat {

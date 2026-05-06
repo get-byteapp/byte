@@ -2,10 +2,11 @@
  * Prompt Assembly Module
  * 
  * Assembles system prompts based on chat configuration.
- * Order: MAIN → Style → Agent → Memory → Tools → Mode
+ * Order: MAIN → Style → Agent → Memory → Date Context → Tools → Mode
  */
 
 import type { ChatConfig, ToolId, ModeId, ResponseStyleId, Model } from '../types';
+import { getDateContextString } from './dateProvider';
 
 // Import all prompt files as raw strings
 import MAIN from '../../prompts/MAIN.md?raw';
@@ -71,8 +72,9 @@ export interface AssembledPrompt {
  * 2. Response Style (if not 'normal')
  * 3. Agent (always, defaults to DEFAULT)
  * 4. Memories (if memoryEnabled and memories provided)
- * 5. Tools (for each enabled tool)
- * 6. Mode (if active)
+ * 5. Date Context (if includeDateContext is true)
+ * 6. Tools (for each enabled tool)
+ * 7. Mode (if active)
  */
 export function assemblePrompt(config: ChatConfig, memories?: { name: string; content: string }[], model?: Model): AssembledPrompt {
   const parts: string[] = [];
@@ -108,7 +110,14 @@ export function assemblePrompt(config: ChatConfig, memories?: { name: string; co
     includedFiles.push('MEMORY.md');
   }
 
-  // 5. Tools (conditional, multiple)
+  // 5. Date Context (if enabled - helpful for web search and reasoning about "today")
+  if (config.includeDateContext !== false) { // default to true
+    const dateContext = getDateContextString();
+    parts.push(`## Current Context\n\n${dateContext}`);
+    includedFiles.push('DATE_CONTEXT');
+  }
+
+  // 6. Tools (conditional, multiple)
   // Skip WEB_SEARCH tool instructions for models with native search
   // (they handle search internally via API config)
   const modelHasNativeSearch = model?.capabilities?.webSearch
@@ -121,7 +130,7 @@ export function assemblePrompt(config: ChatConfig, memories?: { name: string; co
     }
   }
 
-  // 6. Mode (conditional, one max)
+  // 7. Mode (conditional, one max)
   if (config.mode) {
     const modePrompt = MODES[config.mode];
     if (modePrompt?.trim()) {

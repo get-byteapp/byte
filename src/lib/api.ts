@@ -1760,7 +1760,21 @@ export async function searchWithLangSearch(
   return result.data?.webPages?.value || [];
 }
 
+// Rate limit for Jina API calls - minimum 1 second between requests
+let lastJinaCallTime = 0;
+const JINA_COOLDOWN_MS = 1000; // 1 second between requests
+
 export async function fetchPageWithJina(url: string): Promise<string> {
+  // Enforce cooldown between Jina requests
+  const timeSinceLastCall = Date.now() - lastJinaCallTime;
+  if (timeSinceLastCall < JINA_COOLDOWN_MS) {
+    const delayNeeded = JINA_COOLDOWN_MS - timeSinceLastCall;
+    console.log(`[JINA] Cooldown: waiting ${delayNeeded}ms before next request`);
+    await new Promise((resolve) => setTimeout(resolve, delayNeeded));
+  }
+
+  lastJinaCallTime = Date.now();
+
   const response = await fetch(`https://r.jina.ai/${encodeURIComponent(url)}`, {
     headers: { Accept: "text/markdown" },
   });
