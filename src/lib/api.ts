@@ -429,22 +429,69 @@ export async function fetchModels(provider: Provider): Promise<Model[]> {
       throw new Error(`Failed to fetch models: ${response.statusText}`);
     }
 
+    // Hardcoded context windows for known models (Ollama doesn't expose this in API)
+    const modelContextWindows: Record<string, number> = {
+      "qwen2.5:0.5b": 32000,
+      "qwen2.5:1.5b": 32000,
+      "qwen2.5:3b": 32000,
+      "qwen2.5:7b": 32000,
+      "qwen2.5:14b": 32000,
+      "qwen2.5:32b": 32000,
+      "qwen2.5:72b": 32000,
+      "qwen3:7b": 32000,
+      "qwen3:14b": 32000,
+      "qwen3:32b": 32000,
+      "qwen3:72b": 32000,
+      "qwen3:90b": 32000,
+      "qwen3-coder:480b": 32000,
+      "qwen3-coder:480b-cloud": 32000,
+      "llama2": 4096,
+      "llama2:7b": 4096,
+      "llama2:13b": 4096,
+      "llama2:70b": 4096,
+      "llama3": 8192,
+      "llama3:8b": 8192,
+      "llama3:70b": 8192,
+      "llama3.1": 128000,
+      "llama3.1:8b": 128000,
+      "llama3.1:70b": 128000,
+      "llama3.1:405b": 128000,
+      "llama3.2:1b": 8192,
+      "llama3.2:3b": 8192,
+      "mistral": 32000,
+      "mistral:7b": 32000,
+      "mistral:8x7b": 32000,
+      "mixtral": 32000,
+      "mixtral:8x7b": 32000,
+      "mixtral:8x22b": 65000,
+      "neural-chat": 4096,
+      "starling-lm": 4096,
+      "dolphin-mixtral": 32000,
+      "claude-3-5-sonnet-20241022": 200000,
+      "claude-3-5-sonnet-20241022:latest": 200000,
+      "minimax-m2.5": 4096,
+      "minimax-m2.5:cloud": 4096,
+    };
+
     return modelsData.map((m: any) => {
       const modelId = m.id || m.model || m.name || "";
       const modelName = m.name || m.model || m.id || "";
-      // For Ollama/LM Studio, estimate context window from parameter size if not provided
+      
+      // Look up context window from hardcoded map, fall back to 4096
       let contextWindow = m.context_window || m.context_length;
-      if (!contextWindow && m.details?.parameter_size) {
-        // Parse parameter_size like "494.03M", "1.2B", "480B"
-        const sizeStr = m.details.parameter_size.trim();
-        if (sizeStr.endsWith("M")) {
-          const num = parseFloat(sizeStr);
-          // ~1000 tokens context per 1M parameters (rough estimate)
-          contextWindow = Math.ceil(num * 1000);
-        } else if (sizeStr.endsWith("B")) {
-          const num = parseFloat(sizeStr);
-          // ~4000 tokens context per 1B parameters (rough estimate)
-          contextWindow = Math.ceil(num * 4000);
+      if (!contextWindow) {
+        // Try exact match first
+        contextWindow = modelContextWindows[modelName];
+        // If no exact match, try matching the base model name (before :)
+        if (!contextWindow && modelName.includes(":")) {
+          const baseName = modelName.split(":")[0];
+          // Look for any model starting with the base name
+          for (const [key, value] of Object.entries(modelContextWindows)) {
+            if (key.startsWith(baseName)) {
+              contextWindow = value;
+              break;
+            }
+          }
         }
       }
       contextWindow = contextWindow || 4096;
