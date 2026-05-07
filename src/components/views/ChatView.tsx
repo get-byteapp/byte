@@ -62,6 +62,7 @@ export function ChatView({
   const streamAbortRef = useRef<(() => void) | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isSearchingRef = useRef(false);
+  const failedFetchUrlsRef = useRef<string[]>([]);
   const titleGeneratedRef = useRef<Set<string>>(new Set());
   const chat = chats.find((c) => c.id === activeChatId);
 
@@ -177,7 +178,11 @@ export function ChatView({
 
   const parseWebSearchTool = (content: string): WebSearchParams | null => {
     if (!content || content.trim().length < 10) return null;
-    let cleaned = content.replace(/```[\w-]*\n?/g, "").trim();
+    // Strip escaped backticks and tool_call wrappers that models sometimes add
+    let cleaned = content
+      .replace(/\\```[\w-]*\n?/g, "")
+      .replace(/```[\w-]*\n?/g, "")
+      .trim();
     try {
       const jsonMatch = cleaned.match(
         /\{[\s\S]*"tool"\s*:\s*"(?:web_search|news_search|search)"[\s\S]*\}/,
@@ -312,8 +317,34 @@ export function ChatView({
             }
           } catch {
             console.log("[BYTE] Jina blocked or failed:", searchResults[i].url);
+            failedFetchUrlsRef.current.push(searchResults[i].url);
           }
         }
+
+        // If all requested URLs failed (e.g., 451 errors), inform the AI to try alternatives
+        const totalUrlsToTry = params.fetch_urls?.length || Math.min(2, searchResults.length);
+        let feedbackMsg: Message | null = null;
+        
+        if (failedFetchUrlsRef.current.length >= totalUrlsToTry && searchResults.length > 0) {
+          const failedUrls = failedFetchUrlsRef.current.join(', ');
+          const alternativeUrls = searchResults
+            .filter(r => !failedFetchUrlsRef.current.includes(r.url))
+            .slice(0, 3)
+            .map((r, i) => `${i}: ${r.url}`)
+            .join('\n');
+          
+          const feedback = `The following URLs were unscrapable (451 error or blocked): ${failedUrls}.\n\nPlease try fetching these alternative URLs instead:\n${alternativeUrls}\n\nOr run a new web_search with a different query to find accessible sources.`;
+          
+          feedbackMsg = {
+            id: crypto.randomUUID(),
+            role: "user",
+            content: feedback,
+            timestamp: Date.now(),
+            status: "sent",
+            hidden: true,
+          };
+        }
+        failedFetchUrlsRef.current = []; // Reset for next search
 
         let formattedResults = formatSearchResults(params.query, searchResults);
         if (jinaResults.length > 0) {
@@ -337,7 +368,7 @@ export function ChatView({
           return;
         }
 
-        // Phase 4: Mark as done
+        // Phase4: Mark as done
         const updatedMessages = freshChat.messages.map((m) =>
           m.id === toolMsgId
             ? {
@@ -349,9 +380,10 @@ export function ChatView({
             : m,
         );
 
-        const withSearchResults = [...updatedMessages, resultsMsg];
-
-        updateChat(chatId, { messages: withSearchResults });
+        const withSearchResultsFinal = feedbackMsg 
+          ? [...updatedMessages, resultsMsg, feedbackMsg]
+          : [...updatedMessages, resultsMsg];
+        updateChat(chatId, { messages: withSearchResultsFinal });
 
         // Get provider/model for continuing
         let { provider, model } = resolveModel(providers, selectedModelId);
@@ -371,7 +403,7 @@ export function ChatView({
           const handle = streamChat(
             provider,
             model,
-            withSearchResults,
+            withSearchResultsFinal,
             (chunk) => {
               const chat = useStore
                 .getState()
@@ -443,7 +475,7 @@ export function ChatView({
           const response = await sendChatMessage(
             provider,
             model,
-            withSearchResults,
+            withSearchResultsFinal,
             undefined,
             freshChat.config,
             memories,
@@ -457,7 +489,7 @@ export function ChatView({
             (m) => m.id === toolMsgId,
           );
           updateChat(chatId, {
-            messages: withSearchResults.map((m) =>
+            messages: withSearchResultsFinal.map((m) =>
               m.id === toolMsgId
                 ? {
                     ...m,
@@ -754,18 +786,24 @@ export function ChatView({
     // Reject obviously invalid content early
     if (!content || content.trim().length < 10) return null;
 
+    // Strip escaped backticks and tool_call wrappers that models sometimes add
+    let cleaned = content
+      .replace(/\\```[\w-]*\n?/g, "")
+      .replace(/```[\w-]*\n?/g, "")
+      .trim();
+
     // Reject content that looks like an error message
     if (
-      content.startsWith("ERROR:") ||
-      content.startsWith("Error:") ||
-      content.startsWith("error")
+      cleaned.startsWith("ERROR:") ||
+      cleaned.startsWith("Error:") ||
+      cleaned.startsWith("error")
     ) {
       return null;
     }
 
     try {
       // First try: Find JSON object with "tool":"ask_question"
-      const jsonMatch = content.match(
+      const jsonMatch = cleaned.match(
         /\{[\s\S]*"tool"\s*:\s*"ask_question"[\s\S]*\}/,
       );
       if (jsonMatch) {
@@ -782,7 +820,7 @@ export function ChatView({
       // Fallback: Try to detect raw question object without tool wrapper
       // e.g., {"question":"...?","type":"...?","options":[...]}
       // Only match if we have a proper JSON structure
-      const rawMatch = content.match(
+      const rawMatch = cleaned.match(
         /\{[\s\S]*"question"\s*:\s*"[^"]{3,}"[\s\S]*\}/,
       );
       if (rawMatch) {
@@ -896,8 +934,13 @@ export function ChatView({
     content: string,
   ): { name: string; content: string } | null => {
     if (!content || content.trim().length < 10) return null;
+    // Strip escaped backticks and tool_call wrappers
+    let cleaned = content
+      .replace(/\\```[\w-]*\n?/g, "")
+      .replace(/```[\w-]*\n?/g, "")
+      .trim();
     try {
-      const jsonMatch = content.match(
+      const jsonMatch = cleaned.match(
         /\{[\s\S]*"tool"\s*:\s*"suggest_memory"[\s\S]*\}/,
       );
       if (jsonMatch) {
@@ -1117,19 +1160,24 @@ export function ChatView({
               existingMsg?.rawContent || existingMsg?.content || "";
             const accumulatedContent = currentRaw + chunk;
 
+            // Strip escaped backticks for tool detection
+            const cleanedForDetection = accumulatedContent
+              .replace(/\\```[\w-]*\n?/g, "")
+              .replace(/```[\w-]*\n?/g, "");
+
             // Check if this looks like an ask_question tool call
             // Only match the specific "tool":"ask_question" pattern - avoid false positives
             const isAskQuestion =
-              accumulatedContent.includes('"tool":"ask_question"') ||
-              accumulatedContent.includes('"tool": "ask_question"');
+              cleanedForDetection.includes('"tool":"ask_question"') ||
+              cleanedForDetection.includes('"tool": "ask_question"');
 
             const isSuggestMemory =
-              accumulatedContent.includes('"tool":"suggest_memory"') ||
-              accumulatedContent.includes('"tool": "suggest_memory"');
+              cleanedForDetection.includes('"tool":"suggest_memory"') ||
+              cleanedForDetection.includes('"tool": "suggest_memory"');
 
             const isWebSearch =
               /"tool"\s*:\s*"(web_search|news_search|search)"/.test(
-                accumulatedContent,
+                cleanedForDetection,
               );
 
             let displayContent = accumulatedContent;

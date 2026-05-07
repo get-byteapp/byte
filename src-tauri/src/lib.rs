@@ -12,6 +12,32 @@ fn get_project_dir(app: &tauri::AppHandle, project_id: &str) -> PathBuf {
 }
 
 #[tauri::command]
+async fn get_ollama_model_details(base_url: String, model: String) -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/api/show", base_url.trim_end_matches('/'));
+    let body = serde_json::json!({ "model": model });
+
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch model details: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("API returned status: {}", response.status()));
+    }
+
+    let json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    Ok(json)
+}
+
+#[tauri::command]
 fn save_project_file(
     app: tauri::AppHandle,
     project_id: String,
@@ -88,6 +114,7 @@ pub fn run() {
             read_project_file,
             delete_project_file,
             list_project_files,
+            get_ollama_model_details,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -148,6 +148,16 @@ export function modelSupportsVision(
   if (providerId === "mistral") return id.includes("pixtral");
   if (providerId === "together")
     return id.includes("vision") || id.includes("llava");
+  if (providerId === "ollama" || providerId === "lmstudio")
+    return (
+      id.includes("vision") ||
+      id.includes("llava") ||
+      id.includes("bakllava") ||
+      id.includes("moondream") ||
+      id.includes("llama3.2-vision") ||
+      id.includes("llama3.1-vision") ||
+      id.includes("pixtral")
+    );
   return false;
 }
 
@@ -429,72 +439,44 @@ export async function fetchModels(provider: Provider): Promise<Model[]> {
       throw new Error(`Failed to fetch models: ${response.statusText}`);
     }
 
-    // Hardcoded context windows for known models (Ollama doesn't expose this in API)
-    const modelContextWindows: Record<string, number> = {
-      "qwen2.5:0.5b": 32000,
-      "qwen2.5:1.5b": 32000,
-      "qwen2.5:3b": 32000,
-      "qwen2.5:7b": 32000,
-      "qwen2.5:14b": 32000,
-      "qwen2.5:32b": 32000,
-      "qwen2.5:72b": 32000,
-      "qwen3:7b": 32000,
-      "qwen3:14b": 32000,
-      "qwen3:32b": 32000,
-      "qwen3:72b": 32000,
-      "qwen3:90b": 32000,
-      "qwen3-coder:480b": 32000,
-      "qwen3-coder:480b-cloud": 32000,
-      "llama2": 4096,
-      "llama2:7b": 4096,
-      "llama2:13b": 4096,
-      "llama2:70b": 4096,
-      "llama3": 8192,
-      "llama3:8b": 8192,
-      "llama3:70b": 8192,
-      "llama3.1": 128000,
-      "llama3.1:8b": 128000,
-      "llama3.1:70b": 128000,
-      "llama3.1:405b": 128000,
-      "llama3.2:1b": 8192,
-      "llama3.2:3b": 8192,
-      "mistral": 32000,
-      "mistral:7b": 32000,
-      "mistral:8x7b": 32000,
-      "mixtral": 32000,
-      "mixtral:8x7b": 32000,
-      "mixtral:8x22b": 65000,
-      "neural-chat": 4096,
-      "starling-lm": 4096,
-      "dolphin-mixtral": 32000,
-      "claude-3-5-sonnet-20241022": 200000,
-      "claude-3-5-sonnet-20241022:latest": 200000,
-      "minimax-m2.5": 4096,
-      "minimax-m2.5:cloud": 4096,
-    };
+    // Fetch detailed model info using Tauri backend (bypasses CORS)
+    const { invoke } = await import('@tauri-apps/api/core');
 
-    return modelsData.map((m: any) => {
+    const modelPromises = modelsData.map(async (m: any) => {
       const modelId = m.id || m.model || m.name || "";
       const modelName = m.name || m.model || m.id || "";
-      
-      // Look up context window from hardcoded map, fall back to 4096
-      let contextWindow = m.context_window || m.context_length;
-      if (!contextWindow) {
-        // Try exact match first
-        contextWindow = modelContextWindows[modelName];
-        // If no exact match, try matching the base model name (before :)
-        if (!contextWindow && modelName.includes(":")) {
-          const baseName = modelName.split(":")[0];
-          // Look for any model starting with the base name
-          for (const [key, value] of Object.entries(modelContextWindows)) {
-            if (key.startsWith(baseName)) {
-              contextWindow = value;
-              break;
-            }
+
+      let contextWindow = 4096;
+      let supportsVision = false;
+
+      try {
+        const modelDetails: any = await invoke("get_ollama_model_details", {
+          baseUrl: provider.baseUrl.replace(/\/v1\/?$/, ''),
+          model: modelId,
+        });
+
+        // Extract context length from model_info (key varies by model family)
+        if (modelDetails.model_info) {
+          const contextKey = Object.keys(modelDetails.model_info).find(
+            (k: string) => k.endsWith(".context_length")
+          );
+          if (contextKey && modelDetails.model_info[contextKey]) {
+            contextWindow = modelDetails.model_info[contextKey];
           }
         }
+
+        // Check capabilities array for vision support
+        if (modelDetails.capabilities?.includes("vision")) {
+          supportsVision = true;
+        }
+      } catch {
+        // Silently fall back to defaults if backend call fails
       }
-      contextWindow = contextWindow || 4096;
+
+      // Fallback: use name-based detection if API didn't return capabilities
+      if (!supportsVision) {
+        supportsVision = modelSupportsVision(provider.id, modelId);
+      }
 
       return {
         id: modelId,
@@ -504,10 +486,12 @@ export async function fetchModels(provider: Provider): Promise<Model[]> {
         enabled: false,
         capabilities: {
           webSearch: false,
-          supportsVision: modelSupportsVision(provider.id, modelId),
+          supportsVision,
         },
       };
     });
+
+    return Promise.all(modelPromises);
   } else if (
     provider.id === "mistral" ||
     provider.id === "aleph_alpha" ||
