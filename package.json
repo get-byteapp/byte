@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "postinstall": "cp -r node_modules/pyodide/*.js node_modules/pyodide/*.wasm node_modules/pyodide/*.zip node_modules/pyodide/*.json public/pyodide/ 2>/dev/null; mkdir -p public/pyodide"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
@@ -17,6 +18,7 @@
     "katex": "^0.16.0",
     "lucide-react": "^1.7.0",
     "pdfjs-dist": "^5.7.284",
+    "pyodide": "^0.29.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.0.0",

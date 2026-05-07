@@ -20,6 +20,7 @@ import TOOL_URL_FETCH from '../../prompts/tools/URL_FETCH.md?raw';
 import TOOL_FILE_READ from '../../prompts/tools/FILE_READ.md?raw';
 import TOOL_ASK_QUESTION from '../../prompts/tools/ASK_QUESTION.md?raw';
 import TOOL_CONFIRM_ACTION from '../../prompts/tools/CONFIRM_ACTION.md?raw';
+import TOOL_RUN_PYTHON from '../../prompts/tools/RUN_PYTHON.md?raw';
 
 // Modes
 import MODE_CANVAS from '../../prompts/modes/CANVAS.md?raw';
@@ -45,6 +46,7 @@ const TOOLS: Record<ToolId, string> = {
   FILE_READ: TOOL_FILE_READ,
   ASK_QUESTION: TOOL_ASK_QUESTION,
   CONFIRM_ACTION: TOOL_CONFIRM_ACTION,
+  RUN_PYTHON: TOOL_RUN_PYTHON,
 };
 
 const MODES: Record<ModeId, string> = {
@@ -152,7 +154,7 @@ export function getDefaultChatConfig(): ChatConfig {
   return {
     agentId: 'DEFAULT',
     memoryEnabled: false,
-    enabledTools: ['ASK_QUESTION'],
+    enabledTools: ['ASK_QUESTION', 'RUN_PYTHON'],
     mode: null,
     responseStyle: 'normal',
   };

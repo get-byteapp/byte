@@ -29,6 +29,7 @@ import {
 import { assemblePrompt, getDefaultChatConfig } from "../../lib/prompts";
 import { extractTextOCR } from "../../lib/ocr";
 import { getSlashCommandPrompt } from "../../lib/slashCommands";
+import { runPython } from "../../lib/python";
 
 interface ChatViewProps {
   onAskQuestionDetected?: Dispatch<SetStateAction<AskQuestionPayload | null>>;
@@ -529,6 +530,73 @@ export function ChatView({
     ],
   );
 
+  const handleRunPythonTool = useCallback(
+    async (
+      chatId: string,
+      toolMsgId: string,
+      code: string,
+      currentMessages: Message[],
+    ) => {
+      updateChat(chatId, {
+        messages: currentMessages.map((m) =>
+          m.id === toolMsgId
+            ? {
+                ...m,
+                content: "Loading Python environment...",
+                pythonCode: code,
+                pythonPhase: "loading" as const,
+              }
+            : m,
+        ),
+      });
+
+      try {
+        const result = await runPython(code);
+
+        const output = result.error
+          ? `Python error:\n\`\`\`\n${result.error}\n\`\`\``
+          : result.stdout || "(no output)";
+
+        const freshChat = useStore
+          .getState()
+          .chats.find((c) => c.id === chatId);
+        if (!freshChat) return;
+
+        updateChat(chatId, {
+          messages: freshChat.messages.map((m) =>
+            m.id === toolMsgId
+              ? {
+                  ...m,
+                  content: output,
+                  pythonPhase: result.error ? ("error" as const) : ("done" as const),
+                  status: "done" as const,
+                }
+              : m,
+          ),
+        });
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        const freshChat = useStore
+          .getState()
+          .chats.find((c) => c.id === chatId);
+        if (!freshChat) return;
+        updateChat(chatId, {
+          messages: freshChat.messages.map((m) =>
+            m.id === toolMsgId
+              ? {
+                  ...m,
+                  content: `Python error:\n\`\`\`\n${errorMsg}\n\`\`\``,
+                  pythonPhase: "error" as const,
+                  status: "error" as const,
+                }
+              : m,
+          ),
+        });
+      }
+    },
+    [updateChat],
+  );
+
   const handleContinueFromAnswer = useCallback(async () => {
     if (!activeChatId) return;
 
@@ -593,8 +661,13 @@ export function ChatView({
               accumulatedContent,
             );
 
+          const isRunPython =
+            accumulatedContent.includes('"tool":"run_python"') ||
+            accumulatedContent.includes('"tool": "run_python"');
+
           let displayContent = accumulatedContent;
           if (isWebSearch) displayContent = "Searching the web...";
+          else if (isRunPython) displayContent = "Running Python...";
           else if (isAskQuestion) displayContent = "Asking Question...";
           else if (isSuggestMemory) displayContent = "Suggesting memory...";
 
@@ -634,12 +707,20 @@ export function ChatView({
                   lastMsg?.rawContent || lastMsg?.content || "",
                 )
               : null;
+          const runPythonTool =
+            !askQuestion && !suggestMemory && !webSearch
+              ? parseRunPythonTool(
+                  lastMsg?.rawContent || lastMsg?.content || "",
+                )
+              : null;
 
           let displayContent = "Asking Question...";
           if (suggestMemory) {
             displayContent = "Suggesting memory...";
           } else if (webSearch) {
             displayContent = "Searching the web...";
+          } else if (runPythonTool) {
+            displayContent = "Running Python...";
           } else if (!askQuestion) {
             displayContent = lastMsg?.rawContent || lastMsg?.content || "";
           }
@@ -669,6 +750,15 @@ export function ChatView({
               webSearch,
               chat.messages,
             ).catch((err) => console.error("[BYTE] Web search error:", err));
+          }
+
+          if (runPythonTool) {
+            handleRunPythonTool(
+              activeChatId,
+              assistantMsg.id,
+              runPythonTool.code,
+              chat.messages,
+            ).catch((err) => console.error("[BYTE] Python error:", err));
           }
 
           setIsLoading(false);
@@ -721,6 +811,8 @@ export function ChatView({
 
         const askQuestion = parseAskQuestionTool(response);
         const webSearch = !askQuestion ? parseWebSearchTool(response) : null;
+        const runPythonTool =
+          !askQuestion && !webSearch ? parseRunPythonTool(response) : null;
 
         if (webSearch) {
           let display = "Searching the web...";
@@ -737,6 +829,21 @@ export function ChatView({
             webSearch,
             updatedMessages,
           ).catch((err) => console.error("[BYTE] Web search error:", err));
+        } else if (runPythonTool) {
+          let display = "Running Python...";
+          updateChat(activeChatId, {
+            messages: currentChat.messages.map((m) =>
+              m.id === assistantMsg.id
+                ? { ...m, content: display, status: "done" as const }
+                : m,
+            ),
+          });
+          handleRunPythonTool(
+            activeChatId,
+            assistantMsg.id,
+            runPythonTool.code,
+            updatedMessages,
+          ).catch((err) => console.error("[BYTE] Python error:", err));
         } else {
           updateChat(activeChatId, {
             messages: [
@@ -951,6 +1058,30 @@ export function ChatView({
           payload.content
         ) {
           return { name: payload.name, content: payload.content };
+        }
+      }
+    } catch {}
+    return null;
+  };
+
+  // Parse run_python tool from assistant response
+  interface RunPythonParams {
+    code: string;
+  }
+  const parseRunPythonTool = (content: string): RunPythonParams | null => {
+    if (!content || content.trim().length < 10) return null;
+    let cleaned = content
+      .replace(/\\```[\w-]*\n?/g, "")
+      .replace(/```[\w-]*\n?/g, "")
+      .trim();
+    try {
+      const jsonMatch = cleaned.match(
+        /\{[\s\S]*"tool"\s*:\s*"run_python"[\s\S]*\}/,
+      );
+      if (jsonMatch) {
+        const payload = JSON.parse(jsonMatch[0]);
+        if (payload.tool === "run_python" && payload.code) {
+          return { code: payload.code };
         }
       }
     } catch {}
@@ -1180,8 +1311,13 @@ export function ChatView({
                 cleanedForDetection,
               );
 
+            const isRunPython =
+              cleanedForDetection.includes('"tool":"run_python"') ||
+              cleanedForDetection.includes('"tool": "run_python"');
+
             let displayContent = accumulatedContent;
             if (isWebSearch) displayContent = "Searching the web...";
+            else if (isRunPython) displayContent = "Running Python...";
             else if (isAskQuestion) displayContent = "Asking Question...";
             else if (isSuggestMemory) displayContent = "Suggesting memory...";
 
@@ -1226,15 +1362,64 @@ export function ChatView({
                     lastMsg?.rawContent || lastMsg?.content || "",
                   )
                 : null;
+            const runPythonTool =
+              !askQuestion && !suggestMemory && !webSearch
+                ? parseRunPythonTool(
+                    lastMsg?.rawContent || lastMsg?.content || "",
+                  )
+                : null;
 
-            // If this is an ask_question message, show "Asking Question..." instead of the raw JSON
             let displayContent = "Asking Question...";
             if (suggestMemory) {
               displayContent = "Suggesting memory...";
             } else if (webSearch) {
               displayContent = "Searching the web...";
+            } else if (runPythonTool) {
+              displayContent = "Running Python...";
             } else if (!askQuestion) {
               displayContent = lastMsg?.rawContent || lastMsg?.content || "";
+            }
+
+            updateChat(activeChatId, {
+              messages: currentChat.messages.map((m) =>
+                m.id === assistantMsg.id
+                  ? { ...m, content: displayContent, status: "done" as const }
+                  : m,
+              ),
+            });
+
+            if (askQuestion) {
+              onAskQuestionDetected?.(askQuestion);
+            }
+
+            if (suggestMemory) {
+              window.dispatchEvent(
+                new CustomEvent("byte:suggest-memory", {
+                  detail: suggestMemory,
+                }),
+              );
+            }
+
+            if (webSearch) {
+              handleWebSearchTool(
+                activeChatId,
+                assistantMsg.id,
+                webSearch,
+                currentChat.messages,
+              ).catch((err) =>
+                console.error("[BYTE] Web search error:", err),
+              );
+            }
+
+            if (runPythonTool) {
+              handleRunPythonTool(
+                activeChatId,
+                assistantMsg.id,
+                runPythonTool.code,
+                currentChat.messages,
+              ).catch((err) =>
+                console.error("[BYTE] Python error:", err),
+              );
             }
 
             updateChat(activeChatId, {
@@ -1320,9 +1505,14 @@ export function ChatView({
             !askQuestion && !suggestMemory
               ? parseWebSearchTool(response)
               : null;
+          const runPythonTool =
+            !askQuestion && !suggestMemory && !webSearch
+              ? parseRunPythonTool(response)
+              : null;
 
           let displayContent = response;
           if (webSearch) displayContent = "Searching the web...";
+          else if (runPythonTool) displayContent = "Running Python...";
           else if (askQuestion) displayContent = "Asking Question...";
           else if (suggestMemory) displayContent = "Suggesting memory...";
 
@@ -1343,6 +1533,13 @@ export function ChatView({
               webSearch,
               updatedMessages,
             ).catch((err) => console.error("[BYTE] Web search error:", err));
+          } else if (runPythonTool) {
+            handleRunPythonTool(
+              activeChatId,
+              assistantMsg.id,
+              runPythonTool.code,
+              updatedMessages,
+            ).catch((err) => console.error("[BYTE] Python error:", err));
           } else if (askQuestion) {
             onAskQuestionDetected?.(askQuestion);
           }

@@ -10,6 +10,7 @@ import {
   Search,
   Loader2,
   Globe,
+  Terminal,
 } from "lucide-react";
 import { MarkdownRenderer } from "../../lib/markdown";
 import type { Message } from "../../types";
@@ -97,6 +98,7 @@ export const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [showSources, setShowSources] = useState(true);
+  const [showPythonCode, setShowPythonCode] = useState(true);
   const [lazyRef, visible] = useLazyVisible();
 
   const handleCopy = async () => {
@@ -445,6 +447,117 @@ export const MessageBubble = memo(function MessageBubble({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginTop: 8 }}>{content}</div>
+      </>
+    );
+  }
+
+  // Python execution dropdown
+  const hasPythonCode = !!message.pythonCode;
+  const pythonPhase = message.pythonPhase;
+  const showPythonDropdown = hasPythonCode;
+
+  if (showPythonDropdown && !isUser) {
+    content = (
+      <>
+        <div
+          style={{
+            background: "var(--sf2)",
+            border: "1px solid var(--bd)",
+            borderRadius: 10,
+            overflow: "hidden",
+            transition: "all 0.25s ease-out",
+            marginBottom: 12,
+          }}
+        >
+          <div
+            onClick={() => setShowPythonCode(!showPythonCode)}
+            style={{
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 12px",
+              userSelect: "none",
+              transition: "background 0.15s ease",
+            }}
+          >
+            <Terminal size={13} style={{ color: "var(--acc)", flexShrink: 0 }} />
+            <span
+              style={{
+                flex: 1,
+                fontSize: "calc(var(--fs) - 1px)",
+                color: "var(--tx2)",
+                fontWeight: 500,
+              }}
+            >
+              {pythonPhase === "loading" && "Loading Python environment..."}
+              {pythonPhase === "running" && "Running Python..."}
+              {pythonPhase === "done" && "Python complete"}
+              {pythonPhase === "error" && "Python error"}
+              {!pythonPhase && "Python"}
+            </span>
+            {(pythonPhase === "loading" || pythonPhase === "running") && (
+              <Loader2
+                size={13}
+                style={{
+                  color: "var(--tx3)",
+                  animation: "spin 1s linear infinite",
+                }}
+              />
+            )}
+            <ChevronDown
+              size={13}
+              style={{
+                color: "var(--tx3)",
+                transform: showPythonCode ? "rotate(180deg)" : "none",
+                transition: "transform 0.2s ease-out",
+              }}
+            />
+          </div>
+
+          {showPythonCode && (
+            <div
+              style={{
+                padding: "0 12px 10px",
+                animation: "fadeIn 0.2s ease-out",
+              }}
+            >
+              <div
+                style={{
+                  height: 1,
+                  background: "var(--bd)",
+                  marginBottom: 10,
+                }}
+              />
+              <div
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  color: "var(--tx3)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  marginBottom: 6,
+                }}
+              >
+                Code
+              </div>
+              <pre
+                style={{
+                  fontSize: "calc(var(--fs) - 2px)",
+                  lineHeight: 1.5,
+                  color: "var(--tx2)",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  margin: 0,
+                }}
+              >
+                {message.pythonCode}
+              </pre>
             </div>
           )}
         </div>
