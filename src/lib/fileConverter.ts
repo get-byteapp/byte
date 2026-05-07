@@ -66,27 +66,56 @@ export async function convertFileToText(file: File): Promise<string> {
 export function isTextFile(file: File): boolean {
   const mimeType = file.type;
   const fileName = file.name.toLowerCase();
-  return (
-    mimeType.startsWith("text/") ||
-    mimeType === "application/pdf" ||
-    mimeType === "application/json" ||
-    mimeType === "application/x-yaml" ||
-    mimeType === "application/xml" ||
-    fileName.endsWith(".md") ||
-    fileName.endsWith(".csv") ||
-    fileName.endsWith(".yaml") ||
-    fileName.endsWith(".yml") ||
-    fileName.endsWith(".xml") ||
-    fileName.endsWith(".json") ||
-    fileName.endsWith(".ts") ||
-    fileName.endsWith(".tsx") ||
-    fileName.endsWith(".js") ||
-    fileName.endsWith(".jsx") ||
-    fileName.endsWith(".py") ||
-    fileName.endsWith(".java") ||
-    fileName.endsWith(".cpp") ||
-    fileName.endsWith(".go") ||
-    fileName.endsWith(".rb") ||
-    fileName.endsWith(".php")
-  );
+  
+  const textMimeTypes = [
+    "text/plain",
+    "text/markdown", 
+    "text/csv",
+    "application/json",
+    "application/xml",
+    "application/x-yaml",
+    "application/pdf",
+  ];
+  
+  const textExtensions = [
+    ".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".xml",
+    ".ts", ".tsx", ".js", ".jsx", ".py", ".java", ".cpp", 
+    ".go", ".rb", ".php", ".c", ".h", ".css", ".html", ".sql",
+  ];
+  
+  // Check by mime type
+  if (mimeType) {
+    if (textMimeTypes.includes(mimeType) || mimeType.startsWith("text/")) {
+      return true;
+    }
+  }
+  
+  // Check by extension
+  for (const ext of textExtensions) {
+    if (fileName.endsWith(ext)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+export function isImageFile(file: File): boolean {
+  const mimeType = file.type;
+  const fileName = file.name.toLowerCase();
+  
+  // Check by mime type
+  if (mimeType && mimeType.startsWith("image/")) {
+    return true;
+  }
+  
+  // Check by extension for common image types
+  const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico", ".heic", ".heif"];
+  for (const ext of imageExtensions) {
+    if (fileName.endsWith(ext)) {
+      return true;
+    }
+  }
+  
+  return false;
 }

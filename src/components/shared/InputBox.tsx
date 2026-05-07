@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { getDisplayName, makeModelKey, resolveModel } from "../../lib/api";
-import { convertFileToText, isTextFile } from "../../lib/fileConverter";
+import { convertFileToText, isTextFile, isImageFile } from "../../lib/fileConverter";
 import { PlusMenu } from "./PlusMenu";
 import { ModelPicker } from "./ModelPicker";
 import { SlashCommandMenu } from "./SlashCommandMenu";
@@ -276,10 +276,7 @@ export function InputBox({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const imageFiles = Array.from(files).filter((file) =>
-      file.type.startsWith("image/"),
-    );
-
+    const imageFiles = Array.from(files).filter((file) => isImageFile(file));
     const textFiles = Array.from(files).filter((file) => isTextFile(file));
 
     // If there are image files but no vision processing available, show warning
@@ -339,10 +336,7 @@ export function InputBox({
 
     const allFiles = Array.from(e.dataTransfer.files);
 
-    const imageFiles = allFiles.filter((file) =>
-      file.type.startsWith("image/"),
-    );
-
+    const imageFiles = allFiles.filter((file) => isImageFile(file));
     const textFiles = allFiles.filter((file) => isTextFile(file));
 
     // If there are image files but no vision processing available, show warning
