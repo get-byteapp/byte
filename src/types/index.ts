@@ -1,4 +1,4 @@
-export type ImageMode = "vision" | "ocr" | "describe";
+export type ImageMode = "vision" | "ocr" | "describe" | "pdf";
 
 export interface ImageAttachment {
   id: string;

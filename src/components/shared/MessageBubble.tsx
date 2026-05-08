@@ -461,8 +461,9 @@ export const MessageBubble = memo(function MessageBubble({
         style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}
       >
         {message.attachments.map((att) => {
-          // Only show image attachments in messages (files are embedded in text)
+          // Only show image and PDF attachments in messages (files are embedded in text)
           if (att.type !== "image") return null;
+          const isPdf = (att as any).mode === "pdf";
           
           return (
             <div
@@ -472,7 +473,7 @@ export const MessageBubble = memo(function MessageBubble({
                 width: 120,
                 borderRadius: 8,
                 overflow: "hidden",
-                border: "1px solid var(--bd)",
+                border: `1px solid ${isPdf ? "#ef4444" : "var(--bd)"}`,
                 background: "var(--sf2)",
               }}
             >
@@ -482,11 +483,30 @@ export const MessageBubble = memo(function MessageBubble({
                 style={{
                   width: "100%",
                   display: "block",
-                  cursor: "pointer",
+                  cursor: isPdf ? "default" : "pointer",
                 }}
-                onClick={() => window.open(att.dataUri, "_blank")}
+                onClick={() => !isPdf && window.open(att.dataUri, "_blank")}
               />
-              {((att.mode === "describe" && att.description) ||
+              {isPdf ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    padding: "4px 6px",
+                    background: "rgba(239, 68, 68, 0.9)",
+                    fontSize: "9px",
+                    color: "#fff",
+                    textAlign: "center",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  PDF
+                </div>
+              ) : ((att.mode === "describe" && att.description) ||
                 (att.mode === "ocr" && att.description)) && (
                 <div
                   style={{

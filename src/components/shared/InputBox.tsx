@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { getDisplayName, makeModelKey, resolveModel } from "../../lib/api";
-import { convertFileToText, isTextFile, isImageFile } from "../../lib/fileConverter";
+import { convertFileToText, isTextFile, isImageFile, isPdfFile, convertPdfToMarkdown, renderPdfFirstPage } from "../../lib/fileConverter";
 import { PlusMenu } from "./PlusMenu";
 import { ModelPicker } from "./ModelPicker";
 import { SlashCommandMenu } from "./SlashCommandMenu";
@@ -89,6 +89,8 @@ export function InputBox({
         return "#f59e0b"; // Amber
       case "describe":
         return "#8b5cf6"; // Violet
+      case "pdf":
+        return "#ef4444"; // Red
       default:
         return "#6b7280"; // Gray
     }
@@ -102,6 +104,8 @@ export function InputBox({
         return "OCR";
       case "describe":
         return "DESIGN";
+      case "pdf":
+        return "PDF";
     }
   };
 
@@ -173,10 +177,15 @@ export function InputBox({
     const imageAttachments = attachments.filter((a) => a.type === "image") as ImageAttachment[];
     const fileAttachments = attachments.filter((a) => a.type === "file") as FileAttachment[];
     
-    // Build final message with file contents
+    // Build final message with file contents and PDF text
     let finalText = text.trim();
     for (const fileAtt of fileAttachments) {
       finalText += `\n\n[Attachment: ${fileAtt.fileName}]\n${fileAtt.fileContent}`;
+    }
+    for (const imgAtt of imageAttachments) {
+      if (imgAtt.mode === "pdf" && imgAtt.description) {
+        finalText += `\n\n[PDF: ${imgAtt.fileName}]\n${imgAtt.description}`;
+      }
     }
     
     // Send with image attachments only (files are embedded in text)
@@ -272,22 +281,48 @@ export function InputBox({
     }
   };
 
+  const processPdfFile = async (file: File) => {
+    try {
+      const [textContent, dataUri] = await Promise.all([
+        convertPdfToMarkdown(file),
+        renderPdfFirstPage(file),
+      ]);
+      const newAttachment: ImageAttachment = {
+        id: `${Date.now()}-${Math.random()}`,
+        type: "image",
+        fileName: file.name,
+        mimeType: file.type,
+        dataUri,
+        size: file.size,
+        mode: "pdf",
+        description: textContent,
+      };
+      setAttachments((prev) => [...prev, newAttachment]);
+    } catch (error) {
+      console.error("Error processing PDF file:", error);
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     const imageFiles = Array.from(files).filter((file) => isImageFile(file));
-    const textFiles = Array.from(files).filter((file) => isTextFile(file));
+    const pdfFiles = Array.from(files).filter((file) => isPdfFile(file));
+    const textFiles = Array.from(files).filter((file) => !isPdfFile(file) && isTextFile(file));
 
     // If there are image files but no vision processing available, show warning
     if (imageFiles.length > 0 && !checkVisionAvailable()) {
       setShowNoVisionWarning(true);
-      // Still process text files even if vision warning is shown
     } else {
-      // Process image files only if vision is available
       for (const file of imageFiles) {
         processImageFile(file);
       }
+    }
+
+    // Process PDF files
+    for (const file of pdfFiles) {
+      await processPdfFile(file);
     }
 
     // Process text files regardless
@@ -337,17 +372,21 @@ export function InputBox({
     const allFiles = Array.from(e.dataTransfer.files);
 
     const imageFiles = allFiles.filter((file) => isImageFile(file));
-    const textFiles = allFiles.filter((file) => isTextFile(file));
+    const pdfFiles = allFiles.filter((file) => isPdfFile(file));
+    const textFiles = allFiles.filter((file) => !isPdfFile(file) && isTextFile(file));
 
     // If there are image files but no vision processing available, show warning
     if (imageFiles.length > 0 && !checkVisionAvailable()) {
       setShowNoVisionWarning(true);
-      // Still process text files even if vision warning is shown
     } else {
-      // Process image files only if vision is available
       for (const file of imageFiles) {
         processImageFile(file);
       }
+    }
+
+    // Process PDF files
+    for (const file of pdfFiles) {
+      await processPdfFile(file);
     }
 
     // Process text files regardless
@@ -383,7 +422,9 @@ export function InputBox({
       e.preventDefault();
       for (const item of fileItems) {
         const file = item.getAsFile();
-        if (file && isTextFile(file)) {
+        if (file && isPdfFile(file)) {
+          await processPdfFile(file);
+        } else if (file && isTextFile(file)) {
           await processTextFile(file);
         }
       }
@@ -603,12 +644,14 @@ export function InputBox({
                   }
 
                   // Handle image attachments
-                  const borderColor =
-                    att.mode === "vision"
-                      ? "#3b82f6" // Blue
-                      : att.mode === "ocr"
-                        ? "#22c55e" // Green
-                        : "#a855f7"; // Purple
+                    const borderColor =
+                      att.mode === "vision"
+                        ? "#3b82f6" // Blue
+                        : att.mode === "ocr"
+                          ? "#22c55e" // Green
+                          : att.mode === "pdf"
+                            ? "#ef4444" // Red
+                            : "#a855f7"; // Purple
 
                   return (
                     <div
@@ -691,10 +734,11 @@ export function InputBox({
                         </div>
                       )}
 
-                      {/* Swap button - only show on hover if swap enabled and multiple modes available */}
+                      {/* Swap button - only show on hover if swap enabled, multiple modes available, and not PDF */}
                       {!disableAttachmentSwap &&
                         visionDefaultMode === "changeable" &&
                         hoveredImageId === att.id &&
+                        (att as ImageAttachment).mode !== "pdf" &&
                         (() => {
                           // Determine available modes
                           const availableModes = [];

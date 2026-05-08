@@ -1,7 +1,25 @@
 import * as pdfjsLib from "pdfjs-dist";
 
+if (
+  typeof ReadableStream !== "undefined" &&
+  !(ReadableStream.prototype as any)[Symbol.asyncIterator]
+) {
+  (ReadableStream.prototype as any)[Symbol.asyncIterator] = async function* () {
+    const reader = this.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        yield value;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  };
+}
+
 // Set up the worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `/pdf.worker.min.mjs`;
 
 export async function convertPdfToMarkdown(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
@@ -22,7 +40,6 @@ export async function convertPdfToMarkdown(file: File): Promise<string> {
     let lastY: number | null = null;
     for (const item of textContent.items) {
       if ("str" in item) {
-        // Check if this is a new line (Y coordinate changed significantly)
         if (lastY !== null && Math.abs((item as any).y - lastY) > 5) {
           markdown += "\n";
         }
@@ -37,11 +54,20 @@ export async function convertPdfToMarkdown(file: File): Promise<string> {
   return markdown;
 }
 
-export async function convertFileToText(file: File): Promise<string> {
-  if (file.type === "application/pdf") {
-    return convertPdfToMarkdown(file);
-  }
+export async function renderPdfFirstPage(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 0.5 });
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext("2d")!;
+  await page.render({ canvasContext: ctx, canvas: null, viewport }).promise;
+  return canvas.toDataURL("image/png");
+}
 
+export async function convertFileToText(file: File): Promise<string> {
   // For text files, just read as text
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -74,7 +100,6 @@ export function isTextFile(file: File): boolean {
     "application/json",
     "application/xml",
     "application/x-yaml",
-    "application/pdf",
   ];
   
   const textExtensions = [
@@ -97,6 +122,14 @@ export function isTextFile(file: File): boolean {
     }
   }
   
+  return false;
+}
+
+export function isPdfFile(file: File): boolean {
+  const mimeType = file.type;
+  const fileName = file.name.toLowerCase();
+  if (mimeType === "application/pdf") return true;
+  if (fileName.endsWith(".pdf")) return true;
   return false;
 }
 
