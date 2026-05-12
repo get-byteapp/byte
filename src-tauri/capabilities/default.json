@@ -12,7 +12,24 @@
       "identifier": "http:default",
       "allow": [
         { "url": "http://localhost:11434/**" },
-        { "url": "http://127.0.0.1:11434/**" }
+        { "url": "http://127.0.0.1:11434/**" },
+        { "url": "http://localhost:1234/**" },
+        { "url": "http://127.0.0.1:1234/**" },
+        { "url": "https://api.openai.com/**" },
+        { "url": "https://api.anthropic.com/**" },
+        { "url": "https://generativelanguage.googleapis.com/**" },
+        { "url": "https://api.mistral.ai/**" },
+        { "url": "https://api.together.xyz/**" },
+        { "url": "https://api.groq.com/**" },
+        { "url": "https://api-inference.huggingface.co/**" },
+        { "url": "https://api.perplexity.ai/**" },
+        { "url": "https://openrouter.ai/**" },
+        { "url": "https://api.fireworks.ai/**" },
+        { "url": "https://api.replicate.com/**" },
+        { "url": "https://api.aleph-alpha.com/**" },
+        { "url": "https://api.ollama.com/**" },
+        { "url": "https://api.cerebras.ai/**" },
+        { "url": "https://api.langsearch.com/**" }
       ]
     }
   ]

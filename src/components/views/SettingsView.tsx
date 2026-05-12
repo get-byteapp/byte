@@ -16,7 +16,6 @@ import {
   Image as ImageIcon,
   ChevronDown,
   Loader2,
-  Lock,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import {
@@ -41,6 +40,7 @@ const AVAILABLE_PROVIDERS = [
   { id: "replicate", name: "Replicate" },
   { id: "aleph-alpha", name: "Aleph Alpha" },
   { id: "ollama", name: "Local (Ollama)" },
+  { id: "ollama-cloud", name: "Ollama Cloud" },
   { id: "lmstudio", name: "Local (LM Studio)" },
   { id: "cerebras", name: "Cerebras" },
 ];
@@ -215,6 +215,7 @@ function ProviderModal({
     replicate: "https://api.replicate.com/v1",
     "aleph-alpha": "https://api.aleph-alpha.com/v1",
     ollama: "http://localhost:11434/v1",
+    "ollama-cloud": "https://api.ollama.com/v1",
     lmstudio: "http://localhost:1234/v1",
     cerebras: "https://api.cerebras.ai/v1",
   };
@@ -1364,8 +1365,6 @@ function ConnectionsPanel() {
     setOcrEnabled,
     visionDefaultMode,
     setVisionDefaultMode,
-    disableAttachmentSwap,
-    setDisableAttachmentSwap,
   } = useStore();
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyInput, setKeyInput] = useState("");
@@ -1374,7 +1373,6 @@ function ConnectionsPanel() {
     codeRunner: true,
   });
   const [showVisionDropdown, setShowVisionDropdown] = useState(false);
-  const [showVisionModeDropdown, setShowVisionModeDropdown] = useState(false);
   const [isInstallingOCR, setIsInstallingOCR] = useState(false);
 
   const handleInstallOCR = async () => {
@@ -1846,766 +1844,392 @@ function ConnectionsPanel() {
       <div className="set-h" style={{ marginTop: 20, marginBottom: 12 }}>
         VISION
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {/* OCR row */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "11px 12px",
-            background: "var(--sf)",
-            border: "1px solid var(--bd)",
-            borderRadius: "var(--r-sm)",
+            fontSize: "calc(var(--fs) - 1px)",
+            color: "var(--tx3)",
+            lineHeight: 1.5,
+            marginBottom: 2,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
+          Pick how attached images are processed.
+        </div>
+
+        {/* Mode selector cards */}
+        {([
+          { id: "vision" as const, label: "Vision", desc: "AI analyzes images directly", icon: Eye },
+          { id: "ocr" as const, label: "OCR", desc: "Extracts text from images", icon: ImageIcon },
+          { id: "describe" as const, label: "Describe", desc: "Describes image first via a vision model", icon: Eye },
+          { id: "changeable" as const, label: "Flexible", desc: "Choose per image when attaching", icon: RefreshCw },
+        ] as const).map(({ id, label, desc, icon: Icon }) => {
+          const selected = visionDefaultMode === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setVisionDefaultMode(id)}
               style={{
-                position: "relative",
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                background: "var(--sf2)",
-                border: "1px solid var(--bd)",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                color: "var(--tx2)",
-                flexShrink: 0,
+                gap: 12,
+                padding: "11px 12px",
+                background: selected ? "var(--acc-soft)" : "var(--sf)",
+                border: `1px solid ${selected ? "var(--acc-border)" : "var(--bd)"}`,
+                borderRadius: "var(--r-sm)",
+                cursor: "pointer",
+                textAlign: "left",
+                transition: "all var(--ease)",
+                width: "100%",
+                fontFamily: "var(--font)",
+              }}
+              onMouseEnter={(e) => {
+                if (!selected) e.currentTarget.style.background = "var(--sf2)";
+              }}
+              onMouseLeave={(e) => {
+                if (!selected) e.currentTarget.style.background = "var(--sf)";
               }}
             >
-              <ImageIcon size={14} />
-              {ocrEnabled && (
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: selected ? "var(--acc-hover)" : "var(--sf2)",
+                  border: `1px solid ${selected ? "var(--acc-border)" : "var(--bd)"}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: selected ? "var(--acc)" : "var(--tx3)",
+                  flexShrink: 0,
+                  transition: "all var(--ease)",
+                }}
+              >
+                <Icon size={15} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
-                    position: "absolute",
-                    bottom: -3,
-                    right: -3,
-                    width: 9,
-                    height: 9,
-                    borderRadius: "50%",
-                    background: "#22c55e",
-                    border: "1.5px solid var(--sf)",
+                    fontWeight: 500,
+                    fontSize: "var(--fs)",
+                    color: selected ? "var(--acc)" : "var(--tx)",
+                    transition: "color var(--ease)",
                   }}
+                >
+                  {label}
+                </div>
+                <div
+                  style={{
+                    fontSize: "calc(var(--fs) - 2px)",
+                    color: "var(--tx3)",
+                    marginTop: 1,
+                  }}
+                >
+                  {desc}
+                </div>
+              </div>
+              {selected && (
+                <Check
+                  size={14}
+                  style={{ color: "var(--acc)", flexShrink: 0 }}
                 />
               )}
-            </div>
+            </button>
+          );
+        })}
+
+        {/* OCR inline config */}
+        {(visionDefaultMode === "ocr" || visionDefaultMode === "changeable") && (
+          <div
+            style={{
+              padding: "11px 12px",
+              background: "var(--sf2)",
+              border: "1px solid var(--bd)",
+              borderRadius: "var(--r-sm)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <div>
-              <div className="set-rl" style={{ margin: 0 }}>
-                OCR (Text Extraction)
+              <div
+                style={{
+                  fontSize: "var(--fs)",
+                  color: "var(--tx)",
+                  fontWeight: 500,
+                }}
+              >
+                OCR Engine
               </div>
-              <div className="set-rsub">
+              <div
+                style={{
+                  fontSize: "calc(var(--fs) - 2px)",
+                  color: ocrEnabled ? "var(--success)" : "var(--tx3)",
+                }}
+              >
                 {!ocrInstalled
-                  ? "Extract text from images using Tesseract.js (~6MB download)"
+                  ? "Tesseract.js — ~6MB download"
                   : ocrEnabled
                     ? "Tesseract.js · Active"
                     : "Tesseract.js · Installed"}
               </div>
             </div>
-          </div>
-          {!ocrInstalled ? (
-            <button
-              className="btn btn-sm"
-              onClick={handleInstallOCR}
-              disabled={isInstallingOCR}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                minWidth: 80,
-              }}
-            >
-              {isInstallingOCR ? (
-                <>
-                  <Loader2
-                    size={12}
-                    style={{ animation: "spin 1s linear infinite" }}
-                  />
-                  Installing...
-                </>
-              ) : (
-                "Install"
-              )}
-            </button>
-          ) : (
-            <button
-              className={`tog${ocrEnabled ? " on" : ""}`}
-              onClick={() => setOcrEnabled(!ocrEnabled)}
-            />
-          )}
-        </div>
-
-        {/* Image Description Model row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "11px 12px",
-            background: "var(--sf)",
-            border: "1px solid var(--bd)",
-            borderRadius: "var(--r-sm)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {/* Icon */}
-            <div
-              style={{
-                position: "relative",
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                background: "var(--sf2)",
-                border: "1px solid var(--bd)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--tx2)",
-                flexShrink: 0,
-              }}
-            >
-              <ImageIcon size={14} />
-              {selectedVisionModel && (
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: -3,
-                    right: -3,
-                    width: 9,
-                    height: 9,
-                    borderRadius: "50%",
-                    background: "#4ade80",
-                    border: "1.5px solid var(--sf)",
-                  }}
-                />
-              )}
-            </div>
-            <div>
-              <div className="set-rl" style={{ margin: 0 }}>
-                Image Description
-              </div>
-              <div className="set-rsub">
-                {visionModels.length === 0
-                  ? "No vision models available. Add a provider with vision support."
-                  : selectedVisionModel
-                    ? `${selectedVisionModel.displayName} · ${selectedVisionModel.providerName}`
-                    : "Select a vision model for image descriptions"}
-              </div>
-            </div>
-          </div>
-
-          {/* Right-side dropdown */}
-          <div style={{ position: "relative" }}>
-            <button
-              className="btn btn-sm"
-              onClick={() => setShowVisionDropdown(!showVisionDropdown)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                minWidth: 80,
-              }}
-            >
-              {selectedVisionModel ? "Change" : "Select"}
-              <ChevronDown size={12} />
-            </button>
-
-            {/* Dropdown menu */}
-            {showVisionDropdown && (
-              <>
-                <div
-                  style={{
-                    position: "fixed",
-                    inset: 0,
-                    zIndex: 99,
-                  }}
-                  onClick={() => setShowVisionDropdown(false)}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    top: "calc(100% + 4px)",
-                    background: "var(--sf)",
-                    border: "1px solid var(--bd)",
-                    borderRadius: "var(--r-md)",
-                    minWidth: 240,
-                    maxHeight: 280,
-                    overflowY: "auto",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                    zIndex: 100,
-                    padding: 4,
-                  }}
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {!ocrInstalled ? (
+                <button
+                  className="btn btn-sm"
+                  onClick={handleInstallOCR}
+                  disabled={isInstallingOCR}
+                  style={{ display: "flex", alignItems: "center", gap: 6 }}
                 >
-                  {/* No models message */}
-                  {visionModels.length === 0 ? (
-                    <div
-                      style={{
-                        padding: "12px",
-                        color: "var(--tx3)",
-                        fontSize: "calc(var(--fs) - 1px)",
-                        textAlign: "center",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      No vision models available.
-                      <br />
-                      Add a provider (OpenAI, Anthropic, Google) with an API key
-                      in Models settings.
-                    </div>
-                  ) : (
+                  {isInstallingOCR ? (
                     <>
-                      {/* None option */}
-                      <div
-                        onClick={() => {
-                          setImageDescriptionModelId(null);
-                          setShowVisionDropdown(false);
-                        }}
-                        style={{
-                          padding: "8px 10px",
-                          cursor: "pointer",
-                          borderRadius: "var(--r-sm)",
-                          fontSize: "calc(var(--fs) - 1px)",
-                          color: "var(--tx3)",
-                          transition: "all var(--ease)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "var(--sf2)";
-                          e.currentTarget.style.color = "var(--tx)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.color = "var(--tx3)";
-                        }}
-                      >
-                        <span style={{ fontStyle: "italic" }}>None</span>
-                        {!selectedVisionModel && (
-                          <Check size={14} style={{ color: "var(--acc)" }} />
-                        )}
-                      </div>
-
-                      {/* Model options */}
-                      {visionModels.map((model) => {
-                        const modelKey = makeModelKey(
-                          model.providerId,
-                          model.id,
-                        );
-                        const isSelected = imageDescriptionModelId === modelKey;
-                        return (
-                          <div
-                            key={modelKey}
-                            onClick={() => {
-                              setImageDescriptionModelId(modelKey);
-                              setShowVisionDropdown(false);
-                            }}
-                            style={{
-                              padding: "8px 10px",
-                              cursor: "pointer",
-                              borderRadius: "var(--r-sm)",
-                              fontSize: "calc(var(--fs) - 1px)",
-                              transition: "all var(--ease)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              background: isSelected
-                                ? "var(--sf2)"
-                                : "transparent",
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!isSelected) {
-                                e.currentTarget.style.background = "var(--sf2)";
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!isSelected) {
-                                e.currentTarget.style.background =
-                                  "transparent";
-                              }
-                            }}
-                          >
-                            <div style={{ flex: 1, overflow: "hidden" }}>
-                              <div
-                                style={{
-                                  fontWeight: 500,
-                                  color: "var(--tx)",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {model.displayName}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: "calc(var(--fs) - 3px)",
-                                  color: "var(--tx3)",
-                                  marginTop: 2,
-                                }}
-                              >
-                                {model.providerName}
-                              </div>
-                            </div>
-                            {isSelected && (
-                              <Check
-                                size={14}
-                                style={{
-                                  color: "var(--acc)",
-                                  flexShrink: 0,
-                                  marginLeft: 8,
-                                }}
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
+                      <Loader2
+                        size={12}
+                        style={{ animation: "spin 1s linear infinite" }}
+                      />
+                      Installing...
                     </>
+                  ) : (
+                    "Install"
                   )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Vision Mode row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "11px 12px",
-            background: "var(--sf)",
-            border: "1px solid var(--bd)",
-            borderRadius: "var(--r-sm)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {/* Icon with status dot */}
-            <div
-              style={{
-                position: "relative",
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                background: "var(--sf2)",
-                border: "1px solid var(--bd)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--tx2)",
-                flexShrink: 0,
-              }}
-            >
-              <Eye size={14} />
-              {visionDefaultMode !== "changeable" && (
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: -3,
-                    right: -3,
-                    width: 9,
-                    height: 9,
-                    borderRadius: "50%",
-                    background: "#22c55e",
-                    border: "1.5px solid var(--sf)",
-                  }}
-                />
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => {
+                      setOcrEnabled(false);
+                      setOcrInstalled(false);
+                    }}
+                    title="Remove OCR"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      color: "var(--danger)",
+                      borderColor: "var(--danger-border)",
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                  <button
+                    className={`tog${ocrEnabled ? " on" : ""}`}
+                    onClick={() => setOcrEnabled(!ocrEnabled)}
+                  />
+                </>
               )}
             </div>
-            <div>
-              <div className="set-rl" style={{ margin: 0 }}>
-                Default Vision Mode
-              </div>
-              <div className="set-rsub">
-                {visionDefaultMode === "changeable"
-                  ? "Users can cycle between vision modes"
-                  : visionDefaultMode === "vision"
-                    ? "Vision · Always analyzes images directly"
-                    : visionDefaultMode === "ocr"
-                      ? "OCR · Always extracts text from images"
-                      : "Describe · Always gets descriptions first"}
-              </div>
-            </div>
           </div>
+        )}
 
-          {/* Right-side dropdown */}
-          <div style={{ position: "relative" }}>
-            <button
-              className="btn btn-sm"
-              onClick={() => setShowVisionModeDropdown(!showVisionModeDropdown)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                minWidth: 80,
-              }}
-            >
-              Change
-              <ChevronDown size={12} />
-            </button>
-
-            {/* Dropdown menu */}
-            {showVisionModeDropdown && (
-              <>
-                <div
-                  style={{
-                    position: "fixed",
-                    inset: 0,
-                    zIndex: 99,
-                  }}
-                  onClick={() => setShowVisionModeDropdown(false)}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    top: "calc(100% + 4px)",
-                    background: "var(--sf)",
-                    border: "1px solid var(--bd)",
-                    borderRadius: "var(--r-md)",
-                    minWidth: 280,
-                    maxHeight: 280,
-                    overflowY: "auto",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                    zIndex: 100,
-                    padding: 4,
-                  }}
-                >
-                  {/* Changeable option */}
-                  <div
-                    onClick={() => {
-                      setVisionDefaultMode("changeable");
-                      setShowVisionModeDropdown(false);
-                    }}
-                    style={{
-                      padding: "8px 10px",
-                      cursor: "pointer",
-                      borderRadius: "var(--r-sm)",
-                      fontSize: "calc(var(--fs) - 1px)",
-                      transition: "all var(--ease)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      background:
-                        visionDefaultMode === "changeable"
-                          ? "var(--sf2)"
-                          : "transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (visionDefaultMode !== "changeable") {
-                        e.currentTarget.style.background = "var(--sf2)";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (visionDefaultMode !== "changeable") {
-                        e.currentTarget.style.background = "transparent";
-                      }
-                    }}
-                  >
-                    <div style={{ flex: 1, overflow: "hidden" }}>
-                      <div
-                        style={{
-                          fontWeight: 500,
-                          color: "var(--tx)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Changeable
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "calc(var(--fs) - 3px)",
-                          color: "var(--tx3)",
-                          marginTop: 2,
-                        }}
-                      >
-                        Cycle between Vision, OCR, and Describe modes
-                      </div>
-                    </div>
-                    {visionDefaultMode === "changeable" && (
-                      <Check
-                        size={14}
-                        style={{
-                          color: "var(--acc)",
-                          flexShrink: 0,
-                          marginLeft: 8,
-                        }}
-                      />
-                    )}
-                  </div>
-
-                  {/* Vision option */}
-                  <div
-                    onClick={() => {
-                      setVisionDefaultMode("vision");
-                      setShowVisionModeDropdown(false);
-                    }}
-                    style={{
-                      padding: "8px 10px",
-                      cursor: "pointer",
-                      borderRadius: "var(--r-sm)",
-                      fontSize: "calc(var(--fs) - 1px)",
-                      transition: "all var(--ease)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      background:
-                        visionDefaultMode === "vision"
-                          ? "var(--sf2)"
-                          : "transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (visionDefaultMode !== "vision") {
-                        e.currentTarget.style.background = "var(--sf2)";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (visionDefaultMode !== "vision") {
-                        e.currentTarget.style.background = "transparent";
-                      }
-                    }}
-                  >
-                    <div style={{ flex: 1, overflow: "hidden" }}>
-                      <div
-                        style={{
-                          fontWeight: 500,
-                          color: "var(--tx)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Vision
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "calc(var(--fs) - 3px)",
-                          color: "var(--tx3)",
-                          marginTop: 2,
-                        }}
-                      >
-                        Always use Vision mode (analyze images directly)
-                      </div>
-                    </div>
-                    {visionDefaultMode === "vision" && (
-                      <Check
-                        size={14}
-                        style={{
-                          color: "var(--acc)",
-                          flexShrink: 0,
-                          marginLeft: 8,
-                        }}
-                      />
-                    )}
-                  </div>
-
-                  {/* OCR option */}
-                  <div
-                    onClick={() => {
-                      setVisionDefaultMode("ocr");
-                      setShowVisionModeDropdown(false);
-                    }}
-                    style={{
-                      padding: "8px 10px",
-                      cursor: "pointer",
-                      borderRadius: "var(--r-sm)",
-                      fontSize: "calc(var(--fs) - 1px)",
-                      transition: "all var(--ease)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      background:
-                        visionDefaultMode === "ocr"
-                          ? "var(--sf2)"
-                          : "transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (visionDefaultMode !== "ocr") {
-                        e.currentTarget.style.background = "var(--sf2)";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (visionDefaultMode !== "ocr") {
-                        e.currentTarget.style.background = "transparent";
-                      }
-                    }}
-                  >
-                    <div style={{ flex: 1, overflow: "hidden" }}>
-                      <div
-                        style={{
-                          fontWeight: 500,
-                          color: "var(--tx)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        OCR
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "calc(var(--fs) - 3px)",
-                          color: "var(--tx3)",
-                          marginTop: 2,
-                        }}
-                      >
-                        Always use OCR mode (extract text)
-                      </div>
-                    </div>
-                    {visionDefaultMode === "ocr" && (
-                      <Check
-                        size={14}
-                        style={{
-                          color: "var(--acc)",
-                          flexShrink: 0,
-                          marginLeft: 8,
-                        }}
-                      />
-                    )}
-                  </div>
-
-                  {/* Describe option */}
-                  <div
-                    onClick={() => {
-                      setVisionDefaultMode("describe");
-                      setShowVisionModeDropdown(false);
-                    }}
-                    style={{
-                      padding: "8px 10px",
-                      cursor: "pointer",
-                      borderRadius: "var(--r-sm)",
-                      fontSize: "calc(var(--fs) - 1px)",
-                      transition: "all var(--ease)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      background:
-                        visionDefaultMode === "describe"
-                          ? "var(--sf2)"
-                          : "transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (visionDefaultMode !== "describe") {
-                        e.currentTarget.style.background = "var(--sf2)";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (visionDefaultMode !== "describe") {
-                        e.currentTarget.style.background = "transparent";
-                      }
-                    }}
-                  >
-                    <div style={{ flex: 1, overflow: "hidden" }}>
-                      <div
-                        style={{
-                          fontWeight: 500,
-                          color: "var(--tx)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Describe
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "calc(var(--fs) - 3px)",
-                          color: "var(--tx3)",
-                          marginTop: 2,
-                        }}
-                      >
-                        Always use Describe mode (get description first)
-                      </div>
-                    </div>
-                    {visionDefaultMode === "describe" && (
-                      <Check
-                        size={14}
-                        style={{
-                          color: "var(--acc)",
-                          flexShrink: 0,
-                          marginLeft: 8,
-                        }}
-                      />
-                    )}
-                   </div>
-                 </div>
-               </>
-             )}
-           </div>
-         </div>
-
-        {/* Disable Attachment Swap row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "11px 12px",
-            background: "var(--sf)",
-            border: "1px solid var(--bd)",
-            borderRadius: "var(--r-sm)",
-            marginTop: 12,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {/* Icon */}
-            <div
-              style={{
-                position: "relative",
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                background: "var(--sf2)",
-                border: "1px solid var(--bd)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--tx2)",
-                flexShrink: 0,
-              }}
-            >
-              <Lock size={14} />
-            </div>
-            <div>
-              <div className="set-rl" style={{ margin: 0 }}>
-                Lock Attachment Mode
-              </div>
-              <div className="set-rsub">
-                Disable swap button and show mode badge with outline instead
-              </div>
-            </div>
-          </div>
-
-          {/* Toggle */}
-          <label
+        {/* Describe inline config */}
+        {(visionDefaultMode === "describe" || visionDefaultMode === "changeable") && (
+          <div
             style={{
+              padding: "11px 12px",
+              background: "var(--sf2)",
+              border: "1px solid var(--bd)",
+              borderRadius: "var(--r-sm)",
               display: "flex",
               alignItems: "center",
-              cursor: "pointer",
-              gap: 8,
+              justifyContent: "space-between",
             }}
           >
-            <input
-              type="checkbox"
-              checked={disableAttachmentSwap}
-              onChange={(e) => setDisableAttachmentSwap(e.target.checked)}
-              style={{
-                width: 16,
-                height: 16,
-                cursor: "pointer",
-                accentColor: "var(--acc)",
-              }}
-            />
-            <span style={{ fontSize: "12px", color: "var(--tx2)" }}>
-              {disableAttachmentSwap ? "Locked" : "Unlocked"}
-            </span>
-          </label>
-        </div>
+            <div>
+              <div
+                style={{
+                  fontSize: "var(--fs)",
+                  color: "var(--tx)",
+                  fontWeight: 500,
+                }}
+              >
+                Description Model
+              </div>
+              <div
+                style={{
+                  fontSize: "calc(var(--fs) - 2px)",
+                  color: "var(--tx3)",
+                }}
+              >
+                {visionModels.length === 0
+                  ? "No vision models available"
+                  : selectedVisionModel
+                    ? `${selectedVisionModel.displayName} · ${selectedVisionModel.providerName}`
+                    : "Select a model"}
+              </div>
+            </div>
+            <div style={{ position: "relative" }}>
+              <button
+                className="btn btn-sm"
+                onClick={() => setShowVisionDropdown(!showVisionDropdown)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  minWidth: 80,
+                }}
+              >
+                {selectedVisionModel ? "Change" : "Select"}
+                <ChevronDown size={12} />
+              </button>
+              {showVisionDropdown && (
+                <>
+                  <div
+                    style={{
+                      position: "fixed",
+                      inset: 0,
+                      zIndex: 99,
+                    }}
+                    onClick={() => setShowVisionDropdown(false)}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: "calc(100% + 4px)",
+                      background: "var(--sf)",
+                      border: "1px solid var(--bd)",
+                      borderRadius: "var(--r-md)",
+                      minWidth: 240,
+                      maxHeight: 280,
+                      overflowY: "auto",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                      zIndex: 100,
+                      padding: 4,
+                    }}
+                  >
+                    {visionModels.length === 0 ? (
+                      <div
+                        style={{
+                          padding: "12px",
+                          color: "var(--tx3)",
+                          fontSize: "calc(var(--fs) - 1px)",
+                          textAlign: "center",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        No vision models available.
+                        <br />
+                        Add a provider with an API key in Models settings.
+                      </div>
+                    ) : (
+                      <>
+                        <div
+                          onClick={() => {
+                            setImageDescriptionModelId(null);
+                            setShowVisionDropdown(false);
+                          }}
+                          style={{
+                            padding: "8px 10px",
+                            cursor: "pointer",
+                            borderRadius: "var(--r-sm)",
+                            fontSize: "calc(var(--fs) - 1px)",
+                            color: "var(--tx3)",
+                            transition: "all var(--ease)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "var(--sf2)";
+                            e.currentTarget.style.color = "var(--tx)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "transparent";
+                            e.currentTarget.style.color = "var(--tx3)";
+                          }}
+                        >
+                          <span style={{ fontStyle: "italic" }}>None</span>
+                          {!selectedVisionModel && (
+                            <Check
+                              size={14}
+                              style={{ color: "var(--acc)" }}
+                            />
+                          )}
+                        </div>
+                        {visionModels.map((model) => {
+                          const modelKey = makeModelKey(
+                            model.providerId,
+                            model.id,
+                          );
+                          const isSelected =
+                            imageDescriptionModelId === modelKey;
+                          return (
+                            <div
+                              key={modelKey}
+                              onClick={() => {
+                                setImageDescriptionModelId(modelKey);
+                                setShowVisionDropdown(false);
+                              }}
+                              style={{
+                                padding: "8px 10px",
+                                cursor: "pointer",
+                                borderRadius: "var(--r-sm)",
+                                fontSize: "calc(var(--fs) - 1px)",
+                                transition: "all var(--ease)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                background: isSelected
+                                  ? "var(--sf2)"
+                                  : "transparent",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) {
+                                  e.currentTarget.style.background =
+                                    "var(--sf2)";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) {
+                                  e.currentTarget.style.background =
+                                    "transparent";
+                                }
+                              }}
+                            >
+                              <div style={{ flex: 1, overflow: "hidden" }}>
+                                <div
+                                  style={{
+                                    fontWeight: 500,
+                                    color: "var(--tx)",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {model.displayName}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "calc(var(--fs) - 3px)",
+                                    color: "var(--tx3)",
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  {model.providerName}
+                                </div>
+                              </div>
+                              {isSelected && (
+                                <Check
+                                  size={14}
+                                  style={{
+                                    color: "var(--acc)",
+                                    flexShrink: 0,
+                                    marginLeft: 8,
+                                  }}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

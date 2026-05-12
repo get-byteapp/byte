@@ -77,8 +77,9 @@ export function InputBox({
     visionDefaultMode,
     ocrEnabled,
     imageDescriptionModelId,
-    disableAttachmentSwap,
   } = useStore();
+
+  const isModeLocked = visionDefaultMode !== "changeable";
 
   // Mode color mapping
   const getModeColor = (mode: ImageMode) => {
@@ -644,14 +645,7 @@ export function InputBox({
                   }
 
                   // Handle image attachments
-                    const borderColor =
-                      att.mode === "vision"
-                        ? "#3b82f6" // Blue
-                        : att.mode === "ocr"
-                          ? "#22c55e" // Green
-                          : att.mode === "pdf"
-                            ? "#ef4444" // Red
-                            : "#a855f7"; // Purple
+                  const isPdf = att.mode === "pdf";
 
                   return (
                     <div
@@ -666,9 +660,13 @@ export function InputBox({
                         overflow: "hidden",
                         background: "var(--sf2)",
                         transition: "all 0.2s ease",
-                        border: disableAttachmentSwap
-                          ? `2px solid ${getModeColor((att as ImageAttachment).mode)}`
-                          : `2px solid ${borderColor}`,
+                        border: `2px solid ${
+                          isPdf
+                            ? getModeColor("pdf")
+                            : isModeLocked
+                              ? "var(--bd)"
+                              : getModeColor((att as ImageAttachment).mode)
+                        }`,
                       }}
                     >
                       <img
@@ -705,23 +703,23 @@ export function InputBox({
                         <X size={13} />
                       </button>
 
-                      {/* Mode badge or outline */}
-                      {!disableAttachmentSwap && (
+                      {/* Mode badge - only in flexible mode or for PDFs */}
+                      {(!isModeLocked || isPdf) && (
                         <div
                           style={{
                             position: "absolute",
                             bottom: 0,
                             left: 0,
                             right: 0,
-                            height: 24,
+                            height: isPdf ? 24 : 20,
                             background: getModeColor(
                               (att as ImageAttachment).mode,
                             ),
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            fontSize: "10px",
-                            fontWeight: 700,
+                            fontSize: isPdf ? "10px" : "9px",
+                            fontWeight: isPdf ? 700 : 600,
                             color: "#fff",
                             transition: "opacity 0.2s ease",
                             opacity: hoveredImageId === att.id ? 0 : 1,
@@ -734,9 +732,8 @@ export function InputBox({
                         </div>
                       )}
 
-                      {/* Swap button - only show on hover if swap enabled, multiple modes available, and not PDF */}
-                      {!disableAttachmentSwap &&
-                        visionDefaultMode === "changeable" &&
+                      {/* Swap button - only show on hover in flexible mode with multiple modes available */}
+                      {!isModeLocked &&
                         hoveredImageId === att.id &&
                         (att as ImageAttachment).mode !== "pdf" &&
                         (() => {
@@ -978,7 +975,7 @@ export function InputBox({
                   marginBottom: 8,
                 }}
               >
-                Image Processing Modes
+                Image Processing
               </div>
               <div
                 style={{
@@ -988,7 +985,8 @@ export function InputBox({
                   marginBottom: 16,
                 }}
               >
-                Choose how you want images to be processed when sent to the AI.
+                How attached images are handled when sent to the AI. Set your
+                default in Settings → Connections.
               </div>
 
               {/* Vision mode */}
@@ -1115,7 +1113,7 @@ export function InputBox({
                 </div>
               </div>
 
-              {visionDefaultMode === "changeable" && (
+              {!isModeLocked && (
                 <div
                   style={{
                     marginTop: 16,
@@ -1129,8 +1127,9 @@ export function InputBox({
                   }}
                 >
                   <strong style={{ color: "var(--tx)" }}>Tip:</strong> Hover
-                  over an image and click the swap button to switch between
-                  available modes.
+                  over an image and click <strong>Swap</strong> to switch between
+                  available modes. Set a default mode in Settings → Connections
+                  to use a single mode consistently.
                 </div>
               )}
             </div>

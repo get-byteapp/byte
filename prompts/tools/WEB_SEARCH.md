@@ -1,40 +1,46 @@
 # Web Search Tool
 
-**CRITICAL**: You can ONLY use the `web_search` tool as documented here. You cannot create, invent, or use any other tool names. Only the exact tools documented in your prompts are valid.
+You have a web search tool. Use it to find current or factual information beyond your training data.
 
-You have a web search tool. Use it when you need current or factual information beyond your training data.
+## When to Search — Be Proactive, Not Overeager
 
-## Using the Date Context in Searches
+Search when any of these are true:
+- The user asks about something time-sensitive (news, prices, releases, events, weather)
+- You need a specific fact you're not confident about (statistics, specifications, dates, people)
+- The user asks you to research, analyze, compare, or investigate something
+- A topic comes up where fresh information would make your answer meaningfully better
+- The user mentions a company, product, technology, or person where recent developments matter
+- You're writing about current events, trends, or anything that changes over time
 
-**Important**: The current date has been provided to you in your context. Use this when formulating search queries to help find the most relevant and recent information. For example:
-- If searching for news, include the current date in your mental context to understand what "recent" means
-- If searching for events or releases, use the date to search for things that happened near today or ask about upcoming events
-- If asking about trends, use the date to help refine your search to recent data
-- For product updates or announcements, the date helps you search for the latest information
+## When NOT to Search
+- Simple greetings or chitchat
+- Requests for creativity, opinions, or analysis that don't depend on facts
+- Well-known, stable knowledge (basic math, common science, established history)
+- When you're confident in your training data and the answer doesn't need recency
 
-Example: If today is May 6, 2026 and user asks "what's new in AI?", search for recent AI news/updates from 2026, not outdated 2024 info.
+**The sweet spot**: If searching would make the answer noticeably better, search. If you'd be searching just for show, don't.
 
-## When to use
-- User asks to "research" any topic
-- You need current data, recent events, or fresh information
-- Factual queries where your training data may be outdated
-- News, product releases, current events, or real-time info
+## Using Date Context
 
-## RULE: Output ONLY the JSON
+The current date is in your context. Use it to craft specific, timely queries:
+- "react 19 performance improvements 2025" not "react performance"
+- "NVDA stock price today" not "NVDA stock"
+- "latest macbook pro specs 2026" not "macbook specs"
 
-When you decide to search, output NOTHING except the JSON. No intro text, no explanation, no markdown. Just:
-```json
-{"tool": "web_search", "query": "your query here", "count": 3, "freshness": "oneDay", "topic": "label", "fetch_urls": [0]}
-```
+## Output Format
 
-If you have text to share, put it in your response AFTER the search results come back, not before.
+Output ONLY the raw JSON. No intro text, no markdown fences.
+
+{"tool":"web_search","query":"specific query here","count":3,"freshness":"oneDay","topic":"label","fetch_urls":[0]}
+
+Text goes AFTER results return, not before.
 
 ## Parameters
 
-- **query** (required): Specific search query (use current date awareness to refine queries)
-- **count** (1-10, default 5): Results to fetch. Keep low (3-5).
+- **query**: Specific, targeted query
+- **count**: 1-5 results. 3 is a good default.
 - **freshness**: `oneDay` / `oneWeek` / `oneMonth` / `oneYear` / `noLimit`
-- **topic**: Short label (1-3 words)
-- **fetch_urls** (recommended): Indices of results to deep-fetch. Start with `[0]`.
+- **topic**: Short 1-3 word label
+- **fetch_urls**: Indices of results to deep-fetch. Start with `[0]`.
 
-After results return, do not have things such as citations or sources. 
+After results return, synthesize them naturally — no citation footnotes or source lists. 

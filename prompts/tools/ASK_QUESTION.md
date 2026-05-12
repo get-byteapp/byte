@@ -1,53 +1,36 @@
 # Ask Question Tool
 
-**⚠️ RARELY USED - DO NOT USE BY DEFAULT**
-
-**CRITICAL**: You can ONLY use the `ask_question` tool. You cannot create, invent, or use any tool named something else (like `greet`, `custom_tool`, `my_tool`, etc.). Only the exact tool names documented here are valid.
-
-**MOST IMPORTANTLY**: This tool is for rare situations only. In most conversations, you should respond in plain text. Do NOT use this tool just because you have a question to ask. Only use it when:
-1. The user's request is genuinely ambiguous, AND
-2. You need structured input from specific options to proceed
-
-You have access to the `ask_question` tool, but you should almost never use it. 
+When you need input from the user to give a better answer, use the `ask_question` tool. It presents structured options the user can respond to.
 
 ## When to Use
-- When the request is ambiguous and different interpretations would lead to meaningfully different outputs
-- When the user must make a choice between options that can't be reasonably assumed
-- When critical information is missing and guessing wrong would waste significant effort
-- Only for structured, multi-option questions that genuinely need user input to proceed
+- The user's request has multiple valid directions and you need to narrow it down
+- You need a specific preference or choice to proceed with the best result
+- The user asks something open-ended where a quick clarification saves a wrong answer
+- You're about to generate something (code, content, design) and a few targeted choices would make the output meaningfully better
 
 ## When NOT to Use
-- Simple greetings or chitchat ("hi", "hello", "how are you")
-- Requests that are fully self-contained ("write me a haiku")
-- When a reasonable default assumption can be made and stated inline
-- When the question would feel unnecessary or annoying given the request
-- Simple questions in plain conversation
-- When you should just respond naturally to the user
-
-**CRITICAL**: The ask_question tool is RARELY used. Most conversations do not need it. Use it only when the user's request is genuinely ambiguous and you need structured input to proceed. If you can respond to the user in plain text, do that instead.
+- Casual conversation, greetings, or chitchat — just reply naturally
+- Trivial or self-contained requests ("write a poem", "explain quantum computing")
+- When you can reasonably assume the answer or make a solid default choice
+- Asking questions one at a time in plain text is fine for simple clarifications; use the tool only when structured input with options genuinely helps
 
 ## Output Format
 
-Output ONLY a raw JSON object. No extra text, no explanation, no markdown fences, no preamble.
+Output ONLY a raw JSON object. No extra text, no explanation, no markdown fences.
 
-Example of CORRECT output:
-{"tool":"ask_question","questions":[{"id":"q1","question":"What is your goal?","type":"single_select","options":["Option A","Option B","Option C"]}]}
+{"tool":"ask_question","questions":[{"id":"q1","question":"What style?","type":"single_select","options":["Casual","Professional","Humorous"]}]}
 
-Example of WRONG output:
+Wrong (do not do this):
 - "Asking Question... {"tool":..."
-- "Here are some questions: ..."
-- "(Note: I am using the ask_question tool)"
-- Asking a question in plain text like "What would you like to do?"
 - Any text before or after the JSON
+- Wrapping in code blocks or backticks
 
 ## Rules
-1. Output the JSON object and NOTHING else (when you do use this tool)
-2. Use this tool ONLY when genuinely needed for structured questions
-3. Do NOT use this tool for casual conversation or simple greetings
-4. Do NOT narrate, explain, or comment on what you are doing
-5. Do NOT wrap the JSON in code blocks or backticks
-6. Do NOT add notes, caveats, or acknowledgements
-7. **Default to plain text responses** — only use ask_question when truly necessary
+1. Output the JSON object and NOTHING else
+2. Keep questions few and targeted — 1-2 questions max unless genuinely complex
+3. Do NOT use this tool for chitchat or trivial clarifications you can handle inline
+4. Do NOT narrate, explain, or comment on what you're doing
+5. Prefer asking simple clarifications in plain text when it's one quick thing
 
 ## Question Types
 
@@ -57,8 +40,11 @@ Single select (choose one):
 Multi select (choose many):
 {"id":"q2","question":"Your question?","type":"multi_select","options":["A","B","C"]}
 
-Free text:
-{"id":"q3","question":"Your question?","type":"text","placeholder":"Type here..."}
+Short answer (single line):
+{"id":"q3","question":"Your name?","type":"short_text","placeholder":"Enter name..."}
+
+Long answer (multi-line):
+{"id":"q4","question":"Explain your reasoning","type":"text","placeholder":"Type here..."}
 
 Slider:
 {"id":"q4","question":"Your question?","type":"slider","min":1,"max":100}

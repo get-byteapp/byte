@@ -594,9 +594,12 @@ export function ChatView({
             );
 
           let displayContent = accumulatedContent;
-          if (isWebSearch) displayContent = "Searching the web...";
-          else if (isAskQuestion) displayContent = "Asking Question...";
-          else if (isSuggestMemory) displayContent = "Suggesting memory...";
+          if (isWebSearch)
+            displayContent = extractToolCommentary(accumulatedContent, ["web_search", "news_search", "search"]) || "Searching the web...";
+          else if (isAskQuestion)
+            displayContent = extractToolCommentary(accumulatedContent, ["ask_question"]) || "Asking Question...";
+          else if (isSuggestMemory)
+            displayContent = extractToolCommentary(accumulatedContent, ["suggest_memory"]) || "Suggesting memory...";
 
           updateChat(activeChatId, {
             messages: chat.messages.map((m) =>
@@ -635,13 +638,14 @@ export function ChatView({
                 )
               : null;
 
-          let displayContent = "Asking Question...";
-          if (suggestMemory) {
-            displayContent = "Suggesting memory...";
+          const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
+          let displayContent = rawResponse;
+          if (askQuestion) {
+            displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "Asking Question...";
+          } else if (suggestMemory) {
+            displayContent = extractToolCommentary(rawResponse, ["suggest_memory"]) || "Suggesting memory...";
           } else if (webSearch) {
-            displayContent = "Searching the web...";
-          } else if (!askQuestion) {
-            displayContent = lastMsg?.rawContent || lastMsg?.content || "";
+            displayContent = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "Searching the web...";
           }
 
           updateChat(activeChatId, {
@@ -779,6 +783,21 @@ export function ChatView({
     onAskQuestionDetected,
   ]);
 
+  // Extract commentary text that comes before a tool call JSON
+  // e.g. "Sure! {\"tool\":\"ask_question\"}" → "Sure!"
+  // Also handles ```tool_call fences
+  const extractToolCommentary = (content: string, toolNames: string[]): string | null => {
+    if (!content) return null;
+    const cleaned = content
+      .replace(/\\```[\w-]*\n?/g, "")
+      .replace(/```[\w-]*\n?/g, "");
+    const toolPattern = new RegExp(`\\{[\\s\\S]*?"tool"\\s*:\\s*"(?:${toolNames.join("|")})"[\\s\\S]*?\\}`);
+    const match = cleaned.match(toolPattern);
+    if (!match || match.index === undefined) return null;
+    const before = cleaned.slice(0, match.index).trim();
+    return before.length > 0 ? before : null;
+  };
+
   // Parse ask_question tool from assistant response
   // Format 1: {"tool":"ask_question","questions":[...]}
   // Format 2: {"question":"...?","type":"...?","options":[...]} (raw question without tool wrapper)
@@ -834,6 +853,7 @@ export function ChatView({
             rawPayload.question.length < 500 &&
             (Array.isArray(rawPayload.options) ||
               rawPayload.type === "text" ||
+              rawPayload.type === "short_text" ||
               rawPayload.type === "slider" ||
               rawPayload.type === "single_select" ||
               rawPayload.type === "multi_select" ||
@@ -1025,116 +1045,79 @@ export function ChatView({
 
       // Handle describe-mode and OCR-mode attachments
       let processedAttachments = attachments;
-      if (
-        attachments &&
-        attachments.some((a) => a.mode === "describe" || a.mode === "ocr")
-      ) {
-        // Show interstitial message while processing
-        const hasDescribe = attachments.some((a) => a.mode === "describe");
-        const hasOCR = attachments.some((a) => a.mode === "ocr");
+      const hasDescribe = attachments?.some((a) => a.mode === "describe");
+      const hasOCR = attachments?.some((a) => a.mode === "ocr");
 
-        const describingMsg: Message = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content:
-            hasDescribe && hasOCR
-              ? "Analyzing images and extracting text..."
-              : hasOCR
-                ? "Extracting text..."
-                : "Analyzing images...",
-          timestamp: Date.now(),
-          status: "streaming",
-          describePhase: "describing",
-        };
+      const genId = () => crypto.randomUUID();
+      const userMsg: Message = { id: genId(), role: "user", content: text.trim(), timestamp: Date.now(), status: "sent", attachments };
+      const assistantMsg: Message = { id: genId(), role: "assistant", content: "", timestamp: Date.now(), status: "streaming" };
 
+      if (hasOCR) {
+        // For OCR: show extracting phase on the assistant immediately (like web search)
+        assistantMsg.ocrPhase = "extracting";
         updateChat(activeChatId, {
-          messages: [...(chat?.messages || []), describingMsg],
+          messages: [...(chat?.messages || []), userMsg, assistantMsg],
+          title: chat?.title === "New chat" ? text.trim().slice(0, 50) : chat?.title,
         });
+      }
 
-        // Process each describe-mode and OCR-mode attachment
+      // Process describe/OCR attachments
+      if (hasDescribe || hasOCR) {
+        if (hasDescribe && !hasOCR) {
+          const describingMsg: Message = { id: genId(), role: "assistant", content: "Analyzing images...", timestamp: Date.now(), status: "streaming", describePhase: "describing" };
+          updateChat(activeChatId, { messages: [...(chat?.messages || []), describingMsg] });
+        }
+
+        const ocrResults: { text: string }[] = [];
+
         processedAttachments = await Promise.all(
-          attachments.map(async (attachment) => {
+          attachments!.map(async (attachment) => {
             if (attachment.mode === "describe") {
               try {
-                const description = await describeImage(
-                  provider,
-                  model,
-                  attachment.dataUri,
-                  attachment.mimeType,
-                );
-                return {
-                  ...attachment,
-                  description,
-                  describedBy: model.name || model.id,
-                };
-              } catch (error) {
-                console.error("[BYTE] Error describing image:", error);
-                // Return original attachment if description fails
-                return attachment;
-              }
-            } else if (attachment.mode === "ocr") {
-              if (!ocrEnabled) {
-                // OCR not enabled, keep original attachment
-                console.warn(
-                  "[BYTE] OCR requested but not enabled in settings",
-                );
-                return attachment;
-              }
+                const description = await describeImage(provider, model, attachment.dataUri, attachment.mimeType);
+                return { ...attachment, description, describedBy: model.name || model.id };
+              } catch { return attachment; }
+            }
+            if (attachment.mode === "ocr") {
+              if (!ocrEnabled) { console.warn("[BYTE] OCR requested but not enabled"); return attachment; }
               try {
-                const extractedText = await extractTextOCR(
-                  attachment.dataUri,
-                  (progress) => {
-                    // Optional: update progress message
-                    console.log("OCR progress:", progress);
-                  },
-                );
-                return {
-                  ...attachment,
-                  description: extractedText,
-                  describedBy: "Tesseract OCR",
-                };
-              } catch (error) {
-                console.error(
-                  "[BYTE] Error extracting text from image:",
-                  error,
-                );
-                // Return original attachment if OCR fails
-                return attachment;
-              }
+                const extractedText = await extractTextOCR(attachment.dataUri, () => {});
+                ocrResults.push({ text: extractedText });
+                return { ...attachment, description: extractedText, describedBy: "Tesseract OCR" };
+              } catch { return attachment; }
             }
             return attachment;
           }),
         );
 
-        // Remove the describing message
-        updateChat(activeChatId, {
-          messages: chat?.messages || [],
-        });
+        if (hasOCR) {
+          const ocrText = ocrResults.map((r) => r.text).join("\n\n─────────────────────\n\n");
+          const fresh = useStore.getState().chats.find((c) => c.id === activeChatId);
+          if (fresh) {
+            updateChat(activeChatId, {
+              messages: fresh.messages.map((m) =>
+                m.id === assistantMsg.id
+                  ? { ...m, status: "done" as const, ocrPhase: "done" as const, ocrText }
+                : m.id === userMsg.id
+                  ? { ...m, attachments: processedAttachments }
+                  : m
+              ),
+            });
+          }
+        } else {
+          // Describe only — remove interstitial
+          updateChat(activeChatId, { messages: chat?.messages || [] });
+        }
       }
 
-      const userMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: text.trim(),
-        timestamp: Date.now(),
-        status: "sent",
-        attachments: processedAttachments,
-      };
+      const newMessages = hasOCR
+        ? (useStore.getState().chats.find((c) => c.id === activeChatId)?.messages || [])
+        : [...(chat?.messages || []), userMsg, assistantMsg];
+      const title = chat?.title === "New chat" ? text.trim().slice(0, 50) : chat?.title;
 
-      const assistantMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "",
-        timestamp: Date.now(),
-        status: "streaming",
-      };
-
-      const newMessages = [...(chat?.messages || []), userMsg, assistantMsg];
-      updateChat(activeChatId, {
-        messages: newMessages,
-        title:
-          chat?.title === "New chat" ? text.trim().slice(0, 50) : chat?.title,
-      });
+      if (!hasOCR) {
+        updateChat(activeChatId, { messages: newMessages, title });
+      }
 
       setIsLoading(true);
 
@@ -1181,9 +1164,13 @@ export function ChatView({
               );
 
             let displayContent = accumulatedContent;
-            if (isWebSearch) displayContent = "Searching the web...";
-            else if (isAskQuestion) displayContent = "Asking Question...";
-            else if (isSuggestMemory) displayContent = "Suggesting memory...";
+            if (isWebSearch) {
+              displayContent = extractToolCommentary(accumulatedContent, ["web_search", "news_search", "search"]) || "Searching the web...";
+            } else if (isAskQuestion) {
+              displayContent = extractToolCommentary(accumulatedContent, ["ask_question"]) || "Asking Question...";
+            } else if (isSuggestMemory) {
+              displayContent = extractToolCommentary(accumulatedContent, ["suggest_memory"]) || "Suggesting memory...";
+            }
 
             updateChat(activeChatId, {
               messages: currentChat.messages.map((m) =>
@@ -1227,14 +1214,14 @@ export function ChatView({
                   )
                 : null;
 
-            // If this is an ask_question message, show "Asking Question..." instead of the raw JSON
-            let displayContent = "Asking Question...";
-            if (suggestMemory) {
-              displayContent = "Suggesting memory...";
+            const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
+            let displayContent = rawResponse;
+            if (askQuestion) {
+              displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "Asking Question...";
+            } else if (suggestMemory) {
+              displayContent = extractToolCommentary(rawResponse, ["suggest_memory"]) || "Suggesting memory...";
             } else if (webSearch) {
-              displayContent = "Searching the web...";
-            } else if (!askQuestion) {
-              displayContent = lastMsg?.rawContent || lastMsg?.content || "";
+              displayContent = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "Searching the web...";
             }
 
             updateChat(activeChatId, {
@@ -1322,9 +1309,13 @@ export function ChatView({
               : null;
 
           let displayContent = response;
-          if (webSearch) displayContent = "Searching the web...";
-          else if (askQuestion) displayContent = "Asking Question...";
-          else if (suggestMemory) displayContent = "Suggesting memory...";
+          if (askQuestion) {
+            displayContent = extractToolCommentary(response, ["ask_question"]) || "Asking Question...";
+          } else if (suggestMemory) {
+            displayContent = extractToolCommentary(response, ["suggest_memory"]) || "Suggesting memory...";
+          } else if (webSearch) {
+            displayContent = extractToolCommentary(response, ["web_search", "news_search", "search"]) || "Searching the web...";
+          }
 
           const updatedMessages = newMessages.map((m) =>
             m.id === assistantMsg.id

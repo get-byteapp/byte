@@ -337,6 +337,14 @@
   box-shadow: 0 0 0 3px rgba(var(--acc-r), var(--acc-g), var(--acc-b), 0.1);
 }
 
+.aq-textarea {
+  resize: vertical;
+  min-height: 80px;
+  max-height: 200px;
+  line-height: 1.5;
+  font-family: var(--font);
+}
+
 .aq-text-input-hint {
   font-size: 11px;
   color: var(--tx3);

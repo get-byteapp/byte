@@ -313,24 +313,59 @@ export function AskQuestion({ payload, onComplete, onCancel }: AskQuestionProps)
                 </>
               )}
 
-              {/* TEXT */}
-              {currentQuestion?.type === 'text' && (
+              {/* SHORT TEXT - single line */}
+              {currentQuestion?.type === 'short_text' && (
                 <div className="aq-text-input-wrapper">
                   <input
                     type="text"
                     className="aq-text-input-field"
-                    placeholder={currentQuestion.placeholder || 'Type your answer...'}
+                    placeholder={currentQuestion.placeholder || 'Type a short answer...'}
                     value={(answers[currentQuestion.id] as string) || ''}
                     onChange={(e) => setAnswers({ ...answers, [currentQuestion.id]: e.target.value })}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        handleAnswer(answers[currentQuestion.id] || '');
+                        const val = answers[currentQuestion.id];
+                        if (val && String(val).trim()) {
+                          handleAnswer(String(val).trim());
+                        }
                       }
                     }}
                     autoFocus
                   />
-                  <div className="aq-text-input-hint">Press Enter to continue</div>
+                  <div className="aq-text-input-hint">
+                    {answers[currentQuestion.id] && String(answers[currentQuestion.id]).trim()
+                      ? 'Press Enter to submit'
+                      : 'Type your answer, then press Enter'}
+                  </div>
+                </div>
+              )}
+
+              {/* TEXT - long answer (textarea) */}
+              {currentQuestion?.type === 'text' && (
+                <div className="aq-text-input-wrapper">
+                  <textarea
+                    className="aq-text-input-field aq-textarea"
+                    placeholder={currentQuestion.placeholder || 'Type your answer...'}
+                    value={(answers[currentQuestion.id] as string) || ''}
+                    onChange={(e) => setAnswers({ ...answers, [currentQuestion.id]: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        const val = answers[currentQuestion.id];
+                        if (val && String(val).trim()) {
+                          handleAnswer(String(val).trim());
+                        }
+                      }
+                    }}
+                    autoFocus
+                    rows={3}
+                  />
+                  <div className="aq-text-input-hint">
+                    {answers[currentQuestion.id] && String(answers[currentQuestion.id]).trim()
+                      ? 'Press Enter to submit · Shift+Enter for new line'
+                      : 'Type your answer, then press Enter to submit'}
+                  </div>
                 </div>
               )}
 

@@ -38,6 +38,8 @@ export interface Message {
   webSearchFetched?: { url: string; title: string }[];
   searchPhase?: "searching" | "fetching" | "done";
   describePhase?: "describing" | "done"; // for describe-mode interstitial
+  ocrPhase?: "extracting" | "done"; // for OCR processing phase
+  ocrText?: string; // extracted OCR text for display
 }
 
 export type ToolId =
@@ -137,6 +139,7 @@ export type QuestionType =
   | "multi_select"
   | "slider"
   | "text"
+  | "short_text"
   | "rank";
 
 export interface Question {

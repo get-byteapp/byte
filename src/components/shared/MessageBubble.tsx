@@ -97,6 +97,7 @@ export const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [showSources, setShowSources] = useState(true);
+  const [showOcrText, setShowOcrText] = useState(true);
   const [lazyRef, visible] = useLazyVisible();
 
   const handleCopy = async () => {
@@ -167,6 +168,13 @@ export const MessageBubble = memo(function MessageBubble({
 
   // Describe phase handling
   const isDescribing = message.describePhase === "describing";
+
+  // OCR phase handling
+  const isExtractingOcr = message.ocrPhase === "extracting";
+  const ocrDone = message.ocrPhase === "done";
+  if (isExtractingOcr) {
+    displayContent = "";
+  }
 
   if (isUser && isAskQuestionResult) {
     displayContent = "Sent Answers";
@@ -454,6 +462,107 @@ export const MessageBubble = memo(function MessageBubble({
     );
   }
 
+  // OCR phase rendering — prepended above content like web search
+  const ocrCard =
+    (isExtractingOcr || ocrDone) && !isUser ? (
+      <div
+        style={{
+          background: "var(--sf2)",
+          border: "1px solid var(--bd)",
+          borderRadius: 10,
+          overflow: "hidden",
+          transition: "all 0.25s ease-out",
+          marginBottom: ocrDone && message.content ? 12 : 0,
+        }}
+      >
+        <div
+          onClick={() => ocrDone && setShowOcrText(!showOcrText)}
+          style={{
+            cursor: ocrDone ? "pointer" : "default",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 12px",
+            userSelect: "none",
+            transition: "background 0.15s ease",
+          }}
+        >
+          <svg
+            width={13}
+            height={13}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ color: "var(--acc)", flexShrink: 0 }}
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span
+            style={{
+              flex: 1,
+              fontSize: "calc(var(--fs) - 1px)",
+              color: isExtractingOcr ? "var(--tx2)" : "var(--tx)",
+              fontWeight: 500,
+            }}
+          >
+            {isExtractingOcr
+              ? "Extracting text..."
+              : `OCR · ${message.ocrText ? message.ocrText.length : 0} chars`}
+          </span>
+          {isExtractingOcr && (
+            <Loader2
+              size={13}
+              style={{
+                color: "var(--acc)",
+                animation: "spin 1s linear infinite",
+              }}
+            />
+          )}
+          {ocrDone && (
+            <ChevronDown
+              size={13}
+              style={{
+                color: "var(--tx3)",
+                transform: showOcrText ? "rotate(180deg)" : "none",
+                transition: "transform 0.2s ease-out",
+              }}
+            />
+          )}
+        </div>
+
+        {ocrDone && showOcrText && message.ocrText && (
+          <div
+            style={{
+              padding: "0 12px 10px",
+              animation: "fadeIn 0.2s ease-out",
+            }}
+          >
+            <div
+              style={{ height: 1, background: "var(--bd)", marginBottom: 10 }}
+            />
+            <pre
+              style={{
+                fontSize: "calc(var(--fs) - 1.5px)",
+                color: "var(--tx2)",
+                lineHeight: 1.6,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                margin: 0,
+                fontFamily: "var(--font)",
+              }}
+            >
+              {message.ocrText}
+            </pre>
+          </div>
+        )}
+      </div>
+    ) : null;
+
   // Render image attachments
   const attachmentContent =
     message.attachments && message.attachments.length > 0 ? (
@@ -546,6 +655,7 @@ export const MessageBubble = memo(function MessageBubble({
       <div className="msg-body">
         <div className="msg-txt">
           {attachmentContent}
+          {ocrCard}
           {content}
         </div>
         <div className="msg-acts">

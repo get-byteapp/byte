@@ -149,7 +149,7 @@ export function modelSupportsVision(
   if (providerId === "mistral") return id.includes("pixtral");
   if (providerId === "together")
     return id.includes("vision") || id.includes("llava");
-  if (providerId === "ollama" || providerId === "lmstudio")
+  if (providerId === "ollama" || providerId === "ollama-cloud" || providerId === "lmstudio")
     return (
       id.includes("vision") ||
       id.includes("llava") ||
@@ -418,6 +418,24 @@ export async function fetchModels(provider: Provider): Promise<Model[]> {
       enabled: false,
       capabilities: {
         webSearch: true,
+        supportsVision: modelSupportsVision(provider.id, m.id),
+      },
+    }));
+  } else if (provider.id === "ollama-cloud") {
+    headers["Authorization"] = `Bearer ${provider.apiKey}`;
+    const response = await tauriFetch(`${provider.baseUrl}/models`, { headers });
+    if (!response.ok)
+      throw new Error(`Failed to fetch models: ${response.statusText}`);
+    const data = await response.json();
+    const modelsData = data.data || [];
+    return modelsData.map((m: any) => ({
+      id: m.id,
+      name: getDisplayName(m.id),
+      providerId: provider.id,
+      contextWindow: m.context_length || 128000,
+      enabled: false,
+      capabilities: {
+        webSearch: false,
         supportsVision: modelSupportsVision(provider.id, m.id),
       },
     }));
