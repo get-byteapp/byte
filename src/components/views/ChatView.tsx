@@ -99,7 +99,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     return "";
   };
 
-  // Build project context for AI prompts
+  // Build project context for AI prompts (metadata only — no full file contents)
   const getProjectContext = useCallback(() => {
     if (!activeChatId) return undefined;
     const project = projects.find((p) => p.chatIds.includes(activeChatId));
@@ -118,25 +118,11 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     }
 
     if (hasFiles) {
-      const fileLines: string[] = [];
-      for (const f of project.files) {
+      const fileLines = project.files.map((f) => {
         const sizeLabel = f.size >= 1024 ? `${(f.size / 1024).toFixed(1)} KB` : `${f.size} B`;
-        fileLines.push(`- ${f.name} (${sizeLabel})`);
-      }
+        return `- ${f.name} (${sizeLabel})`;
+      });
       parts.push(`<project_files>\n${fileLines.join("\n")}\n</project_files>`);
-
-      const cached = projectFileContentsRef.current;
-      const contents: string[] = [];
-      for (const f of project.files) {
-        const cachedContent = cached[f.id];
-        if (cachedContent) {
-          const ext = f.name.split(".").pop() || "text";
-          contents.push(`<file name="${f.name}">\n\`\`\`${ext}\n${cachedContent}\n\`\`\`\n</file>`);
-        }
-      }
-      if (contents.length > 0) {
-        parts.push(`<file_contents>\n${contents.join("\n")}\n</file_contents>`);
-      }
     }
 
     parts.push("</project_context>");
