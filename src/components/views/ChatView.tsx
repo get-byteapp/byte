@@ -97,24 +97,73 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     const project = projects.find((p) => p.chatIds.includes(activeChatId));
     if (!project) return undefined;
     const parts: string[] = [];
-    if (project.customInstructions) {
-      parts.push(
-        `<project_context>\n<project_name>${project.name}</project_name>`,
-      );
+    const hasInstructions = !!project.customInstructions;
+    const hasFiles = project.files.length > 0;
+    if (!hasInstructions && !hasFiles) return undefined;
+
+    parts.push(`<project_context>\n<project_name>${project.name}</project_name>`);
+
+    if (hasInstructions) {
       parts.push(
         `<custom_instructions>\n${project.customInstructions}\n</custom_instructions>`,
       );
     }
-    if (project.files.length > 0) {
-      parts.push(
-        `<project_files>\n${project.files.map((f) => `- ${f.name} (${(f.size / 1024).toFixed(1)} KB)`).join("\n")}\n</project_files>`,
-      );
+
+    if (hasFiles) {
+      const fileLines: string[] = [];
+      for (const f of project.files) {
+        const sizeLabel = f.size >= 1024 ? `${(f.size / 1024).toFixed(1)} KB` : `${f.size} B`;
+        fileLines.push(`- ${f.name} (${sizeLabel})`);
+      }
+      parts.push(`<project_files>\n${fileLines.join("\n")}\n</project_files>`);
+
+      const cached = projectFileContentsRef.current;
+      const contents: string[] = [];
+      for (const f of project.files) {
+        const cachedContent = cached[f.id];
+        if (cachedContent) {
+          const ext = f.name.split(".").pop() || "text";
+          contents.push(`<file name="${f.name}">\n\`\`\`${ext}\n${cachedContent}\n\`\`\`\n</file>`);
+        }
+      }
+      if (contents.length > 0) {
+        parts.push(`<file_contents>\n${contents.join("\n")}\n</file_contents>`);
+      }
     }
-    if (parts.length > 0) {
-      parts.push("</project_context>");
-      return parts.join("\n");
+
+    parts.push("</project_context>");
+    return parts.join("\n");
+  }, [activeChatId, projects]);
+
+  // Cache project file contents so they're available synchronously for streaming
+  const projectFileContentsRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const project = projects.find((p) => p.chatIds.includes(activeChatId || ""));
+    if (!project || project.files.length === 0) {
+      projectFileContentsRef.current = {};
+      return;
     }
-    return undefined;
+    const textExtRe = /\.(md|txt|csv|json|yaml|yml|xml|ts|tsx|js|jsx|py|java|cpp|go|rb|php|css|html|sql|sh|env)$/i;
+    (async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const cache: Record<string, string> = {};
+      for (const f of project.files) {
+        const isText = !f.type || f.type.startsWith("text/") ||
+          ["application/json", "application/xml", "application/x-yaml",
+           "application/javascript", "application/typescript"].includes(f.type) ||
+          textExtRe.test(f.name);
+        if (!isText) continue;
+        try {
+          const bytes: number[] = await invoke("read_project_file", {
+            projectId: project.id,
+            fileName: f.name,
+          });
+          const text = new TextDecoder().decode(new Uint8Array(bytes));
+          if (text.trim()) cache[f.id] = text;
+        } catch { /* skip unreadable */ }
+      }
+      projectFileContentsRef.current = cache;
+    })();
   }, [activeChatId, projects]);
 
   // Get enabled models for fallback
