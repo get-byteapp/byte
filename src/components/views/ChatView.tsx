@@ -31,6 +31,7 @@ import { extractTextOCR } from "../../lib/ocr";
 import { getSlashCommandPrompt } from "../../lib/slashCommands";
 import { indexProjectFiles, queryProjectChunks, clearProjectIndex } from "../../lib/retrieval";
 
+
 interface ChatViewProps {
   onAskQuestionDetected?: Dispatch<SetStateAction<AskQuestionPayload | null>>;
   activeAskQuestion?: AskQuestionPayload | null;
@@ -92,6 +93,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     return `Error: ${msg}`;
   };
 
+  // Build project context for AI prompts + RAG retrieval
   const lastUserMessage = (messages: Message[]): string => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "user") return messages[i].content;
@@ -99,8 +101,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     return "";
   };
 
-  // Build project context for AI prompts (metadata only — no full file contents)
-  const getProjectContext = useCallback(() => {
+  const getProjectContext = useCallback((userMessage?: string) => {
     if (!activeChatId) return undefined;
     const project = projects.find((p) => p.chatIds.includes(activeChatId));
     if (!project) return undefined;
@@ -125,33 +126,35 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       parts.push(`<project_files>\n${fileLines.join("\n")}\n</project_files>`);
     }
 
+    // RAG: retrieve relevant chunks for the user's message
+    if (hasFiles && userMessage) {
+      const chunks = queryProjectChunks(project.id, userMessage, 5);
+      if (chunks.length > 0) {
+        const lines = chunks.map((c) => `[from ${c.fileName}]\n${c.content}`);
+        parts.push(`<relevant_context>\n${lines.join("\n\n")}\n</relevant_context>`);
+      }
+    }
+
     parts.push("</project_context>");
     return parts.join("\n");
-  }, [activeChatId, projects]);
-
-  // Build RAG context from relevant project file chunks
-  const getRagContext = useCallback((userMessage: string) => {
-    if (!activeChatId || !userMessage.trim()) return undefined;
-    const project = projects.find((p) => p.chatIds.includes(activeChatId));
-    if (!project || project.files.length === 0) return undefined;
-    const chunks = queryProjectChunks(project.id, userMessage, 5);
-    if (chunks.length === 0) return undefined;
-    const lines = chunks.map(
-      (c) => `[from ${c.fileName}]\n${c.content}`
-    );
-    return `<relevant_context>\n${lines.join("\n\n")}\n</relevant_context>`;
   }, [activeChatId, projects]);
 
   // Cache project file contents and build RAG index
   const projectFileContentsRef = useRef<Record<string, string>>({});
   useEffect(() => {
     const project = projects.find((p) => p.chatIds.includes(activeChatId || ""));
-    if (!project || project.files.length === 0) {
+    if (!project) {
       projectFileContentsRef.current = {};
-      if (project) clearProjectIndex(project.id);
+      clearProjectIndex(activeChatId || "");
+      return;
+    }
+    if (project.files.length === 0) {
+      projectFileContentsRef.current = {};
+      clearProjectIndex(project.id);
       return;
     }
     const textExtRe = /\.(md|txt|csv|json|yaml|yml|xml|ts|tsx|js|jsx|py|java|cpp|go|rb|php|css|html|sql|sh|env)$/i;
+    const binaryDocRe = /\.(pdf|docx|xlsx|xls|pptx)$/i;
     (async () => {
       const { invoke } = await import("@tauri-apps/api/core");
       const cache: Record<string, string> = {};
@@ -161,14 +164,67 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           ["application/json", "application/xml", "application/x-yaml",
            "application/javascript", "application/typescript"].includes(f.type) ||
           textExtRe.test(f.name);
-        if (!isText) continue;
+        const isBinaryDoc = !isText && binaryDocRe.test(f.name);
+        if (!isText && !isBinaryDoc) continue;
         try {
           const bytes: number[] = await invoke("read_project_file", {
             projectId: project.id,
             fileName: f.name,
           });
-          const text = new TextDecoder().decode(new Uint8Array(bytes));
-          if (text.trim()) {
+          const uint8 = new Uint8Array(bytes);
+          let text: string | null = null;
+
+          if (isText) {
+            text = new TextDecoder().decode(uint8);
+          } else if (isBinaryDoc) {
+            // Extract text from binary document formats
+            const ext = f.name.split(".").pop()?.toLowerCase();
+            if (ext === "pdf") {
+              const { extractPdfTextFromBytes } = await import("../../lib/fileConverter");
+              text = await extractPdfTextFromBytes(uint8, f.name);
+            } else if (ext === "docx") {
+              const mammoth = await import("mammoth");
+              const result = await mammoth.extractRawText({ arrayBuffer: uint8.buffer as ArrayBuffer });
+              text = `# ${f.name}\n\n` + result.value;
+            } else if (ext === "xlsx" || ext === "xls") {
+              const XLSX = await import("xlsx");
+              const workbook = XLSX.read(uint8, { type: "array" });
+              const lines: string[] = [`# ${f.name}\n`];
+              for (const sheetName of workbook.SheetNames) {
+                const sheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+                if (json.length === 0) continue;
+                lines.push(`## ${sheetName}\n`);
+                const maxCols = Math.max(...json.map((r) => r?.length || 0));
+                const sep = "| " + Array(maxCols).fill("---").join(" | ") + " |";
+                for (let i = 0; i < json.length; i++) {
+                  const row = json[i] || [];
+                  lines.push("| " + Array.from({length: maxCols}, (_, ci) => row[ci] !== undefined && row[ci] !== null ? String(row[ci]) : "").join(" | ") + " |");
+                  if (i === 0) lines.push(sep);
+                }
+                lines.push("");
+              }
+              text = lines.join("\n");
+            } else if (ext === "pptx") {
+              const JSZip = await import("jszip");
+              const zip = await JSZip.default.loadAsync(uint8);
+              const slides = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort();
+              const lines: string[] = [`# ${f.name}\n`];
+              for (let i = 0; i < slides.length; i++) {
+                const xml = await zip.files[slides[i]].async("text");
+                const tagRegex = /<a:t[^>]*>([^<]+)<\/a:t>/g;
+                const texts: string[] = [];
+                let m;
+                while ((m = tagRegex.exec(xml))) { const t = m[1].trim(); if (t) texts.push(t); }
+                if (texts.length === 0) continue;
+                lines.push(`## Slide ${i + 1}\n`);
+                lines.push(texts.join("\n") + "\n");
+              }
+              text = lines.join("\n");
+            }
+          }
+
+          if (text?.trim()) {
             cache[f.id] = text;
             indexInputs.push({ id: f.id, name: f.name, content: text });
           }
@@ -621,7 +677,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             freshChat.config,
             memories,
             undefined,
-            getProjectContext(),
+            getProjectContext(lastUserMessage(withSearchResultsFinal)),
           );
           streamAbortRef.current = handle.abort;
         } else {
@@ -633,7 +689,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             freshChat.config,
             memories,
             undefined,
-            getProjectContext(),
+            getProjectContext(lastUserMessage(withSearchResultsFinal)),
           );
           const freshChat2 = useStore
             .getState()
@@ -760,6 +816,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             accumulatedContent.includes('"tool":"ask_question"') ||
             accumulatedContent.includes('"tool": "ask_question"');
 
+          const isConfirmAction =
+            accumulatedContent.includes('"tool":"confirm_action"') ||
+            accumulatedContent.includes('"tool": "confirm_action"');
+
+          const isFileRead =
+            accumulatedContent.includes('"tool":"file_read"') ||
+            accumulatedContent.includes('"tool": "file_read"');
+
           const isSuggestMemory =
             accumulatedContent.includes('"tool":"suggest_memory"') ||
             accumulatedContent.includes('"tool": "suggest_memory"');
@@ -774,6 +838,10 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             displayContent = extractToolCommentary(accumulatedContent, ["web_search", "news_search", "search"]) || "Searching the web...";
           else if (isAskQuestion)
             displayContent = extractToolCommentary(accumulatedContent, ["ask_question"]) || "Asking Question...";
+          else if (isConfirmAction)
+            displayContent = extractToolCommentary(accumulatedContent, ["confirm_action"]) || "Confirming...";
+          else if (isFileRead)
+            displayContent = extractToolCommentary(accumulatedContent, ["file_read"]) || "Reading File...";
           else if (isSuggestMemory)
             displayContent = extractToolCommentary(accumulatedContent, ["suggest_memory"]) || "Suggesting memory...";
 
@@ -804,11 +872,17 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           const askQuestion = lastMsg
             ? parseAskQuestionTool(lastMsg.rawContent || lastMsg.content)
             : null;
-          const suggestMemory = !askQuestion
+          const confirmAction = !askQuestion && lastMsg
+            ? parseConfirmAction(lastMsg.rawContent || lastMsg.content)
+            : null;
+          const fileRead = !askQuestion && !confirmAction && lastMsg
+            ? parseFileReadTool(lastMsg.rawContent || lastMsg.content)
+            : null;
+          const suggestMemory = !askQuestion && !confirmAction && !fileRead
             ? parseSuggestMemory(lastMsg?.rawContent || lastMsg?.content || "")
             : null;
           const webSearch =
-            !askQuestion && !suggestMemory
+            !askQuestion && !confirmAction && !fileRead && !suggestMemory
               ? parseWebSearchTool(
                   lastMsg?.rawContent || lastMsg?.content || "",
                 )
@@ -818,10 +892,44 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           let displayContent = rawResponse;
           if (askQuestion) {
             displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "Asking Question...";
+          } else if (confirmAction) {
+            displayContent = extractToolCommentary(rawResponse, ["confirm_action"]) || "Confirming...";
+          } else if (fileRead) {
+            displayContent = extractToolCommentary(rawResponse, ["file_read"]) || "Reading File...";
           } else if (suggestMemory) {
             displayContent = extractToolCommentary(rawResponse, ["suggest_memory"]) || "Suggesting memory...";
           } else if (webSearch) {
             displayContent = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "Searching the web...";
+          }
+
+          updateChat(activeChatId, {
+            messages: chat.messages.map((m) =>
+              m.id === assistantMsg.id
+                ? {
+                    ...m,
+                    content: displayContent,
+                    rawContent: rawResponse,
+                  }
+                : m,
+            ),
+          });
+
+          if (askQuestion) {
+            onAskQuestionDetected?.(askQuestion);
+          }
+
+          if (confirmAction) {
+            handleConfirmAction(activeChatId, confirmAction.message);
+          }
+
+          if (fileRead) {
+            handleFileReadTool(activeChatId, fileRead.path);
+          }
+
+          if (suggestMemory) {
+            window.dispatchEvent(
+              new CustomEvent("byte:suggest-memory", { detail: suggestMemory }),
+            );
           }
 
           updateChat(activeChatId, {
@@ -877,7 +985,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         currentChat.config,
         memories,
         undefined,
-        [getProjectContext(), getRagContext(lastUserMessage(currentChat.messages))].filter(Boolean).join("\n\n") || undefined,
+        getProjectContext(lastUserMessage(currentChat.messages)),
       );
       streamAbortRef.current = handle.abort;
     } else {
@@ -891,7 +999,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           currentChat.config,
           memories,
           undefined, // No simplified prompt for continue (not a slash command)
-          [getProjectContext(), getRagContext(lastUserMessage(currentChat.messages))].filter(Boolean).join("\n\n") || undefined,
+          getProjectContext(lastUserMessage(currentChat.messages)),
         );
 
         const updatedMessages = [
@@ -900,7 +1008,9 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         ];
 
         const askQuestion = parseAskQuestionTool(response);
-        const webSearch = !askQuestion ? parseWebSearchTool(response) : null;
+        const confirmAction = !askQuestion ? parseConfirmAction(response) : null;
+        const fileRead = !askQuestion && !confirmAction ? parseFileReadTool(response) : null;
+        const webSearch = !askQuestion && !confirmAction && !fileRead ? parseWebSearchTool(response) : null;
 
         if (webSearch) {
           const commentary = extractToolCommentary(response, ["web_search", "news_search", "search"]);
@@ -923,6 +1033,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             webSearch,
             updatedMessages,
           ).catch((err) => console.error("[BYTE] Web search error:", err));
+        } else if (fileRead) {
+          updateChat(activeChatId, {
+            messages: [
+              ...currentChat.messages,
+              { ...assistantMsg, content: extractToolCommentary(response, ["file_read"]) || "Reading File...", status: "done" as const },
+            ],
+          });
+          handleFileReadTool(activeChatId, fileRead.path);
         } else {
           updateChat(activeChatId, {
             messages: [
@@ -932,6 +1050,9 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           });
           if (askQuestion) {
             onAskQuestionDetected?.(askQuestion);
+          }
+          if (confirmAction) {
+            handleConfirmAction(activeChatId, confirmAction.message);
           }
         }
       } catch (error) {
@@ -1128,6 +1249,87 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     }
     return null;
   };
+
+  // Parse confirm_action tool from assistant response
+  const parseConfirmAction = (content: string): { tool: string; message: string } | null => {
+    if (!content || content.trim().length < 10) return null;
+    const cleaned = content
+      .replace(/\\```[\w-]*\n?/g, "")
+      .replace(/```[\w-]*\n?/g, "")
+      .trim();
+    try {
+      const jsonMatch = cleaned.match(
+        /\{[\s\S]*"tool"\s*:\s*"confirm_action"[\s\S]*\}/,
+      );
+      if (jsonMatch) {
+        const payload = JSON.parse(jsonMatch[0]);
+        if (payload.tool === "confirm_action") {
+          return { tool: "confirm_action", message: payload.message || "" };
+        }
+      }
+    } catch { /* ignore */ }
+    return null;
+  };
+
+  interface FileReadParams {
+    path: string;
+  }
+
+  const parseFileReadTool = (content: string): FileReadParams | null => {
+    if (!content || content.trim().length < 10) return null;
+    const cleaned = content
+      .replace(/\\```[\w-]*\n?/g, "")
+      .replace(/```[\w-]*\n?/g, "")
+      .trim();
+    try {
+      const jsonMatch = cleaned.match(
+        /\{[\s\S]*"tool"\s*:\s*"file_read"[\s\S]*\}/,
+      );
+      if (jsonMatch) {
+        const payload = JSON.parse(jsonMatch[0]);
+        if (payload.tool === "file_read" && payload.path) {
+          return { path: payload.path };
+        }
+      }
+    } catch { /* ignore */ }
+    return null;
+  };
+
+  const handleFileReadTool = useCallback(async (chatId: string, path: string) => {
+    const chat = useStore.getState().chats.find((c) => c.id === chatId);
+    if (!chat) return;
+    const project = projects.find((p) => p.chatIds.includes(chatId));
+    if (!project) return;
+    const file = project.files.find((f) => f.name === path);
+    if (!file) return;
+    const cached = projectFileContentsRef.current[file.id];
+    if (!cached) return;
+    const ext = file.name.split(".").pop() || "text";
+    const content = `[Content of ${file.name}]\n\`\`\`${ext}\n${cached}\n\`\`\``;
+    const fileMsg: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content,
+      timestamp: Date.now(),
+      status: "sent",
+    };
+    updateChat(chatId, { messages: [...chat.messages, fileMsg] });
+  }, [projects, updateChat]);
+
+  // Handle confirm_action by re-sending with confirmation
+  const handleConfirmAction = useCallback(async (chatId: string, _message: string) => {
+    const chat = useStore.getState().chats.find((c) => c.id === chatId);
+    if (!chat) return;
+    // Append a confirmation message so the AI proceeds
+    const confirmMsg: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: "Confirmed. Please proceed.",
+      timestamp: Date.now(),
+      status: "sent",
+    };
+    updateChat(chatId, { messages: [...chat.messages, confirmMsg] });
+  }, [updateChat]);
 
   // Parse suggest_memory tool from assistant response
   const parseSuggestMemory = (
@@ -1388,6 +1590,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               cleanedForDetection.includes('"tool":"suggest_memory"') ||
               cleanedForDetection.includes('"tool": "suggest_memory"');
 
+            const isConfirmAction =
+              cleanedForDetection.includes('"tool":"confirm_action"') ||
+              cleanedForDetection.includes('"tool": "confirm_action"');
+
+            const isFileRead =
+              cleanedForDetection.includes('"tool":"file_read"') ||
+              cleanedForDetection.includes('"tool": "file_read"');
+
             const isWebSearch =
               /"tool"\s*:\s*"(web_search|news_search|search)"/.test(
                 cleanedForDetection,
@@ -1398,6 +1608,10 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               displayContent = extractToolCommentary(accumulatedContent, ["web_search", "news_search", "search"]) || "Searching the web...";
             } else if (isAskQuestion) {
               displayContent = extractToolCommentary(accumulatedContent, ["ask_question"]) || "Asking Question...";
+            } else if (isConfirmAction) {
+              displayContent = extractToolCommentary(accumulatedContent, ["confirm_action"]) || "Confirming...";
+            } else if (isFileRead) {
+              displayContent = extractToolCommentary(accumulatedContent, ["file_read"]) || "Reading File...";
             } else if (isSuggestMemory) {
               displayContent = extractToolCommentary(accumulatedContent, ["suggest_memory"]) || "Suggesting memory...";
             }
@@ -1432,13 +1646,19 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             const askQuestion = lastMsg
               ? parseAskQuestionTool(lastMsg.rawContent || lastMsg.content)
               : null;
-            const suggestMemory = !askQuestion
+            const confirmAction = !askQuestion && lastMsg
+              ? parseConfirmAction(lastMsg.rawContent || lastMsg.content)
+              : null;
+            const fileRead = !askQuestion && !confirmAction && lastMsg
+              ? parseFileReadTool(lastMsg.rawContent || lastMsg.content)
+              : null;
+            const suggestMemory = !askQuestion && !confirmAction && !fileRead
               ? parseSuggestMemory(
                   lastMsg?.rawContent || lastMsg?.content || "",
                 )
               : null;
             const webSearch =
-              !askQuestion && !suggestMemory
+              !askQuestion && !confirmAction && !fileRead && !suggestMemory
                 ? parseWebSearchTool(
                     lastMsg?.rawContent || lastMsg?.content || "",
                   )
@@ -1448,6 +1668,10 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             let displayContent = rawResponse;
             if (askQuestion) {
               displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "Asking Question...";
+            } else if (confirmAction) {
+              displayContent = extractToolCommentary(rawResponse, ["confirm_action"]) || "Confirming...";
+            } else if (fileRead) {
+              displayContent = extractToolCommentary(rawResponse, ["file_read"]) || "Reading File...";
             } else if (suggestMemory) {
               displayContent = extractToolCommentary(rawResponse, ["suggest_memory"]) || "Suggesting memory...";
             } else if (webSearch) {
@@ -1464,6 +1688,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
             if (askQuestion) {
               onAskQuestionDetected?.(askQuestion);
+            }
+
+            if (confirmAction) {
+              handleConfirmAction(activeChatId, confirmAction.message);
+            }
+
+            if (fileRead) {
+              handleFileReadTool(activeChatId, fileRead.path);
             }
 
             if (suggestMemory) {
@@ -1509,7 +1741,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           chat?.config, // Pass chat config for prompt assembly
           memories, // Pass memories for context
           simplifiedSystemPrompt, // Use simplified prompt for slash commands (null for normal messages)
-          [getProjectContext(), getRagContext(text)].filter(Boolean).join("\n\n") || undefined,
+          getProjectContext(text),
           processedAttachments, // Pass image attachments
         );
         streamAbortRef.current = handle.abort;
@@ -1525,22 +1757,28 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             chat?.config, // Pass chat config for prompt assembly
             memories, // Pass memories for context
             simplifiedSystemPrompt, // Use simplified prompt for slash commands (null for normal messages)
-            [getProjectContext(), getRagContext(text)].filter(Boolean).join("\n\n") || undefined,
+            getProjectContext(text),
             processedAttachments, // Pass image attachments
           );
 
           const askQuestion = parseAskQuestionTool(response);
-          const suggestMemory = !askQuestion
+          const confirmAction = !askQuestion ? parseConfirmAction(response) : null;
+          const fileRead = !askQuestion && !confirmAction ? parseFileReadTool(response) : null;
+          const suggestMemory = !askQuestion && !confirmAction && !fileRead
             ? parseSuggestMemory(response)
             : null;
           const webSearch =
-            !askQuestion && !suggestMemory
+            !askQuestion && !confirmAction && !fileRead && !suggestMemory
               ? parseWebSearchTool(response)
               : null;
 
           let displayContent = response;
           if (askQuestion) {
             displayContent = extractToolCommentary(response, ["ask_question"]) || "Asking Question...";
+          } else if (confirmAction) {
+            displayContent = extractToolCommentary(response, ["confirm_action"]) || "Confirming...";
+          } else if (fileRead) {
+            displayContent = extractToolCommentary(response, ["file_read"]) || "Reading File...";
           } else if (suggestMemory) {
             displayContent = extractToolCommentary(response, ["suggest_memory"]) || "Suggesting memory...";
           } else if (webSearch) {
@@ -1566,6 +1804,10 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             ).catch((err) => console.error("[BYTE] Web search error:", err));
           } else if (askQuestion) {
             onAskQuestionDetected?.(askQuestion);
+          } else if (confirmAction) {
+            handleConfirmAction(activeChatId, confirmAction.message);
+          } else if (fileRead) {
+            handleFileReadTool(activeChatId, fileRead.path);
           }
 
           if (suggestMemory) {

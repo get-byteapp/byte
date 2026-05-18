@@ -36,9 +36,17 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `/pdf.worker.min.mjs`;
 
 export async function convertPdfToMarkdown(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  return extractPdfText(arrayBuffer, file.name);
+}
 
-  let markdown = `# ${file.name}\n\n`;
+export async function extractPdfTextFromBytes(bytes: ArrayBuffer | Uint8Array, fileName: string): Promise<string> {
+  return extractPdfText(bytes, fileName);
+}
+
+async function extractPdfText(data: ArrayBuffer | Uint8Array, fileName: string): Promise<string> {
+  const pdf = await pdfjsLib.getDocument(data).promise;
+
+  let markdown = `# ${fileName}\n\n`;
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
