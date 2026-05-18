@@ -1,3 +1,14 @@
+// Polyfill Map.getOrInsertComputed for environments that don't support ES2025 (e.g. Tauri/WKWebView)
+const MapProto = Map.prototype as any;
+if (typeof MapProto.getOrInsertComputed === "undefined") {
+  MapProto.getOrInsertComputed = function (key: any, callback: (key: any) => any): any {
+    if (this.has(key)) return this.get(key);
+    const value = callback(key);
+    this.set(key, value);
+    return value;
+  };
+}
+
 import * as pdfjsLib from "pdfjs-dist";
 
 if (
@@ -58,13 +69,44 @@ export async function renderPdfFirstPage(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
   const page = await pdf.getPage(1);
-  const viewport = page.getViewport({ scale: 0.5 });
+  const viewport = page.getViewport({ scale: 1.5 });
   const canvas = document.createElement("canvas");
   canvas.width = viewport.width;
   canvas.height = viewport.height;
   const ctx = canvas.getContext("2d")!;
-  await page.render({ canvasContext: ctx, canvas: null, viewport }).promise;
+  await page.render({ canvasContext: ctx, canvas, viewport }).promise;
   return canvas.toDataURL("image/png");
+}
+
+export async function renderPdfPages(file: File, onProgress?: (done: number, total: number) => void): Promise<{ page: number; dataUri: string }[]> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  const total = pdf.numPages;
+  const results: { page: number; dataUri: string }[] = [];
+
+  for (let i = 1; i <= total; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 1.5 });
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext("2d")!;
+    await page.render({ canvasContext: ctx, canvas, viewport }).promise;
+    results.push({ page: i, dataUri: canvas.toDataURL("image/png") });
+    onProgress?.(i, total);
+  }
+
+  return results;
+}
+
+export function hasPdfText(textContent: string): boolean {
+  const content = textContent
+    .replace(/# .+\n+/g, '')
+    .replace(/## Page \d+\n+/g, '')
+    .replace(/---\n+/g, '')
+    .replace(/\d+\n/g, '')
+    .trim();
+  return content.length > 30;
 }
 
 export async function convertFileToText(file: File): Promise<string> {

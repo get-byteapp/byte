@@ -29,7 +29,8 @@
         { "url": "https://api.aleph-alpha.com/**" },
         { "url": "https://api.ollama.com/**" },
         { "url": "https://api.cerebras.ai/**" },
-        { "url": "https://api.langsearch.com/**" }
+        { "url": "https://api.langsearch.com/**" },
+        { "url": "https://r.jina.ai/**" }
       ]
     }
   ]

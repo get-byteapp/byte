@@ -398,8 +398,8 @@ export const useStore = create<AppState>()(
       setLangSearchEnabled: (langSearchEnabled) => set({ langSearchEnabled }),
       setImageDescriptionModelId: (imageDescriptionModelId) =>
         set({ imageDescriptionModelId }),
-       setOcrInstalled: (ocrInstalled) => set({ ocrInstalled }),
-       setOcrEnabled: (ocrEnabled) => set({ ocrEnabled }),
+        setOcrInstalled: (ocrInstalled) => set({ ocrInstalled }),
+        setOcrEnabled: (ocrEnabled) => set({ ocrEnabled }),
        setVisionDefaultMode: (visionDefaultMode) => set({ visionDefaultMode }),
        setDisableAttachmentSwap: (disableAttachmentSwap) =>
          set({ disableAttachmentSwap }),
@@ -623,6 +623,24 @@ export const useStore = create<AppState>()(
     {
       name: "byte_store",
       version: 3,
+      partialize: (state) => {
+        // Strip large binary data before persisting to localStorage
+        const stripped = { ...state };
+        stripped.chats = stripped.chats.map((chat) => ({
+          ...chat,
+          messages: chat.messages.map((msg) => ({
+            ...msg,
+            attachments: msg.attachments?.map((att) => {
+              if (att.type === "image") {
+                const { pdfData, ...rest } = att as any;
+                return rest;
+              }
+              return att;
+            }),
+          })),
+        }));
+        return stripped;
+      },
       migrate: (persistedState: any, _version: number) => {
         if (persistedState) {
           const migratedQuickPrompts = migrateQuickPrompts(persistedState);

@@ -6,13 +6,12 @@ import {
   Square,
   Folder,
   X,
-  HelpCircle,
-  RefreshCw,
   File,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { getDisplayName, makeModelKey, resolveModel } from "../../lib/api";
-import { convertFileToText, isTextFile, isImageFile, isPdfFile, convertPdfToMarkdown, renderPdfFirstPage } from "../../lib/fileConverter";
+import * as pdfjsLib from "pdfjs-dist";
+import { convertFileToText, isTextFile, isImageFile, isPdfFile, convertPdfToMarkdown, renderPdfFirstPage, hasPdfText } from "../../lib/fileConverter";
 import { PlusMenu } from "./PlusMenu";
 import { ModelPicker } from "./ModelPicker";
 import { SlashCommandMenu } from "./SlashCommandMenu";
@@ -57,7 +56,9 @@ export function InputBox({
   const [isDragging, setIsDragging] = useState(false);
   const [showFilesHelp, setShowFilesHelp] = useState(false);
   const [showNoVisionWarning, setShowNoVisionWarning] = useState(false);
+  const [pdfErrorMsg, setPdfErrorMsg] = useState<string | null>(null);
   const [hoveredImageId, setHoveredImageId] = useState<string | null>(null);
+  const [visionModalAttId, setVisionModalAttId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelChipRef = useRef<HTMLButtonElement>(null);
@@ -94,19 +95,6 @@ export function InputBox({
         return "#ef4444"; // Red
       default:
         return "#6b7280"; // Gray
-    }
-  };
-
-  const getModeLabel = (mode: ImageMode) => {
-    switch (mode) {
-      case "vision":
-        return "VISION";
-      case "ocr":
-        return "OCR";
-      case "describe":
-        return "DESIGN";
-      case "pdf":
-        return "PDF";
     }
   };
 
@@ -178,18 +166,13 @@ export function InputBox({
     const imageAttachments = attachments.filter((a) => a.type === "image") as ImageAttachment[];
     const fileAttachments = attachments.filter((a) => a.type === "file") as FileAttachment[];
     
-    // Build final message with file contents and PDF text
+    // Build final message with file contents
     let finalText = text.trim();
     for (const fileAtt of fileAttachments) {
       finalText += `\n\n[Attachment: ${fileAtt.fileName}]\n${fileAtt.fileContent}`;
     }
-    for (const imgAtt of imageAttachments) {
-      if (imgAtt.mode === "pdf" && imgAtt.description) {
-        finalText += `\n\n[PDF: ${imgAtt.fileName}]\n${imgAtt.description}`;
-      }
-    }
     
-    // Send with image attachments only (files are embedded in text)
+    // Send with image attachments (PDF content is handled in the API layer)
     onSend(finalText, imageAttachments.length > 0 ? imageAttachments : undefined);
     handleTextChange("");
     setAttachments([]);
@@ -284,25 +267,59 @@ export function InputBox({
 
   const processPdfFile = async (file: File) => {
     try {
-      const [textContent, dataUri] = await Promise.all([
-        convertPdfToMarkdown(file),
-        renderPdfFirstPage(file),
-      ]);
-      const newAttachment: ImageAttachment = {
-        id: `${Date.now()}-${Math.random()}`,
-        type: "image",
-        fileName: file.name,
-        mimeType: file.type,
-        dataUri,
-        size: file.size,
-        mode: "pdf",
-        description: textContent,
-      };
-      setAttachments((prev) => [...prev, newAttachment]);
+      const textContent = await convertPdfToMarkdown(file);
+      const firstPageUri = await renderPdfFirstPage(file);
+
+      if (hasPdfText(textContent)) {
+        // Text PDF — send extracted text directly
+        const newAttachment: ImageAttachment = {
+          id: `${Date.now()}-${Math.random()}`,
+          type: "image",
+          fileName: file.name,
+          mimeType: file.type,
+          dataUri: firstPageUri,
+          size: file.size,
+          mode: "pdf",
+          description: textContent,
+        };
+        setAttachments((prev) => [...prev, newAttachment]);
+      } else {
+        // Scanned PDF — store PDF data for lazy rendering at send time
+        const pdfDataUri = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+
+        // Get page count from the already-loaded pdf
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+
+        const newAttachment: ImageAttachment = {
+          id: `${Date.now()}-${Math.random()}`,
+          type: "image",
+          fileName: file.name,
+          mimeType: file.type,
+          dataUri: firstPageUri,
+          size: file.size,
+          mode: "ocr",
+          totalPages: pdf.numPages,
+          pdfData: pdfDataUri,
+        };
+        setAttachments((prev) => [...prev, newAttachment]);
+      }
     } catch (error) {
       console.error("Error processing PDF file:", error);
+      setPdfErrorMsg(`Failed to process "${file.name}". The file may be corrupted or password-protected.`);
     }
   };
+
+  useEffect(() => {
+    if (pdfErrorMsg) {
+      const t = setTimeout(() => setPdfErrorMsg(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [pdfErrorMsg]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -350,7 +367,7 @@ export function InputBox({
     console.log("[DragLeave] counter before:", dragCounterRef.current);
     e.preventDefault();
     e.stopPropagation();
-    dragCounterRef.current -= 1;
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
     console.log("[DragLeave] counter after:", dragCounterRef.current);
     if (dragCounterRef.current === 0) {
       setIsDragging(false);
@@ -436,42 +453,27 @@ export function InputBox({
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const cycleAttachmentMode = (id: string) => {
-    // If visionDefaultMode is not "changeable", don't allow cycling (mode is locked)
-    if (visionDefaultMode !== "changeable") {
-      return;
+  const getAvailableModes = useCallback((att: Attachment): ImageMode[] => {
+    const modes: ImageMode[] = [];
+    if (att.type === "image" && att.description && hasPdfText(att.description)) {
+      modes.push("pdf");
     }
+    if (model?.capabilities?.supportsVision) {
+      modes.push("vision");
+    }
+    if (ocrEnabled) {
+      modes.push("ocr");
+    }
+    if (imageDescriptionModelId) {
+      modes.push("describe");
+    }
+    return modes;
+  }, [model, ocrEnabled, imageDescriptionModelId]);
 
+  const setAttachmentMode = (id: string, newMode: ImageMode) => {
+    if (visionDefaultMode !== "changeable") return;
     setAttachments((prev) =>
-      prev.map((a) => {
-        if (a.id !== id) return a;
-        
-        // Only cycle for image attachments
-        if (a.type !== "image") return a;
-
-        // Determine which modes are available
-        const availableModes: ImageMode[] = [];
-
-        if (model?.capabilities?.supportsVision) {
-          availableModes.push("vision");
-        }
-        if (ocrEnabled) {
-          availableModes.push("ocr");
-        }
-        if (imageDescriptionModelId) {
-          availableModes.push("describe");
-        }
-
-        // If no modes available or only one mode, don't cycle
-        if (availableModes.length <= 1) return a;
-
-        // Find current mode index and cycle to next available mode
-        const currentIndex = availableModes.indexOf(a.mode);
-        const nextIndex = (currentIndex + 1) % availableModes.length;
-        const newMode = availableModes[nextIndex];
-
-        return { ...a, mode: newMode };
-      }),
+      prev.map((a) => (a.id === id && a.type === "image" ? { ...a, mode: newMode } : a)),
     );
   };
 
@@ -516,6 +518,7 @@ export function InputBox({
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           style={{
+            position: "relative",
             border: isDragging ? "2px dashed var(--acc)" : undefined,
             background: isDragging
               ? "rgba(var(--acc-r),var(--acc-g),var(--acc-b),.05)"
@@ -525,280 +528,292 @@ export function InputBox({
         >
           {/* Attachment thumbnails */}
           {attachments.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              {/* FILES header */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginBottom: 8,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    color: "var(--tx3)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                  }}
-                >
-                  FILES
-                </span>
-                <button
-                  onClick={() => setShowFilesHelp(true)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    color: "var(--tx3)",
-                  }}
-                >
-                  <HelpCircle size={14} />
-                </button>
-              </div>
-
-              {/* Separator line */}
-              <div
-                style={{
-                  height: 1,
-                  background: "var(--bd)",
-                  marginBottom: 10,
-                }}
-              />
-
-              {/* Image thumbnails */}
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  flexWrap: "wrap",
-                }}
-              >
-                {attachments.map((att) => {
-                  // Handle file attachments
-                  if (att.type === "file") {
-                    return (
-                      <div
-                        key={att.id}
-                        style={{
-                          position: "relative",
-                          width: 96,
-                          height: 96,
-                          borderRadius: "var(--r-md)",
-                          overflow: "hidden",
-                          border: "2px solid var(--p-border-subtle)",
-                          background: "var(--sf2)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexDirection: "column",
-                          gap: 8,
-                          padding: 8,
-                        }}
-                      >
-                        <File size={32} style={{ color: "var(--p-text-secondary)" }} />
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            textAlign: "center",
-                            color: "var(--p-text-secondary)",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            width: "100%",
-                          }}
-                          title={att.fileName}
-                        >
-                          {att.fileName}
-                        </span>
-
-                        {/* Remove button */}
-                        <button
-                          onClick={() => removeAttachment(att.id)}
-                          title="Remove file"
-                          style={{
-                            position: "absolute",
-                            top: 4,
-                            right: 4,
-                            width: 22,
-                            height: 22,
-                            borderRadius: "50%",
-                            background: "rgba(0,0,0,0.7)",
-                            border: "1px solid rgba(255,255,255,0.2)",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "#fff",
-                            padding: 0,
-                          }}
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  // Handle image attachments
-                  const isPdf = att.mode === "pdf";
-
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+                marginBottom: 10,
+              }}
+            >
+              {attachments.map((att) => {
+                // Handle file attachments
+                if (att.type === "file") {
                   return (
                     <div
                       key={att.id}
-                      onMouseEnter={() => setHoveredImageId(att.id)}
-                      onMouseLeave={() => setHoveredImageId(null)}
                       style={{
                         position: "relative",
-                        width: 96,
-                        height: 96,
+                        width: 88,
+                        height: 88,
                         borderRadius: "var(--r-md)",
                         overflow: "hidden",
+                        border: "1px solid var(--bd)",
                         background: "var(--sf2)",
-                        transition: "all 0.2s ease",
-                        border: `2px solid ${
-                          isPdf
-                            ? getModeColor("pdf")
-                            : isModeLocked
-                              ? "var(--bd)"
-                              : getModeColor((att as ImageAttachment).mode)
-                        }`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "column",
+                        gap: 6,
+                        padding: 8,
+                        animation: "up .15s ease",
                       }}
                     >
-                      <img
-                        src={att.dataUri}
-                        alt={att.fileName}
+                      <File size={28} style={{ color: "var(--tx3)" }} />
+                      <span
                         style={{
+                          fontSize: "10px",
+                          textAlign: "center",
+                          color: "var(--tx3)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
                           width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
+                          lineHeight: 1.2,
                         }}
-                      />
-
-                      {/* Remove button */}
+                        title={att.fileName}
+                      >
+                        {att.fileName}
+                      </span>
                       <button
                         onClick={() => removeAttachment(att.id)}
-                        title="Remove image"
+                        title="Remove file"
                         style={{
                           position: "absolute",
-                          top: 4,
-                          right: 4,
-                          width: 22,
-                          height: 22,
+                          top: 3,
+                          right: 3,
+                          width: 20,
+                          height: 20,
                           borderRadius: "50%",
-                          background: "rgba(0,0,0,0.7)",
-                          border: "1px solid rgba(255,255,255,0.2)",
+                          background: "rgba(0,0,0,0.65)",
+                          border: "none",
                           cursor: "pointer",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           color: "#fff",
                           padding: 0,
+                          opacity: 0,
+                          transition: "opacity .15s",
                         }}
+                        className="att-remove-btn"
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = "1"}
+                        onMouseLeave={(e) => e.currentTarget.style.opacity = "0"}
                       >
-                        <X size={13} />
+                        <X size={11} />
                       </button>
-
-                      {/* Mode badge - only in flexible mode or for PDFs */}
-                      {(!isModeLocked || isPdf) && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            height: isPdf ? 24 : 20,
-                            background: getModeColor(
-                              (att as ImageAttachment).mode,
-                            ),
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: isPdf ? "10px" : "9px",
-                            fontWeight: isPdf ? 700 : 600,
-                            color: "#fff",
-                            transition: "opacity 0.2s ease",
-                            opacity: hoveredImageId === att.id ? 0 : 1,
-                            pointerEvents: "none",
-                          }}
-                        >
-                          {getModeLabel(
-                            (att as ImageAttachment).mode,
-                          )}
-                        </div>
-                      )}
-
-                      {/* Swap button - only show on hover in flexible mode with multiple modes available */}
-                      {!isModeLocked &&
-                        hoveredImageId === att.id &&
-                        (att as ImageAttachment).mode !== "pdf" &&
-                        (() => {
-                          // Determine available modes
-                          const availableModes = [];
-
-                          // Vision is always available if there's a vision model
-                          const hasVisionModel = providers.some(
-                            (p) =>
-                              p.apiKey &&
-                              p.models.some(
-                                (m) =>
-                                  m.capabilities?.supportsVision &&
-                                  enabledModelIds.includes(
-                                    makeModelKey(p.id, m.id),
-                                  ),
-                              ),
-                          );
-                          if (hasVisionModel) availableModes.push("vision");
-
-                          // OCR is available if enabled
-                          if (ocrEnabled) availableModes.push("ocr");
-
-                          // Describe is available if there's a description model
-                          if (imageDescriptionModelId)
-                            availableModes.push("describe");
-
-                          // Only show swap if there are 2+ modes
-                          return availableModes.length > 1;
-                        })() && (
-                          <button
-                            onClick={() => cycleAttachmentMode(att.id)}
-                            title={`Switch from ${(att as ImageAttachment).mode} mode`}
-                            style={{
-                              position: "absolute",
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              height: 24,
-                              padding: "0 8px",
-                              borderRadius: 0,
-                              background: getModeColor(
-                                (att as ImageAttachment).mode,
-                              ),
-                              border: "none",
-                              cursor: "pointer",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              color: "#fff",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: 4,
-                              animation: "swapButtonFade 0.2s ease",
-                              transition: "all 0.2s ease",
-                            }}
-                          >
-                            <RefreshCw size={12} />
-                            Swap
-                          </button>
-                        )}
                     </div>
                   );
-                })}
-              </div>
+                }
+
+                // Image and PDF attachments
+                const imgAtt = att as ImageAttachment;
+                const availableModes = getAvailableModes(att);
+                const modeColor = getModeColor(imgAtt.mode);
+
+                return (
+                  <>
+                    <div
+                      key={att.id}
+                      onClick={() => {
+                        if (!isModeLocked && availableModes.length > 1) {
+                          setVisionModalAttId(att.id);
+                        }
+                      }}
+                      style={{
+                        position: "relative",
+                        width: 88,
+                        height: 88,
+                        borderRadius: "var(--r-md)",
+                        overflow: "hidden",
+                        background: "var(--sf2)",
+                        border: `2px solid ${
+                          isModeLocked ? "var(--bd)" : modeColor
+                        }`,
+                        transition: "border-color .2s, box-shadow .2s",
+                        animation: "up .15s ease",
+                        flexShrink: 0,
+                        cursor: !isModeLocked && availableModes.length > 1 ? "pointer" : "default",
+                      }}
+                      onMouseEnter={() => setHoveredImageId(att.id)}
+                      onMouseLeave={() => setHoveredImageId(null)}
+                    >
+                      <img
+                        src={imgAtt.dataUri}
+                        alt={imgAtt.fileName}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+
+                      {/* Remove button */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeAttachment(att.id); }}
+                        title="Remove"
+                        style={{
+                          position: "absolute",
+                          top: 3,
+                          right: 3,
+                          width: 20,
+                          height: 20,
+                          borderRadius: "50%",
+                          background: "rgba(0,0,0,0.65)",
+                          border: "none",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#fff",
+                          padding: 0,
+                          opacity: hoveredImageId === att.id ? 1 : 0,
+                          transition: "opacity .15s",
+                        }}
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+
+                    {/* Vision mode modal */}
+                    {visionModalAttId === att.id && (
+                      <div
+                        style={{
+                          position: "fixed",
+                          inset: 0,
+                          zIndex: 999,
+                          background: "rgba(0,0,0,0.4)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 24,
+                        }}
+                        onClick={() => setVisionModalAttId(null)}
+                      >
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            background: "var(--sf)",
+                            border: "1px solid var(--bd)",
+                            borderRadius: "var(--r-lg)",
+                            boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+                            width: "100%",
+                            maxWidth: 280,
+                            padding: 20,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              marginBottom: 16,
+                            }}
+                          >
+                            <div style={{ fontSize: "var(--fs)", fontWeight: 600, color: "var(--tx)" }}>
+                              Image mode
+                            </div>
+                            <button
+                              onClick={() => setVisionModalAttId(null)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "var(--tx3)",
+                                cursor: "pointer",
+                                padding: 4,
+                                display: "flex",
+                                borderRadius: "var(--r-sm)",
+                              }}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            {availableModes.map((mode) => {
+                              const isActive = imgAtt.mode === mode;
+                              const colors: Record<string, { dot: string; glow: string }> = {
+                                vision: { dot: "var(--vision-color, #6366f1)", glow: "rgba(99,102,241,0.3)" },
+                                ocr: { dot: "var(--ocr-color, #f59e0b)", glow: "rgba(245,158,11,0.3)" },
+                                describe: { dot: "var(--describe-color, #8b5cf6)", glow: "rgba(139,92,246,0.3)" },
+                                pdf: { dot: "#ef4444", glow: "rgba(239,68,68,0.3)" },
+                              };
+                              const c = colors[mode] || { dot: "var(--tx3)", glow: "transparent" };
+                              const labels: Record<string, string> = {
+                                vision: "AI analyzes the image directly",
+                                ocr: "Extracts text from the image",
+                                describe: "Describes image via a vision model",
+                                pdf: "Sends extracted text from PDF",
+                              };
+                              return (
+                                <div
+                                  key={mode}
+                                  onClick={() => {
+                                    setAttachmentMode(att.id, mode);
+                                    setVisionModalAttId(null);
+                                  }}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 10,
+                                    padding: "9px 10px",
+                                    borderRadius: "var(--r-sm)",
+                                    cursor: "pointer",
+                                    background: isActive ? "var(--acc-soft)" : "transparent",
+                                    transition: "background var(--ease)",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (!isActive) e.currentTarget.style.background = "var(--sf2)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (!isActive) e.currentTarget.style.background = "transparent";
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: "50%",
+                                      background: c.dot,
+                                      display: "inline-block",
+                                      flexShrink: 0,
+                                      boxShadow: isActive ? `0 0 6px ${c.glow}` : "none",
+                                    }}
+                                  />
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div
+                                      style={{
+                                        fontSize: "var(--fs)",
+                                        fontWeight: 500,
+                                        color: isActive ? "var(--tx)" : "var(--tx2)",
+                                      }}
+                                    >
+                                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "calc(var(--fs) - 2px)",
+                                        color: "var(--tx3)",
+                                        marginTop: 1,
+                                      }}
+                                    >
+                                      {labels[mode] || ""}
+                                    </div>
+                                  </div>
+                                  {isActive && (
+                                    <span style={{ color: "var(--acc)", fontSize: 11, flexShrink: 0 }}>✓</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })}
             </div>
           )}
 
@@ -948,8 +963,77 @@ export function InputBox({
               )}
             </div>
           </div>
+
+          {/* Drop zone overlay */}
+          {isDragging && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "inherit",
+                background: "rgba(var(--acc-r),var(--acc-g),var(--acc-b),.06)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 10,
+                pointerEvents: "none",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 12,
+                  color: "rgba(var(--acc-r),var(--acc-g),var(--acc-b),.7)",
+                }}
+              >
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <span style={{ fontSize: 14, fontWeight: 500 }}>Drop files here</span>
+                <span style={{ fontSize: 11, opacity: 0.7 }}>Images, PDFs, text files, and more</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* PDF Error Toast */}
+      {pdfErrorMsg && (
+        <div
+          style={{
+            marginTop: 8,
+            padding: "8px 12px",
+            background: "var(--danger-fill)",
+            color: "var(--white)",
+            borderRadius: "var(--r-md)",
+            fontSize: "calc(var(--fs) - 1px)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            animation: "up .12s ease",
+          }}
+        >
+          <span style={{ flex: 1 }}>{pdfErrorMsg}</span>
+          <button
+            onClick={() => setPdfErrorMsg(null)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "inherit",
+              cursor: "pointer",
+              padding: 2,
+              display: "flex",
+              opacity: 0.8,
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Files Help Modal */}
       {showFilesHelp && (

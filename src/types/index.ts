@@ -10,6 +10,9 @@ export interface ImageAttachment {
   mode: ImageMode;
   description?: string; // populated after describe-mode API call
   describedBy?: string; // display name of model used to describe
+  ocrPages?: { page: number; dataUri: string; text?: string }[]; // per-page OCR results
+  totalPages?: number;
+  pdfData?: string; // base64-encoded PDF for lazy page rendering + OCR
 }
 
 export interface FileAttachment {

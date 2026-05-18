@@ -308,6 +308,12 @@
   }
 }
 
+@keyframes progressIndeterminate {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(200%); }
+  100% { transform: translateX(400%); }
+}
+
 /* ── TOUCH DEVICE OPTIMIZATIONS ── */
 @media (hover: none) and (pointer: coarse) {
   /* Disable hover lift effects on touch devices */

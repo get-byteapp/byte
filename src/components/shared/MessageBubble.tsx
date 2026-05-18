@@ -1,4 +1,4 @@
-import { useState, memo, useRef, useCallback } from "react";
+import { useState, memo, useRef, useCallback, useMemo } from "react";
 import {
   Copy,
   Check,
@@ -122,33 +122,25 @@ export const MessageBubble = memo(function MessageBubble({
   // Hidden messages (e.g., search results context) are not rendered
   if (message.hidden) return null;
 
-  // Strip tool calls from display if they are web search tools
+  // Strip tool calls from display — strip any {"tool":"..."} JSON blocks
   if (
     !isUser &&
-    displayContent.includes('"tool"') &&
-    (displayContent.includes('"web_search"') ||
-      displayContent.includes('"news_search"') ||
-      displayContent.includes('"search"'))
+    displayContent.includes('"tool"')
   ) {
-    // 1. Remove markdown code blocks containing the tool call
+    // 1. Remove markdown code blocks containing any tool call JSON
     displayContent = displayContent.replace(
       /```[\w-]*\s*[\s\S]*?```/g,
       (match) => {
-        if (
-          match.includes('"tool"') &&
-          (match.includes('"web_search"') ||
-            match.includes('"news_search"') ||
-            match.includes('"search"'))
-        ) {
+        if (match.includes('"tool"')) {
           return "";
         }
         return match;
       },
     );
 
-    // 2. Remove any remaining raw JSON blocks containing the tool call
+    // 2. Remove any remaining raw JSON blocks containing "tool"
     displayContent = displayContent.replace(
-      /\{[\s\S]*?"tool"\s*:\s*"(?:web_search|news_search|search)"[\s\S]*?\}/g,
+      /\{[\s\S]*?"tool"\s*:\s*"[^"]*"[\s\S]*?\}/g,
       "",
     );
 
@@ -172,6 +164,15 @@ export const MessageBubble = memo(function MessageBubble({
   // OCR phase handling
   const isExtractingOcr = message.ocrPhase === "extracting";
   const ocrDone = message.ocrPhase === "done";
+  const [ocrPageIndex, setOcrPageIndex] = useState(0);
+
+  // Parse OCR text into pages for multi-page navigation
+  const ocrPages = useMemo(() => {
+    if (!message.ocrText) return [];
+    const parts = message.ocrText.split(/\n--- Page \d+ ---\n/);
+    return parts.filter(Boolean);
+  }, [message.ocrText]);
+  const ocrPageCount = ocrPages.length;
   if (isExtractingOcr) {
     displayContent = "";
   }
@@ -329,14 +330,16 @@ export const MessageBubble = memo(function MessageBubble({
             />
           </div>
 
-          {/* Expandable content - same background as header */}
-          {showSources && (
-            <div
-              style={{
-                padding: "0 12px 10px",
-                animation: "fadeIn 0.2s ease-out",
-              }}
-            >
+          {/* Expandable content - animated with height transition */}
+          <div
+            style={{
+              maxHeight: showSources ? "800px" : "0",
+              opacity: showSources ? 1 : 0,
+              overflow: showSources ? "auto" : "hidden",
+              transition: "max-height 0.25s ease-out, opacity 0.2s ease-out, padding 0.2s ease-out",
+              padding: showSources ? "0 12px 10px" : "0 12px",
+            }}
+          >
               {/* Divider */}
               <div
                 style={{ height: 1, background: "var(--bd)", marginBottom: 10 }}
@@ -454,8 +457,7 @@ export const MessageBubble = memo(function MessageBubble({
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </div>
 
         <div style={{ marginTop: 8 }}>{content}</div>
       </>
@@ -511,7 +513,7 @@ export const MessageBubble = memo(function MessageBubble({
             }}
           >
             {isExtractingOcr
-              ? "Extracting text..."
+              ? (message.content || "Extracting text...")
               : `OCR · ${message.ocrText ? message.ocrText.length : 0} chars`}
           </span>
           {isExtractingOcr && (
@@ -535,16 +537,49 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         </div>
 
-        {ocrDone && showOcrText && message.ocrText && (
-          <div
-            style={{
-              padding: "0 12px 10px",
-              animation: "fadeIn 0.2s ease-out",
-            }}
-          >
+        {/* Expandable content - animated with height transition */}
+        <div
+          style={{
+            maxHeight: ocrDone && showOcrText && message.ocrText ? "800px" : "0",
+            opacity: ocrDone && showOcrText && message.ocrText ? 1 : 0,
+            overflow: ocrDone && showOcrText && message.ocrText ? "auto" : "hidden",
+            transition: "max-height 0.25s ease-out, opacity 0.2s ease-out, padding 0.2s ease-out",
+            padding: ocrDone && showOcrText && message.ocrText ? "0 12px 10px" : "0 12px",
+          }}
+        >
             <div
               style={{ height: 1, background: "var(--bd)", marginBottom: 10 }}
             />
+
+            {/* Page navigation for multi-page */}
+            {ocrPageCount > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 8 }}>
+                <button
+                  onClick={() => setOcrPageIndex(Math.max(0, ocrPageIndex - 1))}
+                  disabled={ocrPageIndex === 0}
+                  style={{
+                    background: "none", border: "none", cursor: ocrPageIndex > 0 ? "pointer" : "default",
+                    color: ocrPageIndex > 0 ? "var(--tx2)" : "var(--tx4)", padding: 2,
+                  }}
+                >
+                  <ChevronDown size={13} style={{ transform: "rotate(90deg)" }} />
+                </button>
+                <span style={{ fontSize: "calc(var(--fs) - 1px)", color: "var(--tx2)", fontWeight: 500 }}>
+                  Page {ocrPageIndex + 1} / {ocrPageCount}
+                </span>
+                <button
+                  onClick={() => setOcrPageIndex(Math.min(ocrPageCount - 1, ocrPageIndex + 1))}
+                  disabled={ocrPageIndex >= ocrPageCount - 1}
+                  style={{
+                    background: "none", border: "none", cursor: ocrPageIndex < ocrPageCount - 1 ? "pointer" : "default",
+                    color: ocrPageIndex < ocrPageCount - 1 ? "var(--tx2)" : "var(--tx4)", padding: 2,
+                  }}
+                >
+                  <ChevronDown size={13} style={{ transform: "rotate(-90deg)" }} />
+                </button>
+              </div>
+            )}
+
             <pre
               style={{
                 fontSize: "calc(var(--fs) - 1.5px)",
@@ -556,11 +591,10 @@ export const MessageBubble = memo(function MessageBubble({
                 fontFamily: "var(--font)",
               }}
             >
-              {message.ocrText}
+              {ocrPageCount > 1 ? ocrPages[ocrPageIndex] : message.ocrText}
             </pre>
           </div>
-        )}
-      </div>
+        </div>
     ) : null;
 
   // Render image attachments

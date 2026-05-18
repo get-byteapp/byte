@@ -2101,6 +2101,7 @@
   width:100%;
   max-width:480px;
   box-shadow:0 20px 60px rgba(0,0,0,.2);
+  animation:up .14s ease;
 }
 .modal h3{
   font-family:var(--font-d);

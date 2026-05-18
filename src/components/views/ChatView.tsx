@@ -63,8 +63,33 @@ export function ChatView({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isSearchingRef = useRef(false);
   const failedFetchUrlsRef = useRef<string[]>([]);
+  const searchDepthRef = useRef(0);
+  const MAX_SEARCH_DEPTH = 3;
   const titleGeneratedRef = useRef<Set<string>>(new Set());
   const chat = chats.find((c) => c.id === activeChatId);
+
+  const formatErrorContent = (err: unknown): string => {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("11434") || msg.includes("localhost:11434") || /ollama/i.test(msg)) {
+      return `<details>
+<summary>Connection to Ollama failed</summary>
+
+\`\`\`
+${msg}
+\`\`\`
+
+**Troubleshooting:**
+
+- Make sure Ollama is running: \`ollama serve\`
+- Verify the model is pulled: \`ollama list\`
+- Keep it running after closing terminal: \`nohup ollama serve > /dev/null 2>&1 &\`
+- Stop it: \`pkill ollama\`
+- Or install the Ollama desktop app from [ollama.com](https://ollama.com) (runs in menubar)
+
+Check that your provider settings point to the correct Ollama URL.</details>`;
+    }
+    return `Error: ${msg}`;
+  };
 
   // Build project context for AI prompts
   const getProjectContext = useCallback(() => {
@@ -185,7 +210,7 @@ export function ChatView({
       .trim();
     try {
       const jsonMatch = cleaned.match(
-        /\{[\s\S]*"tool"\s*:\s*"(?:web_search|news_search|search)"[\s\S]*\}/,
+        /\{[\s\S]*?"tool"\s*:\s*"(?:web_search|news_search|search)"[\s\S]*?\}/,
       );
       if (jsonMatch) {
         const payload = JSON.parse(jsonMatch[0]);
@@ -229,13 +254,20 @@ export function ChatView({
       try {
         console.log("[BYTE] Searching:", params.query);
 
-        // Phase 1: Show searching state
+        // Phase 1: Show searching state — preserve any commentary text from the AI
+        const commentaryText =
+          extractToolCommentary(
+            currentMessages.find((m) => m.id === toolMsgId)?.content || "",
+            ["web_search", "news_search", "search"],
+          ) ||
+          currentMessages.find((m) => m.id === toolMsgId)?.content ||
+          "";
         updateChat(chatId, {
           messages: currentMessages.map((m) =>
             m.id === toolMsgId
               ? {
                   ...m,
-                  content: "Searching the web...",
+                  content: commentaryText || "Searching the web...",
                   searchPhase: "searching" as const,
                 }
               : m,
@@ -251,17 +283,21 @@ export function ChatView({
           },
         );
 
-        // Phase 2: Show all searched results immediately
+        // Phase 2: Show all searched results immediately — preserve commentary text
         const allSources = searchResults.map((r) => ({
           url: r.url,
           title: r.name || r.displayUrl,
         }));
+        const currentContent =
+          currentMessages.find((m) => m.id === toolMsgId)?.content || "";
+        const commentaryOrContent =
+          extractToolCommentary(currentContent, ["web_search", "news_search", "search"]) || currentContent;
         updateChat(chatId, {
           messages: currentMessages.map((m) =>
             m.id === toolMsgId
               ? {
                   ...m,
-                  content: "",
+                  content: commentaryOrContent,
                   searchPhase: "fetching" as const,
                   webSearchSources: allSources,
                 }
@@ -315,9 +351,15 @@ export function ChatView({
                 ),
               });
             }
-          } catch {
-            console.log("[BYTE] Jina blocked or failed:", searchResults[i].url);
-            failedFetchUrlsRef.current.push(searchResults[i].url);
+          } catch (err: any) {
+            const errMsg = err?.message || String(err);
+            console.log("[BYTE] Jina blocked or failed:", searchResults[i].url, errMsg);
+            // Skip 451 (unscrapeable) and 403 (forbidden) silently — just use snippets
+            if (errMsg.includes("451") || errMsg.includes("403")) {
+              console.log("[BYTE] Skipping unscrapeable page, using snippets instead");
+            } else {
+              failedFetchUrlsRef.current.push(searchResults[i].url);
+            }
           }
         }
 
@@ -368,12 +410,12 @@ export function ChatView({
           return;
         }
 
-        // Phase4: Mark as done
+        // Phase4: Mark as done — preserve commentary text
         const updatedMessages = freshChat.messages.map((m) =>
           m.id === toolMsgId
             ? {
                 ...m,
-                content: "",
+                content: m.content || "",
                 status: "done" as const,
                 searchPhase: "done" as const,
               }
@@ -412,13 +454,22 @@ export function ChatView({
               const existingMsg = chat.messages.find((m) => m.id === toolMsgId);
               const currentRaw = existingMsg?.rawContent || "";
               const accumulated = currentRaw + chunk;
+
+              // Detect web_search tool call during post-search streaming
+              const hasNextSearch =
+                /"tool"\s*:\s*"(web_search|news_search|search)"/.test(accumulated);
+              let displayContent = accumulated;
+              if (hasNextSearch) {
+                displayContent = extractToolCommentary(accumulated, ["web_search", "news_search", "search"]) || "Searching the web...";
+              }
+
               updateChat(chatId, {
                 messages: chat.messages.map((m) =>
                   m.id === toolMsgId
                     ? {
                         ...m,
                         ...existingMsg,
-                        content: accumulated,
+                        content: displayContent,
                         rawContent: accumulated,
                       }
                     : m,
@@ -431,8 +482,44 @@ export function ChatView({
                 .chats.find((c) => c.id === chatId);
               if (!chat) return;
               const existingMsg = chat.messages.find((m) => m.id === toolMsgId);
-              let displayContent =
+              const rawResponse =
                 existingMsg?.rawContent || existingMsg?.content || "";
+
+              // Check if AI wants to do another search (multi-tool chaining)
+              const nextSearch = parseWebSearchTool(rawResponse);
+              if (nextSearch && searchDepthRef.current < MAX_SEARCH_DEPTH) {
+                searchDepthRef.current++;
+                const commentary = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]);
+                // Update message with commentary text and keep search dropdown visible
+                updateChat(chatId, {
+                  messages: chat.messages.map((m) =>
+                    m.id === toolMsgId
+                      ? {
+                          ...m,
+                          ...existingMsg,
+                          content: commentary || "Searching the web...",
+                          searchPhase: "done" as const,
+                        }
+                      : m,
+                  ),
+                });
+                // Create new assistant message for the next search iteration
+                const nextSearchMsg: Message = {
+                  id: crypto.randomUUID(),
+                  role: "assistant",
+                  content: commentary || "Searching the web...",
+                  status: "done" as const,
+                  timestamp: Date.now(),
+                };
+                const nextMessages = [...chat.messages, nextSearchMsg];
+                updateChat(chatId, { messages: nextMessages });
+                handleWebSearchTool(chatId, nextSearchMsg.id, nextSearch, nextMessages)
+                  .catch((err: Error) => console.error("[BYTE] Chained search error:", err));
+                return;
+              }
+
+              searchDepthRef.current = 0; // Reset depth on successful completion
+              let displayContent = rawResponse;
               updateChat(chatId, {
                 messages: chat.messages.map((m) =>
                   m.id === toolMsgId
@@ -485,7 +572,29 @@ export function ChatView({
           const freshChat2 = useStore
             .getState()
             .chats.find((c) => c.id === chatId);
-          const existingMsg = freshChat2?.messages.find(
+          if (!freshChat2) return;
+
+          // Check if AI wants to do another search (multi-tool chaining)
+          const nextSearch = parseWebSearchTool(response);
+          if (nextSearch && searchDepthRef.current < MAX_SEARCH_DEPTH) {
+            searchDepthRef.current++;
+            const commentary = extractToolCommentary(response, ["web_search", "news_search", "search"]);
+            const nextSearchMsg: Message = {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: commentary || "Searching the web...",
+              status: "done" as const,
+              timestamp: Date.now(),
+            };
+            const nextMessages = [...freshChat2.messages, nextSearchMsg];
+            updateChat(chatId, { messages: nextMessages });
+            handleWebSearchTool(chatId, nextSearchMsg.id, nextSearch, nextMessages)
+              .catch((err: Error) => console.error("[BYTE] Chained search error:", err));
+            return;
+          }
+
+          searchDepthRef.current = 0; // Reset depth on successful completion
+          const existingMsg = freshChat2.messages.find(
             (m) => m.id === toolMsgId,
           );
           updateChat(chatId, {
@@ -503,6 +612,7 @@ export function ChatView({
         }
       } catch (err) {
         console.error("[BYTE] Web search failed:", err);
+        searchDepthRef.current = 0;
         updateChat(chatId, {
           messages: currentMessages.map((m) =>
             m.id === toolMsgId
@@ -689,7 +799,7 @@ export function ChatView({
               m.id === assistantMsg.id
                 ? {
                     ...m,
-                    content: m.content || `Error: ${error.message}`,
+                    content: m.content || formatErrorContent(error),
                     status: "error" as const,
                   }
                 : m,
@@ -727,7 +837,13 @@ export function ChatView({
         const webSearch = !askQuestion ? parseWebSearchTool(response) : null;
 
         if (webSearch) {
-          let display = "Searching the web...";
+          const commentary = extractToolCommentary(response, ["web_search", "news_search", "search"]);
+          const display = commentary || "Searching the web...";
+          // Patch updatedMessages so handleWebSearchTool receives commentary text not raw JSON
+          updatedMessages[updatedMessages.length - 1] = {
+            ...updatedMessages[updatedMessages.length - 1],
+            content: commentary || response,
+          };
           updateChat(activeChatId, {
             messages: currentChat.messages.map((m) =>
               m.id === assistantMsg.id
@@ -754,14 +870,12 @@ export function ChatView({
         }
       } catch (error) {
         if (error instanceof Error && error.name !== "AbortError") {
-          const errorMessage =
-            error instanceof Error ? error.message : "Unknown error occurred";
           updateChat(activeChatId, {
             messages: [
               ...currentChat.messages,
               {
                 ...assistantMsg,
-                content: `Error: ${errorMessage}`,
+                content: formatErrorContent(error),
                 status: "error" as const,
               },
             ],
@@ -1081,6 +1195,56 @@ export function ChatView({
             if (attachment.mode === "ocr") {
               if (!ocrEnabled) { console.warn("[BYTE] OCR requested but not enabled"); return attachment; }
               try {
+                const imgAtt = attachment as ImageAttachment;
+
+                // Multi-page PDF OCR (lazy rendering)
+                if (imgAtt.pdfData && imgAtt.totalPages && imgAtt.totalPages > 0) {
+                  const { pdfData, ...imgAttNoPdf } = imgAtt;
+                  const { renderPdfPages } = await import("../../lib/fileConverter");
+
+                  // Re-create a File-like Blob from the stored PDF data
+                  const pdfBlob = await (await fetch(imgAtt.pdfData)).blob();
+                  const pdfFile = new File([pdfBlob], imgAtt.fileName, { type: "application/pdf" });
+
+                  const pages = await renderPdfPages(pdfFile);
+                  const pageTexts: string[] = [];
+
+                  for (let i = 0; i < pages.length; i++) {
+                    // Update progress message
+                    const progressChat = useStore.getState().chats.find((c) => c.id === activeChatId);
+                    if (progressChat) {
+                      updateChat(activeChatId, {
+                        messages: progressChat.messages.map((m) =>
+                          m.id === assistantMsg.id
+                            ? { ...m, content: `Extracting Text - ${i + 1}/${pages.length}` }
+                            : m
+                        ),
+                      });
+                    }
+
+                    const text = await extractTextOCR(pages[i].dataUri, () => {});
+                    pageTexts.push(text);
+                  }
+
+                  // Update OCR phase message with results
+                  const currentChat = useStore.getState().chats.find((c) => c.id === activeChatId);
+                  if (currentChat) {
+                    const progressText = pageTexts.map((t, i) => `--- Page ${i + 1} ---\n${t}`).join("\n\n");
+                    updateChat(activeChatId, {
+                      messages: currentChat.messages.map((m) =>
+                        m.id === assistantMsg.id
+                          ? { ...m, ocrPhase: "done" as const, ocrText: progressText, content: "" }
+                          : m
+                      ),
+                    });
+                  }
+
+                  const fullText = pageTexts.map((t, i) => `--- Page ${i + 1} ---\n${t}`).join("\n\n");
+                  ocrResults.push({ text: fullText });
+                  return { ...imgAttNoPdf, description: fullText, describedBy: "Tesseract OCR" } as ImageAttachment;
+                }
+
+                // Single image OCR
                 const extractedText = await extractTextOCR(attachment.dataUri, () => {});
                 ocrResults.push({ text: extractedText });
                 return { ...attachment, description: extractedText, describedBy: "Tesseract OCR" };
@@ -1267,7 +1431,7 @@ export function ChatView({
                 m.id === assistantMsg.id
                   ? {
                       ...m,
-                      content: m.content || `Error: ${error.message}`,
+                      content: m.content || formatErrorContent(error),
                       status: "error" as const,
                     }
                   : m,
@@ -1357,14 +1521,12 @@ export function ChatView({
               ),
             });
           } else {
-            const errorMessage =
-              error instanceof Error ? error.message : "Unknown error occurred";
             updateChat(activeChatId, {
               messages: newMessages.map((m) =>
                 m.id === assistantMsg.id
                   ? {
                       ...m,
-                      content: `Error: ${errorMessage}`,
+                      content: formatErrorContent(error),
                       status: "error" as const,
                     }
                   : m,

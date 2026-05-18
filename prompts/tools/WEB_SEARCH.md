@@ -33,6 +33,8 @@ Output ONLY the raw JSON. No intro text, no markdown fences.
 
 {"tool":"web_search","query":"specific query here","count":3,"freshness":"oneDay","topic":"label","fetch_urls":[0]}
 
+**IMPORTANT: Output only ONE tool call at a time.** Do not chain multiple tool calls in the same response. After results return, you can output another tool call if needed.
+
 Text goes AFTER results return, not before.
 
 ## Parameters

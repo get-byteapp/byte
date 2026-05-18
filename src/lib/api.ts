@@ -155,8 +155,6 @@ export function modelSupportsVision(
       id.includes("llava") ||
       id.includes("bakllava") ||
       id.includes("moondream") ||
-      id.includes("llama3.2-vision") ||
-      id.includes("llama3.1-vision") ||
       id.includes("pixtral")
     );
   return false;
@@ -489,6 +487,11 @@ export async function fetchModels(provider: Provider): Promise<Model[]> {
         if (modelDetails.capabilities?.includes("vision")) {
           supportsVision = true;
         }
+
+        // Check for projector_info (multimodal projector) — strong indicator of vision capability
+        if (!supportsVision && modelDetails.projector_info != null) {
+          supportsVision = true;
+        }
       } catch {
         // Silently fall back to defaults if backend call fails
       }
@@ -785,6 +788,7 @@ async function streamGroq(
       const visionAttachments = imageAttachments.filter((a) => a.mode === "vision");
       const ocrAttachments = imageAttachments.filter((a) => a.mode === "ocr");
       const describeAttachments = imageAttachments.filter((a) => a.mode === "describe");
+      const pdfAttachments = imageAttachments.filter((a) => a.mode === "pdf");
       
       // Debug: log attachments
       if (m.attachments && m.attachments.length > 0) {
@@ -793,26 +797,34 @@ async function streamGroq(
           vision: visionAttachments.length,
           ocr: ocrAttachments.length,
           describe: describeAttachments.length,
+          pdf: pdfAttachments.length,
           attachments: m.attachments.map((a) => ({ type: a.type, mode: (a as any).mode, hasDescription: !!(a as any).description })),
          });
-       }
-       
-       // Build message content
-       let messageContent = m.content;
-       
-       // Add OCR extracted text
-       for (const att of ocrAttachments) {
-         if (att.description) {
-           messageContent += `\n\nText extracted from image user attached:\n${att.description}`;
-         }
-       }
-       
-       // Add describe extracted text
-       for (const att of describeAttachments) {
-         if (att.description) {
-           messageContent += `\n\n[Image description of ${att.fileName}]\n${att.description}`;
-         }
-       }
+        }
+        
+        // Build message content
+        let messageContent = m.content;
+        
+        // Add OCR extracted text
+        for (const att of ocrAttachments) {
+          if (att.description) {
+            messageContent += `\n\nText extracted from image via OCR (may contain recognition errors):\n${att.description}`;
+          }
+        }
+        
+        // Add describe extracted text
+        for (const att of describeAttachments) {
+          if (att.description) {
+            messageContent += `\n\n[Image description of ${att.fileName}]\n${att.description}`;
+          }
+        }
+        
+        // Add PDF extracted text
+        for (const att of pdfAttachments) {
+          if (att.description) {
+            messageContent += `\n\n[Content from ${att.fileName}]\n${att.description}`;
+          }
+        }
        
       if (m.role === "user" && visionAttachments.length > 0 && model.capabilities?.supportsVision) {
         // Build multimodal content for vision attachments
@@ -1049,6 +1061,7 @@ async function streamOpenAICompatible(
       const visionAttachments = imageAttachments.filter((a) => a.mode === "vision");
        const ocrAttachments = imageAttachments.filter((a) => a.mode === "ocr");
        const describeAttachments = imageAttachments.filter((a) => a.mode === "describe");
+       const pdfAttachments = imageAttachments.filter((a) => a.mode === "pdf");
        
        // Build message content
        let messageContent = m.content;
@@ -1056,7 +1069,7 @@ async function streamOpenAICompatible(
        // Add OCR extracted text
        for (const att of ocrAttachments) {
          if (att.description) {
-           messageContent += `\n\nText extracted from image user attached:\n${att.description}`;
+           messageContent += `\n\nText extracted from image via OCR (may contain recognition errors):\n${att.description}`;
          }
        }
        
@@ -1064,6 +1077,13 @@ async function streamOpenAICompatible(
        for (const att of describeAttachments) {
         if (att.description) {
           messageContent += `\n\n[Image description of ${att.fileName}]\n${att.description}`;
+        }
+      }
+      
+      // Add PDF extracted text
+      for (const att of pdfAttachments) {
+        if (att.description) {
+          messageContent += `\n\n[Content from ${att.fileName}]\n${att.description}`;
         }
       }
       
@@ -1531,17 +1551,26 @@ async function sendOpenAICompatibleMessage(
   );
   apiMessages.push(
     ...messages.map((m, i) => {
+      // Build message content with OCR/describe/PDF attachment text from history
+      const prevAttachments = (m.attachments?.filter((a) => a.type === "image") as ImageAttachment[]) || [];
+      let messageContent = m.content;
+      for (const att of prevAttachments) {
+        if ((att.mode === "ocr" || att.mode === "pdf") && att.description) {
+          messageContent += `\n\n[${att.mode === "ocr" ? "OCR text from" : "Content from"} ${att.fileName}]\n${att.description}`;
+        }
+      }
+      
       if (i === lastUserIdx && attachments && attachments.length > 0) {
         const parts: any[] = [];
-        if (m.content) parts.push({ type: "text", text: m.content });
+        if (messageContent) parts.push({ type: "text", text: messageContent });
         for (const att of attachments) {
           if (att.mode === "vision") {
             parts.push({ type: "image_url", image_url: { url: att.dataUri } });
           }
         }
-        return { role: m.role, content: parts.length > 1 ? parts : m.content };
+        return { role: m.role, content: parts.length > 1 ? parts : messageContent };
       }
-      return { role: m.role, content: m.content };
+      return { role: m.role, content: messageContent };
     }),
   );
 
@@ -1767,24 +1796,41 @@ export async function searchWithLangSearch(
   return result.data?.webPages?.value || [];
 }
 
-// Rate limit for Jina API calls - minimum 1 second between requests
+// Rate limit for Jina API calls - with exponential backoff on 429
 let lastJinaCallTime = 0;
-const JINA_COOLDOWN_MS = 1000; // 1 second between requests
+const JINA_COOLDOWN_MS = 1000;
 
 export async function fetchPageWithJina(url: string): Promise<string> {
-  // Enforce cooldown between Jina requests
-  const timeSinceLastCall = Date.now() - lastJinaCallTime;
-  if (timeSinceLastCall < JINA_COOLDOWN_MS) {
-    const delayNeeded = JINA_COOLDOWN_MS - timeSinceLastCall;
-    console.log(`[JINA] Cooldown: waiting ${delayNeeded}ms before next request`);
-    await new Promise((resolve) => setTimeout(resolve, delayNeeded));
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const timeSinceLastCall = Date.now() - lastJinaCallTime;
+    if (timeSinceLastCall < JINA_COOLDOWN_MS) {
+      const delayNeeded = JINA_COOLDOWN_MS - timeSinceLastCall;
+      console.log(`[JINA] Cooldown: waiting ${delayNeeded}ms before next request`);
+      await new Promise((resolve) => setTimeout(resolve, delayNeeded));
+    }
+
+    lastJinaCallTime = Date.now();
+
+    const response = await tauriFetch(`https://r.jina.ai/${encodeURIComponent(url)}`, {
+      headers: { Accept: "text/markdown" },
+    });
+
+    if (response.ok) return await response.text();
+
+    const errorText = await response.text().catch(() => "no error body");
+
+    // 429 = rate limited — backoff and retry
+    if (response.status === 429 && attempt < maxRetries) {
+      const backoffMs = (attempt + 1) * 2000;
+      console.log(`[JINA] Rate limited (429), retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      continue;
+    }
+
+    // Other errors (451, 403, 5xx, etc.) — fail immediately
+    throw new Error(`Jina error: ${response.status} - ${errorText.slice(0, 200)}`);
   }
 
-  lastJinaCallTime = Date.now();
-
-  const response = await tauriFetch(`https://r.jina.ai/${encodeURIComponent(url)}`, {
-    headers: { Accept: "text/markdown" },
-  });
-  if (!response.ok) throw new Error(`Jina error: ${response.status}`);
-  return await response.text();
+  throw new Error(`Jina error: max retries exceeded for ${url}`);
 }

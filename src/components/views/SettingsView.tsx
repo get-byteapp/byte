@@ -14,7 +14,6 @@ import {
   Plus,
   Pen,
   Image as ImageIcon,
-  ChevronDown,
   Loader2,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
@@ -1360,7 +1359,6 @@ function ConnectionsPanel() {
     providers,
     enabledModelIds,
     ocrInstalled,
-    ocrEnabled,
     setOcrInstalled,
     setOcrEnabled,
     visionDefaultMode,
@@ -1378,16 +1376,13 @@ function ConnectionsPanel() {
   const handleInstallOCR = async () => {
     setIsInstallingOCR(true);
     try {
-      // Dynamic import to avoid bundling
       const { preloadTesseract } = await import("../../lib/ocr");
       const success = await preloadTesseract();
       if (success) {
         setOcrInstalled(true);
-        setOcrEnabled(true); // Enable by default after installation
+        setOcrEnabled(true);
       } else {
-        alert(
-          "Failed to install OCR. Please check your internet connection and try again.",
-        );
+        alert("Failed to install OCR. Please check your internet connection and try again.");
       }
     } catch (error) {
       console.error("[OCR] Installation error:", error);
@@ -1397,11 +1392,15 @@ function ConnectionsPanel() {
     }
   };
 
-  // Get all vision-capable models from providers with API keys
+  // Get all vision-capable models from providers with API keys or local providers (Ollama/LM Studio)
   // Note: We show ALL vision models, not just enabled ones, so users can select
   // a dedicated image description model even if they don't use it for chat
   const visionModels = providers
-    .filter((provider) => provider.apiKey && provider.apiKey.trim() !== "")
+    .filter((provider) =>
+      (provider.apiKey && provider.apiKey.trim() !== "") ||
+      provider.id === "ollama" ||
+      provider.id === "lmstudio"
+    )
     .flatMap((provider) =>
       provider.models
         .filter((model) => model.capabilities?.supportsVision)
@@ -1937,7 +1936,7 @@ function ConnectionsPanel() {
           );
         })}
 
-        {/* OCR inline config */}
+        {/* OCR Engine */}
         {(visionDefaultMode === "ocr" || visionDefaultMode === "changeable") && (
           <div
             style={{
@@ -1951,26 +1950,9 @@ function ConnectionsPanel() {
             }}
           >
             <div>
-              <div
-                style={{
-                  fontSize: "var(--fs)",
-                  color: "var(--tx)",
-                  fontWeight: 500,
-                }}
-              >
-                OCR Engine
-              </div>
-              <div
-                style={{
-                  fontSize: "calc(var(--fs) - 2px)",
-                  color: ocrEnabled ? "var(--success)" : "var(--tx3)",
-                }}
-              >
-                {!ocrInstalled
-                  ? "Tesseract.js — ~6MB download"
-                  : ocrEnabled
-                    ? "Tesseract.js · Active"
-                    : "Tesseract.js · Installed"}
+              <div style={{ fontSize: "var(--fs)", color: "var(--tx)", fontWeight: 500 }}>OCR Engine</div>
+              <div style={{ fontSize: "calc(var(--fs) - 2px)", color: "var(--tx3)" }}>
+                Tesseract.js — Extracts text from images & scanned PDFs
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1982,41 +1964,34 @@ function ConnectionsPanel() {
                   style={{ display: "flex", alignItems: "center", gap: 6 }}
                 >
                   {isInstallingOCR ? (
-                    <>
-                      <Loader2
-                        size={12}
-                        style={{ animation: "spin 1s linear infinite" }}
-                      />
-                      Installing...
-                    </>
+                    <><Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Installing...</>
                   ) : (
                     "Install"
                   )}
                 </button>
               ) : (
-                <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: "calc(var(--fs) - 2px)", color: "var(--success)", fontWeight: 500 }}>Active</span>
                   <button
                     className="btn btn-sm"
                     onClick={() => {
-                      setOcrEnabled(false);
                       setOcrInstalled(false);
+                      setOcrEnabled(false);
                     }}
-                    title="Remove OCR"
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 4,
+                      justifyContent: "center",
                       color: "var(--danger)",
-                      borderColor: "var(--danger-border)",
+                      width: 28,
+                      height: 28,
+                      padding: 0,
                     }}
+                    title="Remove OCR engine"
                   >
-                    <Trash2 size={12} />
+                    <Trash2 size={13} />
                   </button>
-                  <button
-                    className={`tog${ocrEnabled ? " on" : ""}`}
-                    onClick={() => setOcrEnabled(!ocrEnabled)}
-                  />
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -2058,10 +2033,10 @@ function ConnectionsPanel() {
                     : "Select a model"}
               </div>
             </div>
-            <div style={{ position: "relative" }}>
+            <div>
               <button
                 className="btn btn-sm"
-                onClick={() => setShowVisionDropdown(!showVisionDropdown)}
+                onClick={() => setShowVisionDropdown(true)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -2070,162 +2045,199 @@ function ConnectionsPanel() {
                 }}
               >
                 {selectedVisionModel ? "Change" : "Select"}
-                <ChevronDown size={12} />
               </button>
+
               {showVisionDropdown && (
-                <>
+                <div
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 999,
+                    background: "rgba(0,0,0,0.5)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 24,
+                  }}
+                  onClick={() => setShowVisionDropdown(false)}
+                >
                   <div
+                    onClick={(e) => e.stopPropagation()}
                     style={{
-                      position: "fixed",
-                      inset: 0,
-                      zIndex: 99,
-                    }}
-                    onClick={() => setShowVisionDropdown(false)}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "calc(100% + 4px)",
                       background: "var(--sf)",
                       border: "1px solid var(--bd)",
-                      borderRadius: "var(--r-md)",
-                      minWidth: 240,
-                      maxHeight: 280,
-                      overflowY: "auto",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                      zIndex: 100,
-                      padding: 4,
+                      borderRadius: "var(--r-lg)",
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+                      width: "100%",
+                      maxWidth: 420,
+                      maxHeight: "70vh",
+                      display: "flex",
+                      flexDirection: "column",
                     }}
                   >
-                    {visionModels.length === 0 ? (
-                      <div
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "16px 16px 8px",
+                      }}
+                    >
+                      <div style={{ fontSize: "var(--fs)", fontWeight: 600, color: "var(--tx)" }}>
+                        Choose Description Model
+                      </div>
+                      <button
+                        onClick={() => setShowVisionDropdown(false)}
                         style={{
-                          padding: "12px",
+                          background: "none",
+                          border: "none",
                           color: "var(--tx3)",
-                          fontSize: "calc(var(--fs) - 1px)",
-                          textAlign: "center",
-                          lineHeight: 1.5,
+                          cursor: "pointer",
+                          padding: 4,
+                          display: "flex",
+                          borderRadius: "var(--r-sm)",
                         }}
                       >
-                        No vision models available.
-                        <br />
-                        Add a provider with an API key in Models settings.
-                      </div>
-                    ) : (
-                      <>
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div
+                      style={{
+                        overflowY: "auto",
+                        padding: "8px 8px 12px",
+                        flex: 1,
+                      }}
+                    >
+                      {visionModels.length === 0 ? (
                         <div
-                          onClick={() => {
-                            setImageDescriptionModelId(null);
-                            setShowVisionDropdown(false);
-                          }}
                           style={{
-                            padding: "8px 10px",
-                            cursor: "pointer",
-                            borderRadius: "var(--r-sm)",
-                            fontSize: "calc(var(--fs) - 1px)",
+                            padding: "24px 12px",
                             color: "var(--tx3)",
-                            transition: "all var(--ease)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "var(--sf2)";
-                            e.currentTarget.style.color = "var(--tx)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "transparent";
-                            e.currentTarget.style.color = "var(--tx3)";
+                            fontSize: "calc(var(--fs) - 1px)",
+                            textAlign: "center",
+                            lineHeight: 1.5,
                           }}
                         >
-                          <span style={{ fontStyle: "italic" }}>None</span>
-                          {!selectedVisionModel && (
-                            <Check
-                              size={14}
-                              style={{ color: "var(--acc)" }}
-                            />
-                          )}
+                          No vision models available.
+                          <br />
+                          Add a provider with an API key in Models settings.
                         </div>
-                        {visionModels.map((model) => {
-                          const modelKey = makeModelKey(
-                            model.providerId,
-                            model.id,
-                          );
-                          const isSelected =
-                            imageDescriptionModelId === modelKey;
-                          return (
-                            <div
-                              key={modelKey}
-                              onClick={() => {
-                                setImageDescriptionModelId(modelKey);
-                                setShowVisionDropdown(false);
-                              }}
-                              style={{
-                                padding: "8px 10px",
-                                cursor: "pointer",
-                                borderRadius: "var(--r-sm)",
-                                fontSize: "calc(var(--fs) - 1px)",
-                                transition: "all var(--ease)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                background: isSelected
-                                  ? "var(--sf2)"
-                                  : "transparent",
-                              }}
-                              onMouseEnter={(e) => {
-                                if (!isSelected) {
-                                  e.currentTarget.style.background =
-                                    "var(--sf2)";
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!isSelected) {
-                                  e.currentTarget.style.background =
-                                    "transparent";
-                                }
-                              }}
-                            >
-                              <div style={{ flex: 1, overflow: "hidden" }}>
-                                <div
-                                  style={{
-                                    fontWeight: 500,
-                                    color: "var(--tx)",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  {model.displayName}
+                      ) : (
+                        <>
+                          <div
+                            onClick={() => {
+                              setImageDescriptionModelId(null);
+                              setShowVisionDropdown(false);
+                            }}
+                            style={{
+                              padding: "10px 12px",
+                              cursor: "pointer",
+                              borderRadius: "var(--r-sm)",
+                              fontSize: "calc(var(--fs) - 1px)",
+                              color: "var(--tx3)",
+                              transition: "background var(--ease)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "var(--sf2)";
+                              e.currentTarget.style.color = "var(--tx)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.color = "var(--tx3)";
+                            }}
+                          >
+                            <span style={{ fontStyle: "italic" }}>None</span>
+                            {!imageDescriptionModelId && (
+                              <Check size={14} style={{ color: "var(--acc)" }} />
+                            )}
+                          </div>
+                          {visionModels.map((model) => {
+                            const modelKey = makeModelKey(
+                              model.providerId,
+                              model.id,
+                            );
+                            const isSelected =
+                              imageDescriptionModelId === modelKey;
+                            return (
+                              <div
+                                key={modelKey}
+                                onClick={() => {
+                                  setImageDescriptionModelId(modelKey);
+                                  setShowVisionDropdown(false);
+                                }}
+                                style={{
+                                  padding: "10px 12px",
+                                  cursor: "pointer",
+                                  borderRadius: "var(--r-sm)",
+                                  fontSize: "calc(var(--fs) - 1px)",
+                                  transition: "background var(--ease)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  background: isSelected
+                                    ? "var(--acc-soft)"
+                                    : "transparent",
+                                  border: isSelected
+                                    ? "1px solid var(--acc-border)"
+                                    : "1px solid transparent",
+                                  marginTop: 2,
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isSelected) {
+                                    e.currentTarget.style.background =
+                                      "var(--sf2)";
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isSelected) {
+                                    e.currentTarget.style.background =
+                                      "transparent";
+                                  }
+                                }}
+                              >
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div
+                                    style={{
+                                      fontWeight: 500,
+                                      color: "var(--tx)",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {model.displayName}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: "calc(var(--fs) - 3px)",
+                                      color: "var(--tx3)",
+                                      marginTop: 2,
+                                    }}
+                                  >
+                                    {model.providerName}
+                                  </div>
                                 </div>
-                                <div
-                                  style={{
-                                    fontSize: "calc(var(--fs) - 3px)",
-                                    color: "var(--tx3)",
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  {model.providerName}
-                                </div>
+                                {isSelected && (
+                                  <Check
+                                    size={14}
+                                    style={{
+                                      color: "var(--acc)",
+                                      flexShrink: 0,
+                                      marginLeft: 8,
+                                    }}
+                                  />
+                                )}
                               </div>
-                              {isSelected && (
-                                <Check
-                                  size={14}
-                                  style={{
-                                    color: "var(--acc)",
-                                    flexShrink: 0,
-                                    marginLeft: 8,
-                                  }}
-                                />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
