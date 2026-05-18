@@ -258,7 +258,7 @@ export async function convertExcelToMarkdown(file: File): Promise<string> {
 
 export async function convertDocxToMarkdown(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.convertToMarkdown({ arrayBuffer });
+  const result = await mammoth.extractRawText({ arrayBuffer });
   return `# ${file.name}\n\n` + result.value;
 }
 
