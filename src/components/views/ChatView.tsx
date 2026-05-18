@@ -29,6 +29,7 @@ import {
 import { assemblePrompt, getDefaultChatConfig } from "../../lib/prompts";
 import { extractTextOCR } from "../../lib/ocr";
 import { getSlashCommandPrompt } from "../../lib/slashCommands";
+import { indexProjectFiles, queryProjectChunks, clearProjectIndex } from "../../lib/retrieval";
 
 interface ChatViewProps {
   onAskQuestionDetected?: Dispatch<SetStateAction<AskQuestionPayload | null>>;
@@ -91,6 +92,13 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     return `Error: ${msg}`;
   };
 
+  const lastUserMessage = (messages: Message[]): string => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i].content;
+    }
+    return "";
+  };
+
   // Build project context for AI prompts
   const getProjectContext = useCallback(() => {
     if (!activeChatId) return undefined;
@@ -135,18 +143,33 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     return parts.join("\n");
   }, [activeChatId, projects]);
 
-  // Cache project file contents so they're available synchronously for streaming
+  // Build RAG context from relevant project file chunks
+  const getRagContext = useCallback((userMessage: string) => {
+    if (!activeChatId || !userMessage.trim()) return undefined;
+    const project = projects.find((p) => p.chatIds.includes(activeChatId));
+    if (!project || project.files.length === 0) return undefined;
+    const chunks = queryProjectChunks(project.id, userMessage, 5);
+    if (chunks.length === 0) return undefined;
+    const lines = chunks.map(
+      (c) => `[from ${c.fileName}]\n${c.content}`
+    );
+    return `<relevant_context>\n${lines.join("\n\n")}\n</relevant_context>`;
+  }, [activeChatId, projects]);
+
+  // Cache project file contents and build RAG index
   const projectFileContentsRef = useRef<Record<string, string>>({});
   useEffect(() => {
     const project = projects.find((p) => p.chatIds.includes(activeChatId || ""));
     if (!project || project.files.length === 0) {
       projectFileContentsRef.current = {};
+      if (project) clearProjectIndex(project.id);
       return;
     }
     const textExtRe = /\.(md|txt|csv|json|yaml|yml|xml|ts|tsx|js|jsx|py|java|cpp|go|rb|php|css|html|sql|sh|env)$/i;
     (async () => {
       const { invoke } = await import("@tauri-apps/api/core");
       const cache: Record<string, string> = {};
+      const indexInputs: { id: string; name: string; content: string }[] = [];
       for (const f of project.files) {
         const isText = !f.type || f.type.startsWith("text/") ||
           ["application/json", "application/xml", "application/x-yaml",
@@ -159,10 +182,18 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             fileName: f.name,
           });
           const text = new TextDecoder().decode(new Uint8Array(bytes));
-          if (text.trim()) cache[f.id] = text;
+          if (text.trim()) {
+            cache[f.id] = text;
+            indexInputs.push({ id: f.id, name: f.name, content: text });
+          }
         } catch { /* skip unreadable */ }
       }
       projectFileContentsRef.current = cache;
+      if (indexInputs.length > 0) {
+        indexProjectFiles(project.id, indexInputs);
+      } else {
+        clearProjectIndex(project.id);
+      }
     })();
   }, [activeChatId, projects]);
 
@@ -860,7 +891,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         currentChat.config,
         memories,
         undefined,
-        getProjectContext(),
+        [getProjectContext(), getRagContext(lastUserMessage(currentChat.messages))].filter(Boolean).join("\n\n") || undefined,
       );
       streamAbortRef.current = handle.abort;
     } else {
@@ -874,7 +905,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           currentChat.config,
           memories,
           undefined, // No simplified prompt for continue (not a slash command)
-          getProjectContext(),
+          [getProjectContext(), getRagContext(lastUserMessage(currentChat.messages))].filter(Boolean).join("\n\n") || undefined,
         );
 
         const updatedMessages = [
@@ -1492,7 +1523,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           chat?.config, // Pass chat config for prompt assembly
           memories, // Pass memories for context
           simplifiedSystemPrompt, // Use simplified prompt for slash commands (null for normal messages)
-          getProjectContext(),
+          [getProjectContext(), getRagContext(text)].filter(Boolean).join("\n\n") || undefined,
           processedAttachments, // Pass image attachments
         );
         streamAbortRef.current = handle.abort;
@@ -1508,7 +1539,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             chat?.config, // Pass chat config for prompt assembly
             memories, // Pass memories for context
             simplifiedSystemPrompt, // Use simplified prompt for slash commands (null for normal messages)
-            getProjectContext(),
+            [getProjectContext(), getRagContext(text)].filter(Boolean).join("\n\n") || undefined,
             processedAttachments, // Pass image attachments
           );
 
