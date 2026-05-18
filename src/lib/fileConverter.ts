@@ -10,6 +10,8 @@ if (typeof MapProto.getOrInsertComputed === "undefined") {
 }
 
 import * as pdfjsLib from "pdfjs-dist";
+import * as XLSX from "xlsx";
+import * as mammoth from "mammoth";
 
 if (
   typeof ReadableStream !== "undefined" &&
@@ -110,6 +112,20 @@ export function hasPdfText(textContent: string): boolean {
 }
 
 export async function convertFileToText(file: File): Promise<string> {
+  const name = file.name.toLowerCase();
+
+  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+    return convertExcelToMarkdown(file);
+  }
+
+  if (name.endsWith(".docx")) {
+    return convertDocxToMarkdown(file);
+  }
+
+  if (name.endsWith(".pptx")) {
+    return convertPptxToMarkdown(file);
+  }
+
   // For text files, just read as text
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -193,4 +209,88 @@ export function isImageFile(file: File): boolean {
   }
   
   return false;
+}
+
+export function isExcelFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return name.endsWith(".xlsx") || name.endsWith(".xls");
+}
+
+export function isWordFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return name.endsWith(".docx");
+}
+
+export function isPptxFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return name.endsWith(".pptx");
+}
+
+export async function convertExcelToMarkdown(file: File): Promise<string> {
+  const data = await file.arrayBuffer();
+  const workbook = XLSX.read(data, { type: "array" });
+  const lines: string[] = [`# ${file.name}\n`];
+
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+
+    if (json.length === 0) continue;
+
+    lines.push(`## Sheet: ${sheetName}\n`);
+
+    const maxCols = Math.max(...json.map((r) => r?.length || 0));
+    const separator = "| " + Array(maxCols).fill("---").join(" | ") + " |";
+
+    for (let i = 0; i < json.length; i++) {
+      const row = json[i] || [];
+      const padded = Array.from({ length: maxCols }, (_, ci) =>
+        row[ci] !== undefined && row[ci] !== null ? String(row[ci]) : ""
+      );
+      lines.push("| " + padded.join(" | ") + " |");
+      if (i === 0) lines.push(separator);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+export async function convertDocxToMarkdown(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.convertToMarkdown({ arrayBuffer });
+  return `# ${file.name}\n\n` + result.value;
+}
+
+export async function convertPptxToMarkdown(file: File): Promise<string> {
+  const { default: JSZip } = await import("jszip");
+  const data = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(data);
+
+  const slideFiles = Object.keys(zip.files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort();
+
+  const lines: string[] = [`# ${file.name}\n`];
+
+  for (let i = 0; i < slideFiles.length; i++) {
+    const xmlStr = await zip.files[slideFiles[i]].async("text");
+    const texts = extractPptxText(xmlStr);
+    if (texts.length === 0) continue;
+    lines.push(`## Slide ${i + 1}\n`);
+    lines.push(texts.join("\n") + "\n");
+  }
+
+  return lines.join("\n");
+}
+
+function extractPptxText(xml: string): string[] {
+  const texts: string[] = [];
+  const tagRegex = /<a:t[^>]*>([^<]+)<\/a:t>/g;
+  let match;
+  while ((match = tagRegex.exec(xml)) !== null) {
+    const t = match[1].trim();
+    if (t) texts.push(t);
+  }
+  return texts;
 }

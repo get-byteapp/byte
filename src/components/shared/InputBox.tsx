@@ -11,7 +11,7 @@ import {
 import { useStore } from "../../store/useStore";
 import { getDisplayName, makeModelKey, resolveModel } from "../../lib/api";
 import * as pdfjsLib from "pdfjs-dist";
-import { convertFileToText, isTextFile, isImageFile, isPdfFile, convertPdfToMarkdown, renderPdfFirstPage, hasPdfText } from "../../lib/fileConverter";
+import { convertFileToText, isTextFile, isImageFile, isPdfFile, isExcelFile, isWordFile, isPptxFile, convertPdfToMarkdown, renderPdfFirstPage, hasPdfText } from "../../lib/fileConverter";
 import { PlusMenu } from "./PlusMenu";
 import { ModelPicker } from "./ModelPicker";
 import { SlashCommandMenu } from "./SlashCommandMenu";
@@ -327,7 +327,7 @@ export function InputBox({
 
     const imageFiles = Array.from(files).filter((file) => isImageFile(file));
     const pdfFiles = Array.from(files).filter((file) => isPdfFile(file));
-    const textFiles = Array.from(files).filter((file) => !isPdfFile(file) && isTextFile(file));
+    const textFiles = Array.from(files).filter((file) => !isPdfFile(file) && (isTextFile(file) || isExcelFile(file) || isWordFile(file) || isPptxFile(file)));
 
     // If there are image files but no vision processing available, show warning
     if (imageFiles.length > 0 && !checkVisionAvailable()) {
@@ -391,7 +391,7 @@ export function InputBox({
 
     const imageFiles = allFiles.filter((file) => isImageFile(file));
     const pdfFiles = allFiles.filter((file) => isPdfFile(file));
-    const textFiles = allFiles.filter((file) => !isPdfFile(file) && isTextFile(file));
+    const textFiles = allFiles.filter((file) => !isPdfFile(file) && (isTextFile(file) || isExcelFile(file) || isWordFile(file) || isPptxFile(file)));
 
     // If there are image files but no vision processing available, show warning
     if (imageFiles.length > 0 && !checkVisionAvailable()) {
@@ -676,138 +676,161 @@ export function InputBox({
                       </button>
                     </div>
 
-                    {/* Vision mode modal */}
+                    {/* Image preview modal with mode picker */}
                     {visionModalAttId === att.id && (
                       <div
                         style={{
                           position: "fixed",
                           inset: 0,
                           zIndex: 999,
-                          background: "rgba(0,0,0,0.4)",
+                          background: "rgba(0,0,0,0.75)",
                           display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: 24,
+                          flexDirection: "column",
+                          padding: 0,
                         }}
                         onClick={() => setVisionModalAttId(null)}
                       >
+                        {/* Image area */}
+                        <div
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: 24,
+                            minHeight: 0,
+                          }}
+                          onClick={() => setVisionModalAttId(null)}
+                        >
+                          <img
+                            src={imgAtt.dataUri}
+                            alt={imgAtt.fileName}
+                            style={{
+                              maxWidth: "100%",
+                              maxHeight: "100%",
+                              objectFit: "contain",
+                              borderRadius: "var(--r-md)",
+                              boxShadow: "0 8px 40px rgba(0,0,0,0.3)",
+                              display: "block",
+                            }}
+                          />
+                        </div>
+
+                        {/* Bottom bar */}
                         <div
                           onClick={(e) => e.stopPropagation()}
                           style={{
                             background: "var(--sf)",
-                            border: "1px solid var(--bd)",
-                            borderRadius: "var(--r-lg)",
-                            boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
-                            width: "100%",
-                            maxWidth: 280,
-                            padding: 20,
+                            borderTop: "1px solid var(--bd)",
+                            padding: "10px 16px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
                           }}
                         >
+                          {/* File info */}
+                          <div
+                            style={{
+                              fontSize: "calc(var(--fs) - 1px)",
+                              color: "var(--tx2)",
+                              fontWeight: 500,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              flex: 1,
+                              minWidth: 0,
+                            }}
+                          >
+                            {imgAtt.fileName}
+                          </div>
+
+                          {/* Mode selector */}
                           <div
                             style={{
                               display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              marginBottom: 16,
+                              gap: 2,
+                              background: "var(--sf2)",
+                              borderRadius: "var(--r-sm)",
+                              padding: 2,
+                              flexShrink: 0,
                             }}
                           >
-                            <div style={{ fontSize: "var(--fs)", fontWeight: 600, color: "var(--tx)" }}>
-                              Image mode
-                            </div>
-                            <button
-                              onClick={() => setVisionModalAttId(null)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "var(--tx3)",
-                                cursor: "pointer",
-                                padding: 4,
-                                display: "flex",
-                                borderRadius: "var(--r-sm)",
-                              }}
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-
-                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                             {availableModes.map((mode) => {
                               const isActive = imgAtt.mode === mode;
-                              const colors: Record<string, { dot: string; glow: string }> = {
-                                vision: { dot: "var(--vision-color, #6366f1)", glow: "rgba(99,102,241,0.3)" },
-                                ocr: { dot: "var(--ocr-color, #f59e0b)", glow: "rgba(245,158,11,0.3)" },
-                                describe: { dot: "var(--describe-color, #8b5cf6)", glow: "rgba(139,92,246,0.3)" },
-                                pdf: { dot: "#ef4444", glow: "rgba(239,68,68,0.3)" },
+                              const modeColors: Record<string, string> = {
+                                vision: "var(--vision-color, #6366f1)",
+                                ocr: "var(--ocr-color, #f59e0b)",
+                                describe: "var(--describe-color, #8b5cf6)",
+                                pdf: "#ef4444",
                               };
-                              const c = colors[mode] || { dot: "var(--tx3)", glow: "transparent" };
-                              const labels: Record<string, string> = {
-                                vision: "AI analyzes the image directly",
-                                ocr: "Extracts text from the image",
-                                describe: "Describes image via a vision model",
-                                pdf: "Sends extracted text from PDF",
+                              const modeLabels: Record<string, string> = {
+                                vision: "Vision",
+                                ocr: "OCR",
+                                describe: "Describe",
+                                pdf: "PDF",
                               };
+                              const dotColor = modeColors[mode] || "var(--tx3)";
                               return (
-                                <div
+                                <button
                                   key={mode}
-                                  onClick={() => {
-                                    setAttachmentMode(att.id, mode);
-                                    setVisionModalAttId(null);
-                                  }}
+                                  onClick={() => setAttachmentMode(att.id, mode)}
                                   style={{
                                     display: "flex",
                                     alignItems: "center",
-                                    gap: 10,
-                                    padding: "9px 10px",
+                                    gap: 5,
+                                    padding: "5px 10px",
                                     borderRadius: "var(--r-sm)",
+                                    border: "none",
+                                    background: isActive ? "var(--sf)" : "transparent",
                                     cursor: "pointer",
-                                    background: isActive ? "var(--acc-soft)" : "transparent",
-                                    transition: "background var(--ease)",
+                                    fontSize: "calc(var(--fs) - 1px)",
+                                    fontWeight: isActive ? 600 : 500,
+                                    color: isActive ? dotColor : "var(--tx3)",
+                                    fontFamily: "var(--font)",
+                                    transition: "all var(--ease)",
+                                    boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                                   }}
                                   onMouseEnter={(e) => {
-                                    if (!isActive) e.currentTarget.style.background = "var(--sf2)";
+                                    if (!isActive) e.currentTarget.style.color = "var(--tx)";
                                   }}
                                   onMouseLeave={(e) => {
-                                    if (!isActive) e.currentTarget.style.background = "transparent";
+                                    if (!isActive) e.currentTarget.style.color = "var(--tx3)";
                                   }}
                                 >
                                   <span
                                     style={{
-                                      width: 8,
-                                      height: 8,
+                                      width: 6,
+                                      height: 6,
                                       borderRadius: "50%",
-                                      background: c.dot,
+                                      background: dotColor,
                                       display: "inline-block",
                                       flexShrink: 0,
-                                      boxShadow: isActive ? `0 0 6px ${c.glow}` : "none",
                                     }}
                                   />
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div
-                                      style={{
-                                        fontSize: "var(--fs)",
-                                        fontWeight: 500,
-                                        color: isActive ? "var(--tx)" : "var(--tx2)",
-                                      }}
-                                    >
-                                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                                    </div>
-                                    <div
-                                      style={{
-                                        fontSize: "calc(var(--fs) - 2px)",
-                                        color: "var(--tx3)",
-                                        marginTop: 1,
-                                      }}
-                                    >
-                                      {labels[mode] || ""}
-                                    </div>
-                                  </div>
-                                  {isActive && (
-                                    <span style={{ color: "var(--acc)", fontSize: 11, flexShrink: 0 }}>✓</span>
-                                  )}
-                                </div>
+                                  {modeLabels[mode] || mode}
+                                </button>
                               );
                             })}
                           </div>
+
+                          {/* Close button */}
+                          <button
+                            onClick={() => setVisionModalAttId(null)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "var(--tx3)",
+                              cursor: "pointer",
+                              padding: 6,
+                              display: "flex",
+                              borderRadius: "var(--r-sm)",
+                              flexShrink: 0,
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = "var(--tx)"}
+                            onMouseLeave={(e) => e.currentTarget.style.color = "var(--tx3)"}
+                          >
+                            <X size={16} />
+                          </button>
                         </div>
                       </div>
                     )}
@@ -830,7 +853,7 @@ export function InputBox({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,.pdf,.txt,.md,.json,.yaml,.yml,.xml,.csv,.ts,.tsx,.js,.jsx,.py,.java,.cpp,.go,.rb,.php"
+            accept="image/*,.pdf,.txt,.md,.json,.yaml,.yml,.xml,.csv,.ts,.tsx,.js,.jsx,.py,.java,.cpp,.go,.rb,.php,.xlsx,.xls,.docx,.pptx"
             multiple
             style={{ display: "none" }}
             onChange={handleFileChange}
