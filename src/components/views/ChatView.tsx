@@ -563,8 +563,8 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         }
 
         // STREAM DIRECTLY INTO THE SAME MESSAGE (toolMsgId)
-        if (streamingEnabled) {
-          const handle = streamChat(
+    if (streamingEnabled) {
+      const handle = streamChat(
             provider,
             model,
             withSearchResultsFinal,
@@ -574,7 +574,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                 .chats.find((c) => c.id === chatId);
               if (!chat) return;
               const existingMsg = chat.messages.find((m) => m.id === toolMsgId);
-              const currentRaw = existingMsg?.rawContent || "";
+              const currentRaw = existingMsg?.rawContent || existingMsg?.content || "";
               const accumulated = currentRaw + chunk;
 
               // Detect web_search tool call during post-search streaming
@@ -780,6 +780,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
     if (!provider || !model) return;
 
+    // Enable FILE_READ tool only if the chat is in a project with files
+    const projectHasFiles = activeChatId && projects.some(
+      (p) => p.chatIds.includes(activeChatId) && p.files.length > 0
+    );
+    const effectiveConfig = projectHasFiles
+      ? { ...currentChat.config, enabledTools: [...new Set([...currentChat.config.enabledTools, "FILE_READ" as ToolId])] }
+      : currentChat.config;
+
     const assistantMsg: Message = {
       id: crypto.randomUUID(),
       role: "assistant",
@@ -822,7 +830,8 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
           const isFileRead =
             accumulatedContent.includes('"tool":"file_read"') ||
-            accumulatedContent.includes('"tool": "file_read"');
+            accumulatedContent.includes('"tool": "file_read"') ||
+            accumulatedContent.includes('\\"tool\\":\\"file_read\\"');
 
           const isSuggestMemory =
             accumulatedContent.includes('"tool":"suggest_memory"') ||
@@ -982,7 +991,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           setIsLoading(false);
           streamAbortRef.current = null;
         },
-        currentChat.config,
+        effectiveConfig,
         memories,
         undefined,
         getProjectContext(lastUserMessage(currentChat.messages)),
@@ -996,7 +1005,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           model,
           currentChat.messages,
           abortControllerRef.current.signal,
-          currentChat.config,
+          effectiveConfig,
           memories,
           undefined, // No simplified prompt for continue (not a slash command)
           getProjectContext(lastUserMessage(currentChat.messages)),
@@ -1082,6 +1091,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     memories,
     updateChat,
     onAskQuestionDetected,
+    projects,
   ]);
 
   // Extract commentary text that comes before a tool call JSON
@@ -1277,43 +1287,70 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
   const parseFileReadTool = (content: string): FileReadParams | null => {
     if (!content || content.trim().length < 10) return null;
-    const cleaned = content
+    let cleaned = content
       .replace(/\\```[\w-]*\n?/g, "")
       .replace(/```[\w-]*\n?/g, "")
       .trim();
+    console.log("[file_read] raw cleaned:", cleaned.substring(0, 300));
     try {
-      const jsonMatch = cleaned.match(
-        /\{[\s\S]*"tool"\s*:\s*"file_read"[\s\S]*\}/,
-      );
-      if (jsonMatch) {
-        const payload = JSON.parse(jsonMatch[0]);
-        if (payload.tool === "file_read" && payload.path) {
-          return { path: payload.path };
-        }
+      // Try with escaped quotes (some models output \" instead of ")
+      let jsonMatch = cleaned.match(/\{[\s\S]*\\?"tool\\?"\s*:\s*\\?"file_read\\?"[\s\S]*\}/);
+      if (!jsonMatch) {
+        jsonMatch = cleaned.match(/\{[\s\S]*"tool"\s*:\s*"file_read"[\s\S]*\}/);
       }
-    } catch { /* ignore */ }
+      if (!jsonMatch) {
+        jsonMatch = cleaned.match(/\{[\s\S]*\"tool\"\s*:\s*\"file_read\"[\s\S]*\}/);
+      }
+      if (jsonMatch) {
+        console.log("[file_read] JSON match found:", jsonMatch[0].substring(0, 200));
+        // Unescape quotes before parsing
+        let jsonStr = jsonMatch[0].replace(/\\"/g, '"');
+        const payload = JSON.parse(jsonStr);
+        console.log("[file_read] parsed payload:", payload);
+        if (payload.tool === "file_read") {
+          const filePath = payload.path || payload.filename || payload.file;
+          if (filePath) {
+            console.log("[file_read] file path:", filePath);
+            return { path: filePath };
+          }
+          console.log("[file_read] no path/filename/file in payload");
+        }
+      } else {
+        console.log("[file_read] no JSON match found");
+      }
+    } catch (e) { console.log("[file_read] parse error:", e); }
     return null;
   };
 
   const handleFileReadTool = useCallback(async (chatId: string, path: string) => {
+    console.log("[file_read] handleFileReadTool called with path:", path);
     const chat = useStore.getState().chats.find((c) => c.id === chatId);
-    if (!chat) return;
+    if (!chat) { console.log("[file_read] chat not found"); return; }
     const project = projects.find((p) => p.chatIds.includes(chatId));
-    if (!project) return;
-    const file = project.files.find((f) => f.name === path);
-    if (!file) return;
+    if (!project) { console.log("[file_read] project not found"); return; }
+    const file = project.files.find((f) => f.name === path || f.name.toLowerCase() === path.toLowerCase());
+    if (!file) { console.log("[file_read] file not found in project:", path, "available:", project.files.map(f => f.name)); return; }
     const cached = projectFileContentsRef.current[file.id];
-    if (!cached) return;
+    if (!cached) { console.log("[file_read] cached content empty for file:", file.id); return; }
+    console.log("[file_read] file found, cached length:", cached.length);
+
+
+    // Find the last assistant message that triggered this file_read
+    const lastMsg = chat.messages[chat.messages.length - 1];
+    if (!lastMsg || lastMsg.role !== "assistant") return;
+
+    // Show file content in the card — use fresh state to not overwrite commentary
     const ext = file.name.split(".").pop() || "text";
-    const content = `[Content of ${file.name}]\n\`\`\`${ext}\n${cached}\n\`\`\``;
-    const fileMsg: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content,
-      timestamp: Date.now(),
-      status: "sent",
-    };
-    updateChat(chatId, { messages: [...chat.messages, fileMsg] });
+    const fileContent = `\`\`\`${ext}\n${cached}\n\`\`\``;
+    const freshChat = useStore.getState().chats.find((c) => c.id === chatId);
+    if (!freshChat) return;
+    updateChat(chatId, {
+      messages: freshChat.messages.map((m) =>
+        m.id === lastMsg.id
+          ? { ...m, fileReadResult: fileContent, fileReadFileName: file.name, fileReadPhase: "done" as const, status: "done" as const }
+          : m,
+      ),
+    });
   }, [projects, updateChat]);
 
   // Handle confirm_action by re-sending with confirmation
@@ -1393,6 +1430,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         return;
       }
 
+      // Enable FILE_READ tool only if the chat is in a project with files
+      const projectHasFiles = activeChatId && projects.some(
+        (p) => p.chatIds.includes(activeChatId) && p.files.length > 0
+      );
+      const effectiveConfig = projectHasFiles && chat?.config
+        ? { ...chat.config, enabledTools: [...new Set([...chat.config.enabledTools, "FILE_READ" as ToolId])] }
+        : chat?.config;
+
       // DEBUG: Log everything being sent to the API
       console.group("[BYTE DEBUG] Sending message");
       console.log("User message:", text.trim());
@@ -1401,7 +1446,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       // Log the actual system prompt if not using slash command
       if (!simplifiedSystemPrompt) {
         const { systemPrompt: actualPrompt } = assemblePrompt(
-          chat?.config || getDefaultChatConfig(),
+          effectiveConfig || getDefaultChatConfig(),
           memories,
           model
         );
@@ -1417,9 +1462,9 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         console.log("System prompt:", simplifiedSystemPrompt.substring(0, 500));
       }
       
-      console.log("Chat config:", chat?.config);
-      console.log("Enabled tools:", chat?.config?.enabledTools);
-      console.log("Memories enabled:", chat?.config?.memoryEnabled);
+      console.log("Chat config:", effectiveConfig);
+      console.log("Enabled tools:", effectiveConfig?.enabledTools);
+      console.log("Memories enabled:", effectiveConfig?.memoryEnabled);
       console.log("Memories:", memories);
       console.log("Model:", model?.id);
       console.log("Provider:", provider?.id);
@@ -1575,10 +1620,11 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               existingMsg?.rawContent || existingMsg?.content || "";
             const accumulatedContent = currentRaw + chunk;
 
-            // Strip escaped backticks for tool detection
+            // Strip escaped backticks and unescape JSON quotes for tool detection
             const cleanedForDetection = accumulatedContent
               .replace(/\\```[\w-]*\n?/g, "")
-              .replace(/```[\w-]*\n?/g, "");
+              .replace(/```[\w-]*\n?/g, "")
+              .replace(/\\"/g, '"');
 
             // Check if this looks like an ask_question tool call
             // Only match the specific "tool":"ask_question" pattern - avoid false positives
@@ -1738,7 +1784,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             setIsLoading(false);
             streamAbortRef.current = null;
           },
-          chat?.config, // Pass chat config for prompt assembly
+          effectiveConfig, // Pass chat config for prompt assembly
           memories, // Pass memories for context
           simplifiedSystemPrompt, // Use simplified prompt for slash commands (null for normal messages)
           getProjectContext(text),
@@ -1754,7 +1800,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             model,
             newMessages.slice(0, -1),
             abortControllerRef.current.signal,
-            chat?.config, // Pass chat config for prompt assembly
+            effectiveConfig, // Pass chat config for prompt assembly
             memories, // Pass memories for context
             simplifiedSystemPrompt, // Use simplified prompt for slash commands (null for normal messages)
             getProjectContext(text),
@@ -1857,6 +1903,8 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       streamingEnabled,
       memories,
       updateChat,
+      projects,
+      handleFileReadTool,
     ],
   );
 

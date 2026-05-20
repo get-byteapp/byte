@@ -165,6 +165,11 @@ export const MessageBubble = memo(function MessageBubble({
   const isExtractingOcr = message.ocrPhase === "extracting";
   const ocrDone = message.ocrPhase === "done";
   const [ocrPageIndex, setOcrPageIndex] = useState(0);
+  const [showFileContent, setShowFileContent] = useState(false);
+
+  // File read phase handling
+  const isReadingFile = message.fileReadPhase === "reading";
+  const fileReadDone = message.fileReadPhase === "done";
 
   // Parse OCR text into pages for multi-page navigation
   const ocrPages = useMemo(() => {
@@ -465,6 +470,90 @@ export const MessageBubble = memo(function MessageBubble({
   }
 
   // OCR phase rendering — prepended above content like web search
+  const fileReadCard =
+    (isReadingFile || fileReadDone) && !isUser ? (
+      <div
+        style={{
+          background: "var(--sf2)",
+          border: "1px solid var(--bd)",
+          borderRadius: 10,
+          overflow: "hidden",
+          marginBottom: fileReadDone && message.content ? 12 : 0,
+        }}
+      >
+        <div
+          onClick={() => fileReadDone && message.fileReadResult && setShowFileContent(!showFileContent)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 12px",
+            cursor: fileReadDone && message.fileReadResult ? "pointer" : "default",
+            userSelect: "none",
+          }}
+        >
+          <svg
+            width={13}
+            height={13}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ color: "var(--acc)", flexShrink: 0 }}
+          >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          <span
+            style={{
+              flex: 1,
+              fontSize: "calc(var(--fs) - 1px)",
+              color: isReadingFile ? "var(--tx2)" : "var(--tx)",
+              fontWeight: 500,
+            }}
+            >
+              {isReadingFile ? "Reading File..." : `Read: ${message.fileReadFileName || "file"}`}
+          </span>
+          {isReadingFile && (
+            <Loader2
+              size={13}
+              style={{
+                color: "var(--acc)",
+                animation: "spin 1s linear infinite",
+              }}
+            />
+          )}
+          {fileReadDone && message.fileReadResult && (
+            <ChevronDown
+              size={13}
+              style={{
+                color: "var(--tx3)",
+                transform: showFileContent ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 0.2s ease",
+              }}
+            />
+          )}
+        </div>
+        {showFileContent && message.fileReadResult && (
+          <div
+            style={{
+              padding: "0 12px 12px",
+              fontSize: "calc(var(--fs) - 1px)",
+              color: "var(--tx2)",
+              whiteSpace: "pre-wrap",
+              lineHeight: 1.5,
+              maxHeight: 300,
+              overflowY: "auto",
+            }}
+          >
+            {message.fileReadResult}
+          </div>
+        )}
+      </div>
+    ) : null;
+
   const ocrCard =
     (isExtractingOcr || ocrDone) && !isUser ? (
       <div
@@ -691,6 +780,7 @@ export const MessageBubble = memo(function MessageBubble({
           {attachmentContent}
           {ocrCard}
           {content}
+          {fileReadCard}
         </div>
         <div className="msg-acts">
           <button

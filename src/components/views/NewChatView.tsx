@@ -6,7 +6,12 @@ import { InputBox } from "../shared/InputBox";
 import { sendChatMessage, resolveModel } from "../../lib/api";
 
 export function NewChatView() {
-  const { providers, selectedModelId } = useStore();
+  const { providers, selectedModelId, activeProjectId, setActiveProjectId } = useStore();
+
+  // Clear active project when entering new chat page
+  useEffect(() => {
+    if (activeProjectId) setActiveProjectId(null);
+  }, []);
   const [isLoading, setIsLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);

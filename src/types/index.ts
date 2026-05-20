@@ -42,6 +42,9 @@ export interface Message {
   searchPhase?: "searching" | "fetching" | "done";
   describePhase?: "describing" | "done"; // for describe-mode interstitial
   ocrPhase?: "extracting" | "done"; // for OCR processing phase
+  fileReadPhase?: "reading" | "done"; // for file_read tool phase
+  fileReadResult?: string; // file content returned by file_read
+  fileReadFileName?: string; // name of file that was read
   ocrText?: string; // extracted OCR text for display
 }
 
