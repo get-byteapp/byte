@@ -13,6 +13,7 @@ import type {
   AskQuestionPayload,
   ToolId,
   ImageAttachment,
+  ToolCallEntry,
 } from "../../types";
 import { MessageBubble } from "../shared/MessageBubble";
 import { InputBox } from "../shared/InputBox";
@@ -26,7 +27,6 @@ import {
   resolveModel,
   describeImage,
 } from "../../lib/api";
-import { assemblePrompt, getDefaultChatConfig } from "../../lib/prompts";
 import { extractTextOCR } from "../../lib/ocr";
 import { getSlashCommandPrompt } from "../../lib/slashCommands";
 import { indexProjectFiles, queryProjectChunks, clearProjectIndex } from "../../lib/retrieval";
@@ -66,7 +66,8 @@ export function ChatView({
   const isSearchingRef = useRef(false);
   const failedFetchUrlsRef = useRef<string[]>([]);
   const searchDepthRef = useRef(0);
-  const MAX_SEARCH_DEPTH = 3;
+  const executedOpsRef = useRef<Set<string>>(new Set());
+  const pendingOpsRef = useRef<Op[]>([]);
   const titleGeneratedRef = useRef<Set<string>>(new Set());
   const chat = chats.find((c) => c.id === activeChatId);
 
@@ -246,10 +247,58 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
   const messagesLength = chat?.messages.length ?? 0;
   const lastContent = chat?.messages[messagesLength - 1]?.content;
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const chatMsgsRef = useRef<HTMLDivElement>(null);
+  const lastScrollTopRef = useRef<number>(0);
 
+  // Check if user is at the bottom of the chat
+  const checkIfAtBottom = useCallback(() => {
+    if (!chatMsgsRef.current) return true;
+    const { scrollHeight, scrollTop, clientHeight } = chatMsgsRef.current;
+    // Consider "at bottom" if within 100px of the bottom
+    return scrollHeight - scrollTop - clientHeight < 100;
+  }, []);
+
+  // Handle scroll events
+  const handleScroll = useCallback(() => {
+    if (!chatMsgsRef.current) return;
+    const currentScrollTop = chatMsgsRef.current.scrollTop;
+    
+    // If scrolling up, don't auto-scroll
+    if (currentScrollTop < lastScrollTopRef.current) {
+      setIsAtBottom(false);
+    } else {
+      const atBottom = checkIfAtBottom();
+      setIsAtBottom(atBottom);
+      // If scrolled back to bottom, re-enable auto-scroll
+      if (atBottom) {
+        setIsAtBottom(true);
+      }
+    }
+    
+    lastScrollTopRef.current = currentScrollTop;
+    setShowScrollButton(!checkIfAtBottom());
+  }, [checkIfAtBottom]);
+
+  // Auto-scroll only if at bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messagesLength, lastContent]);
+    if (isAtBottom && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messagesLength, lastContent, isAtBottom]);
+
+  // Scroll to bottom button handler
+  const scrollToBottom = useCallback(() => {
+    if (chatMsgsRef.current) {
+      chatMsgsRef.current.scrollTo({
+        top: chatMsgsRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+      setIsAtBottom(true);
+      setShowScrollButton(false);
+    }
+  }, []);
 
   const handleStop = useCallback(() => {
     if (streamAbortRef.current) {
@@ -317,40 +366,107 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
   // Parse web_search tool from assistant response
   interface WebSearchParams {
     query: string;
+    header?: string;
     topic?: string;
     count?: number;
     freshness?: string;
     fetch_urls?: number[];
+    decline?: number[];
   }
 
-  const parseWebSearchTool = (content: string): WebSearchParams | null => {
-    if (!content || content.trim().length < 10) return null;
-    // Strip escaped backticks and tool_call wrappers that models sometimes add
+  // Parsed tool operation from the AI response
+  interface Op {
+    type: "web_search" | "fetch" | "delete";
+    commentary?: string; // only for tools
+    // web_search
+    header?: string;
+    query?: string;
+    count?: number;
+    freshness?: string;
+    // fetch / delete
+    indices?: number[];
+  }
+
+  // Parse ALL operations from the AI response — tools + subtools
+  const parseOperations = (content: string): Op[] => {
+    if (!content || content.trim().length < 10) {
+      console.log("[PARSE] Content too short, returning empty");
+      return [];
+    }
     let cleaned = content
       .replace(/\\```[\w-]*\n?/g, "")
       .replace(/```[\w-]*\n?/g, "")
       .trim();
-    try {
-      const jsonMatch = cleaned.match(
-        /\{[\s\S]*?"tool"\s*:\s*"(?:web_search|news_search|search)"[\s\S]*?\}/,
-      );
-      if (jsonMatch) {
-        const payload = JSON.parse(jsonMatch[0]);
-        if (payload.query && typeof payload.query === "string") {
-          return {
-            query: payload.query,
-            topic: payload.topic,
-            count: payload.count,
-            freshness: payload.freshness,
-            fetch_urls: payload.fetch_urls,
-          };
+    const results: Op[] = [];
+    // Extract commentary between blocks — store positions of each JSON block
+    const blockPositions: { start: number; end: number }[] = [];
+    const blockRegex = /\{[\s\S]*?"(?:tool|subtool)"\s*:\s*"[^"]*"[\s\S]*?\}/g;
+    let blockMatch;
+    while ((blockMatch = blockRegex.exec(cleaned)) !== null) {
+      blockPositions.push({ start: blockMatch.index, end: blockMatch.index + blockMatch[0].length });
+    }
+
+    // Get text before a given block index
+    const getCommentary = (blockIdx: number): string => {
+      if (blockIdx === 0) return cleaned.slice(0, blockPositions[0].start).trim();
+      return cleaned.slice(blockPositions[blockIdx - 1].end, blockPositions[blockIdx].start).trim();
+    };
+
+    // Match all JSON blocks in order (both tool and subtool)
+    const regex = /\{[\s\S]*?"(?:tool|subtool)"\s*:\s*"[^"]*"[\s\S]*?\}/g;
+    let match;
+    const seenQueries = new Set<string>();
+    let blockIdx = 0;
+    while ((match = regex.exec(cleaned)) !== null) {
+      try {
+        const payload = JSON.parse(match[0]);
+        const tool = payload.tool || payload.subtool;
+        if (tool === "web_search" || tool === "search") {
+          if (payload.query && !seenQueries.has(payload.query)) {
+            seenQueries.add(payload.query);
+            const commentary = getCommentary(blockIdx);
+            results.push({
+              type: "web_search",
+              header: payload.header || payload.query,
+              query: payload.query,
+              count: payload.count ?? 10,
+              freshness: payload.freshness || "oneMonth",
+              commentary: commentary || undefined,
+            });
+            console.log("[PARSE] Found web_search: query='%s' header='%s' commentary='%s'", payload.query.slice(0, 50), payload.header, (commentary || "").slice(0, 50));
+          }
+        } else if (tool === "fetch" && Array.isArray(payload.indices)) {
+          results.push({ type: "fetch", indices: payload.indices });
+          console.log("[PARSE] Found fetch: indices=%s", JSON.stringify(payload.indices));
+        } else if (tool === "delete" && Array.isArray(payload.indices)) {
+          results.push({ type: "delete", indices: payload.indices });
+          console.log("[PARSE] Found delete: indices=%s", JSON.stringify(payload.indices));
+        } else {
+          console.log("[PARSE] Unknown operation: tool=%s", tool);
         }
+      } catch (e) {
+        console.log("[PARSE] Failed to parse JSON block:", match[0].slice(0, 80));
       }
-    } catch {}
-    return null;
+      blockIdx++;
+    }
+    console.log("[PARSE] Total operations found:", results.length);
+    return results;
   };
 
-  // Format search results for AI context (snippets only, no summaries)
+  // Extract per-tool commentary from response text between blocks
+  const extractToolCommentary = (content: string, _toolNames?: string[]): string => {
+    if (!content) return "";
+    const cleaned = content
+      .replace(/\\```[\w-]*\n?/g, "")
+      .replace(/```[\w-]*\n?/g, "")
+      .trim();
+    // Get text before the first JSON block with "tool" or "subtool"
+    const firstBlock = cleaned.search(/\{[\s\S]*?"(?:tool|subtool)"\s*:\s*"[^"]*"[\s\S]*?\}/);
+    if (firstBlock <= 0) return "";
+    return cleaned.slice(0, firstBlock).trim();
+  };
+
+  // Format search results for AI context (snippets only)
   const formatSearchResults = (
     query: string,
     results: Array<{ name: string; url: string; snippet: string }>,
@@ -364,34 +480,278 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       .join("\n\n")}`;
   };
 
+  // Handle ONE operation, then trigger follow-up for the next
+  const executeOneOp = useCallback(
+    async (
+      chatId: string,
+      toolMsgId: string,
+      op: Op,
+      currentMessages: Message[],
+      ) => {
+        // Dedup: skip if this exact operation was already executed
+        const opKey = `${op.type}:${op.header || ""}:${op.query || ""}:${JSON.stringify(op.indices || [])}`;
+        if (executedOpsRef.current.has(opKey)) {
+          console.log("[EXEC] SKIP duplicate op:", opKey);
+          return currentMessages;
+        }
+        executedOpsRef.current.add(opKey);
+        
+        const hiddenMessages: Message[] = [];
+        console.log("[EXEC] Starting operation: type=%s header=%s query=%s", op.type, op.header || "", op.query ? op.query.slice(0, 50) : "");
+        console.log("[EXEC] Full op:", JSON.stringify(op));
+        console.log("[EXEC] Op key for dedup:", opKey);
+
+      if (op.type === "web_search") {
+        const query = op.query || "";
+        const count = op.count ?? 10;
+        const freshness = op.freshness || "oneMonth";
+
+        console.log("[BYTE] Searching:", query);
+        const searchResults = await searchWithLangSearch(query, effectiveLangSearchApiKey, { count, freshness });
+        console.log("[EXEC] Search API returned", searchResults.length, "results for:", query.slice(0, 50));
+        if (searchResults.length > 0) console.log("[EXEC] First result URL:", searchResults[0].url);
+
+        const entry: ToolCallEntry = {
+          id: crypto.randomUUID(),
+          tool: "web_search",
+          header: op.header || query,
+          commentary: op.commentary,
+          params: { query, freshness, count },
+          status: "done",
+          fetchResults: searchResults.map((r: any) => ({
+            url: r.url,
+            title: r.name || r.displayUrl,
+            status: "declined" as const,
+          })),
+        };
+
+        updateChat(chatId, {
+          messages: currentMessages.map(m =>
+            m.id === toolMsgId
+              ? { ...m, toolCalls: [...(m.toolCalls || []), entry] }
+              : m
+          ),
+        });
+        console.log("[EXEC] web_search done: created toolCall entry, %d results as declined", searchResults.length);
+
+        hiddenMessages.push({
+          id: crypto.randomUUID(),
+          role: "user",
+          content: `[Web search results for "${query}"]\n\n${searchResults
+            .map((r: any, i: number) => `${i + 1}. **${r.name || r.displayUrl}**\n   URL: ${r.url}\n   ${r.snippet || ""}`)
+            .join("\n\n")}`,
+          timestamp: Date.now(),
+          status: "sent",
+          hidden: true,
+        });
+      } else if (op.type === "fetch" && op.indices) {
+        console.log("[EXEC] Fetching indices:", JSON.stringify(op.indices));
+        const chatNow = useStore.getState().chats.find(c => c.id === chatId);
+        const msg = chatNow?.messages.find(m => m.id === toolMsgId);
+        const entries = msg?.toolCalls?.filter(tc => tc.tool === "web_search") || [];
+        const latestSearch = entries[entries.length - 1];
+        if (!latestSearch || !latestSearch.fetchResults) {
+          console.log("[EXEC] No web_search entry found for fetch, skipping");
+        } else {
+          console.log("[EXEC] Latest web_search:", latestSearch.header, "has", latestSearch.fetchResults.length, "results");
+        }
+        if (!latestSearch || !latestSearch.fetchResults) return currentMessages;
+
+        for (const idx of op.indices) {
+          const result = latestSearch.fetchResults[idx];
+          if (!result || result.status !== "declined") {
+            console.log("[EXEC] Skip fetch index", idx, "- status:", result?.status, "url:", result?.url);
+            continue;
+          }
+          console.log("[EXEC] Fetching index", idx, ":", result.url);
+          try {
+            const content = await fetchPageWithJina(result.url);
+            console.log("[EXEC] Fetched OK:", result.url, "content length:", content.length);
+            const truncated = content.slice(0, 3000);
+            hiddenMessages.push({
+              id: crypto.randomUUID(),
+              role: "user",
+              content: `--- Full content from ${result.url} ---\n${truncated}`,
+              timestamp: Date.now(),
+              status: "sent",
+              hidden: true,
+            });
+            const c2 = useStore.getState().chats.find(c => c.id === chatId);
+            if (c2) updateChat(chatId, {
+              messages: c2.messages.map(m =>
+                m.id === toolMsgId
+                  ? {
+                      ...m,
+                      toolCalls: (m.toolCalls || []).map(tc =>
+                        tc.id === latestSearch.id
+                          ? { ...tc, fetchResults: (tc.fetchResults || []).map((fr, fi) =>
+                              fi === idx ? { ...fr, status: "ok" as const } : fr
+                            )}
+                          : tc
+                      ),
+                    }
+                  : m
+              ),
+            });
+          } catch {
+            // skip unscrapeable
+          }
+        }
+      } else if (op.type === "delete" && op.indices) {
+        console.log("[EXEC] Deleting indices:", JSON.stringify(op.indices));
+        const chatNow = useStore.getState().chats.find(c => c.id === chatId);
+        const msg = chatNow?.messages.find(m => m.id === toolMsgId);
+        const entries = msg?.toolCalls?.filter(tc => tc.tool === "web_search") || [];
+        const latestSearch = entries[entries.length - 1];
+        if (latestSearch && chatNow) {
+          console.log("[EXEC] Delete on web_search:", latestSearch.header);
+          updateChat(chatId, {
+            messages: chatNow.messages.map(m =>
+              m.id === toolMsgId
+                ? {
+                    ...m,
+                    toolCalls: (m.toolCalls || []).map(tc =>
+                      tc.id === latestSearch.id
+                        ? { ...tc, fetchResults: (tc.fetchResults || []).map((fr, fi) =>
+                            op.indices!.includes(fi) ? { ...fr, status: "deleted" as const } : fr
+                          )}
+                        : tc
+                    ),
+                  }
+                : m
+            ),
+          });
+        }
+      }
+
+      // Append hidden results and start follow-up
+      const { provider, model } = resolveModel(providers, selectedModelId);
+      if (!provider || !model) return currentMessages;
+
+      const freshChat = useStore.getState().chats.find(c => c.id === chatId);
+      if (!freshChat) return currentMessages;
+
+      const freshMsg = freshChat.messages.find(m => m.id === toolMsgId);
+      const resultMessages = [...(freshChat.messages || [])];
+      const toolIdx = resultMessages.findIndex(m => m.id === toolMsgId);
+      if (toolIdx >= 0 && freshMsg) {
+        resultMessages[toolIdx] = freshMsg;
+        resultMessages.splice(toolIdx + 1, 0, ...hiddenMessages);
+      }
+      updateChat(chatId, { messages: resultMessages });
+
+      // Start follow-up stream
+      console.log("[EXEC] Starting follow-up stream. Hidden messages added:", hiddenMessages.length);
+      if (streamingEnabled) {
+        let followUpStarted = false;
+        streamChat(
+          provider, model, resultMessages,
+          (chunk) => {
+            const c = useStore.getState().chats.find(x => x.id === chatId);
+            if (!c) return;
+            const ex = c.messages.find(m => m.id === toolMsgId);
+            let acc: string;
+            if (!followUpStarted) { followUpStarted = true; acc = chunk; }
+            else { acc = (ex?.rawContent || ex?.content || "") + chunk; }
+            const hasSearch = /"tool"\s*:\s*"(web_search|search)"/.test(acc);
+            const disp = hasSearch
+              ? (extractToolCommentary(acc, ["web_search", "news_search", "search"]) || "")
+              : acc;
+            updateChat(chatId, {
+              messages: c.messages.map(m =>
+                m.id === toolMsgId ? { ...m, content: disp, rawContent: acc } : m
+              ),
+            });
+          },
+          () => {
+            const c = useStore.getState().chats.find(x => x.id === chatId);
+            if (!c) return;
+            const ex = c.messages.find(m => m.id === toolMsgId);
+            const rawResp = ex?.rawContent || ex?.content || "";
+            console.log("[FOLLOWUP] Stream complete. rawResp length:", rawResp.length);
+            console.log("[FOLLOWUP] rawResp start:", rawResp.slice(0, 200));
+            const nextOps = parseOperations(rawResp);
+            console.log("[FOLLOWUP] Next operations found:", nextOps.length, "| pending:", pendingOpsRef.current.length);
+            if (nextOps.length > 0) {
+              console.log("[FOLLOWUP] Recursing with next op from follow-up:", nextOps[0].type, nextOps[0].header || "");
+              pendingOpsRef.current = [];
+              executeOneOp(chatId, toolMsgId, nextOps[0], c.messages);
+            } else if (pendingOpsRef.current.length > 0) {
+              const nextPend = pendingOpsRef.current.shift()!;
+              console.log("[FOLLOWUP] No new ops, using pending:", nextPend.type, nextPend.header || "");
+              executeOneOp(chatId, toolMsgId, nextPend, c.messages);
+            } else {
+              console.log("[FOLLOWUP] No more operations. Marking done.");
+              updateChat(chatId, {
+                messages: c.messages.map(m =>
+                  m.id === toolMsgId ? { ...m, content: rawResp, status: "done" as const } : m
+                ),
+              });
+            }
+          },
+          (error) => {
+            updateChat(chatId, {
+              messages: (useStore.getState().chats.find(x => x.id === chatId)?.messages || []).map(m =>
+                m.id === toolMsgId ? { ...m, content: m.content || `Error: ${error.message}`, status: "error" as const } : m
+              ),
+            });
+          },
+          freshChat.config, memories, undefined,
+          getProjectContext(lastUserMessage(currentMessages)),
+        );
+      }
+      return resultMessages;
+    },
+    [effectiveLangSearchApiKey, providers, selectedModelId, enabledModels, streamingEnabled, memories, updateChat],
+  );
+
+  // Backward compat: parseAllWebSearchTools wraps parseOperations
+  const parseAllWebSearchTools = (content: string): { query: string; header?: string; topic?: string; count?: number; freshness?: string; fetch_urls?: number[]; decline?: number[] }[] => {
+    return parseOperations(content)
+      .filter((op): op is Op & { type: "web_search" } => op.type === "web_search")
+      .map(op => ({
+        query: op.query || "",
+        header: op.header,
+        topic: undefined,
+        count: op.count,
+        freshness: op.freshness,
+      }));
+  };
+
   const handleWebSearchTool = useCallback(
     async (
       chatId: string,
       toolMsgId: string,
       params: WebSearchParams,
       currentMessages: Message[],
+      isLastSearch?: boolean,
     ) => {
-      if (isSearchingRef.current) return;
-      isSearchingRef.current = true;
-      try {
-        console.log("[BYTE] Searching:", params.query);
+      // Deduplicate: skip if same query+header already completed
+      const chatState = useStore.getState().chats.find((c) => c.id === chatId);
+      const toolMsg = chatState?.messages.find((m) => m.id === toolMsgId);
+      const alreadyDone = (toolMsg?.toolCalls || []).some(
+        (tc) => tc.tool === "web_search" && tc.status === "done" && tc.header === (params.header || params.query) && tc.params?.query === params.query,
+      );
+      if (alreadyDone) {
+        console.log("[BYTE] Skipping duplicate search:", params.query.slice(0, 40));
+        return;
+      }
+      console.log("[BYTE] Tool running:", params.query.slice(0, 60), "| header:", params.header);
 
-        // Phase 1: Show searching state — preserve any commentary text from the AI
-        const commentaryText =
-          extractToolCommentary(
-            currentMessages.find((m) => m.id === toolMsgId)?.content || "",
-            ["web_search", "news_search", "search"],
-          ) ||
-          currentMessages.find((m) => m.id === toolMsgId)?.content ||
-          "";
+      // Safety timeout: force-reset search lock after 60s
+      const safetyTimeout = setTimeout(() => {
+        console.warn("[BYTE TOOL] Search timed out after 60s, resetting lock");
+        isSearchingRef.current = false;
+      }, 60000);
+
+      try {
+// Phase 1: Show searching state — preserve any commentary text from the AI
+        // Don't create duplicate entries — caller already added them to toolCalls
+
         updateChat(chatId, {
           messages: currentMessages.map((m) =>
             m.id === toolMsgId
-              ? {
-                  ...m,
-                  content: commentaryText || "Searching the web...",
-                  searchPhase: "searching" as const,
-                }
+              ? { ...m, searchPhase: "searching" as const }
               : m,
           ),
         });
@@ -404,70 +764,75 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             freshness: params.freshness,
           },
         );
-
-        // Phase 2: Show all searched results immediately — preserve commentary text
-        const allSources = searchResults.map((r) => ({
+        // Phase 2: Show all searched results immediately on the running entry
+        const declinedIndices = params.decline || [];
+        const allFetchResults = searchResults.map((r, idx) => ({
           url: r.url,
           title: r.name || r.displayUrl,
+          status: declinedIndices.includes(idx) ? "declined" as const : "error" as const,
         }));
-        const currentContent =
-          currentMessages.find((m) => m.id === toolMsgId)?.content || "";
-        const commentaryOrContent =
-          extractToolCommentary(currentContent, ["web_search", "news_search", "search"]) || currentContent;
         updateChat(chatId, {
           messages: currentMessages.map((m) =>
             m.id === toolMsgId
               ? {
                   ...m,
-                  content: commentaryOrContent,
                   searchPhase: "fetching" as const,
-                  webSearchSources: allSources,
+                  toolCalls: (() => {
+                    let found = false;
+                    return (m.toolCalls || []).map((tc) => {
+                      if (tc.tool === "web_search" && tc.status === "running" && !found) {
+                        found = true;
+                        return { ...tc, fetchResults: allFetchResults };
+                      }
+                      return tc;
+                    });
+                  })(),
                 }
               : m,
           ),
         });
-
         const indicesToFetch = params.fetch_urls?.length
           ? params.fetch_urls.filter((i) => i >= 0 && i < searchResults.length)
           : [0, 1].filter((i) => i < searchResults.length);
 
         const jinaResults: string[] = [];
-        const fetchedSources: { url: string; title: string }[] = [];
         for (const i of indicesToFetch) {
-          console.log("[BYTE] Fetching page:", searchResults[i].url);
           try {
             const content = await fetchPageWithJina(searchResults[i].url);
             jinaResults.push(
               `--- Full content from ${searchResults[i].url} ---\n${content.slice(0, 3000)}`,
             );
-            fetchedSources.push({
-              url: searchResults[i].url,
-              title: searchResults[i].name || searchResults[i].displayUrl,
-            });
 
             // Phase 3: Update with each successful fetch in real-time
+            const fetchUrl = searchResults[i].url;
+            const fetchTitle = searchResults[i].name || searchResults[i].displayUrl;
             const freshChat = useStore
               .getState()
               .chats.find((c) => c.id === chatId);
             if (freshChat) {
-              const currentToolMsg = freshChat.messages.find(
-                (m) => m.id === toolMsgId,
-              );
-              const existingFetched = currentToolMsg?.webSearchFetched || [];
               updateChat(chatId, {
                 messages: freshChat.messages.map((m) =>
                   m.id === toolMsgId
                     ? {
                         ...m,
-                        webSearchFetched: [
-                          ...existingFetched,
-                          {
-                            url: searchResults[i].url,
-                            title:
-                              searchResults[i].name ||
-                              searchResults[i].displayUrl,
-                          },
-                        ],
+                        // Update the matching URL status to "ok" on the first running entry
+                        toolCalls: (() => {
+                          let found = false;
+                          return (m.toolCalls || []).map((tc) => {
+                            if (tc.tool === "web_search" && tc.status === "running" && !found) {
+                              found = true;
+                              return {
+                                ...tc,
+                                fetchResults: (tc.fetchResults || []).map((fr) =>
+                                  fr.url === fetchUrl
+                                    ? { ...fr, status: "ok" as const, title: fr.title || fetchTitle }
+                                    : fr,
+                                ),
+                              };
+                            }
+                            return tc;
+                          });
+                        })(),
                       }
                     : m,
                 ),
@@ -475,10 +840,9 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             }
           } catch (err: any) {
             const errMsg = err?.message || String(err);
-            console.log("[BYTE] Jina blocked or failed:", searchResults[i].url, errMsg);
             // Skip 451 (unscrapeable) and 403 (forbidden) silently — just use snippets
             if (errMsg.includes("451") || errMsg.includes("403")) {
-              console.log("[BYTE] Skipping unscrapeable page, using snippets instead");
+              // Silently skip unscrapeable pages
             } else {
               failedFetchUrlsRef.current.push(searchResults[i].url);
             }
@@ -532,14 +896,20 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           return;
         }
 
-        // Phase4: Mark as done — preserve commentary text
+        // Phase4: Mark first running entry as done
+        let foundRunning = false;
         const updatedMessages = freshChat.messages.map((m) =>
           m.id === toolMsgId
             ? {
                 ...m,
-                content: m.content || "",
-                status: "done" as const,
-                searchPhase: "done" as const,
+                ...(isLastSearch !== false ? { status: "done" as const, searchPhase: "done" as const } : {}),
+                toolCalls: (m.toolCalls || []).map((tc) => {
+                  if (tc.tool === "web_search" && tc.status === "running" && !foundRunning) {
+                    foundRunning = true;
+                    return { ...tc, status: "done" as const };
+                  }
+                  return tc;
+                }),
               }
             : m,
         );
@@ -547,7 +917,16 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         const withSearchResultsFinal = feedbackMsg 
           ? [...updatedMessages, resultsMsg, feedbackMsg]
           : [...updatedMessages, resultsMsg];
+        // Ensure the tool message has content or toolCalls for the follow-up API call
+        const toolIdx = withSearchResultsFinal.findIndex(m => m.id === toolMsgId);
+        if (toolIdx >= 0) {
+          const msg = withSearchResultsFinal[toolIdx];
+          if (!msg.content && (!msg.toolCalls || msg.toolCalls.length === 0)) {
+            withSearchResultsFinal[toolIdx] = { ...msg, content: "Searching..." };
+          }
+        }
         updateChat(chatId, { messages: withSearchResultsFinal });
+        console.log("[BYTE] Phase 4 done:", foundRunning ? "marked done" : "no running entry", "| results:", searchResults.length);
 
         // Get provider/model for continuing
         let { provider, model } = resolveModel(providers, selectedModelId);
@@ -562,8 +941,17 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           return;
         }
 
+        // Only trigger follow-up AI stream for the last search in a batch
+        // Earlier searches just complete silently — the last one triggers the AI response
+        if (isLastSearch === false) {
+          console.log("[BYTE] Intermediate search done, skipping follow-up");
+          return;
+        }
+
         // STREAM DIRECTLY INTO THE SAME MESSAGE (toolMsgId)
+        console.log("[BYTE] Follow-up start, toolCalls done");
     if (streamingEnabled) {
+      let followUpStreamStarted = false;
       const handle = streamChat(
             provider,
             model,
@@ -574,15 +962,21 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                 .chats.find((c) => c.id === chatId);
               if (!chat) return;
               const existingMsg = chat.messages.find((m) => m.id === toolMsgId);
-              const currentRaw = existingMsg?.rawContent || existingMsg?.content || "";
-              const accumulated = currentRaw + chunk;
+              // Accumulate from rawContent (preserves tool_call JSON), not displayContent
+              let accumulated: string;
+              if (!followUpStreamStarted) {
+                followUpStreamStarted = true;
+                accumulated = chunk;
+              } else {
+                accumulated = (existingMsg?.rawContent || existingMsg?.content || "") + chunk;
+              }
 
               // Detect web_search tool call during post-search streaming
               const hasNextSearch =
                 /"tool"\s*:\s*"(web_search|news_search|search)"/.test(accumulated);
               let displayContent = accumulated;
               if (hasNextSearch) {
-                displayContent = extractToolCommentary(accumulated, ["web_search", "news_search", "search"]) || "Searching the web...";
+                displayContent = extractToolCommentary(accumulated, ["web_search", "news_search", "search"]) || "";
               }
 
               updateChat(chatId, {
@@ -590,9 +984,10 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                   m.id === toolMsgId
                     ? {
                         ...m,
-                        ...existingMsg,
                         content: displayContent,
                         rawContent: accumulated,
+                        searchPhase: m.searchPhase,
+                        toolCalls: m.toolCalls,
                       }
                     : m,
                 ),
@@ -607,40 +1002,45 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               const rawResponse =
                 existingMsg?.rawContent || existingMsg?.content || "";
 
-              // Check if AI wants to do another search (multi-tool chaining)
-              const nextSearch = parseWebSearchTool(rawResponse);
-              if (nextSearch && searchDepthRef.current < MAX_SEARCH_DEPTH) {
-                searchDepthRef.current++;
-                const commentary = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]);
-                // Update message with commentary text and keep search dropdown visible
+              // Check if follow-up response contains another web search
+              const nextSearches = parseAllWebSearchTools(rawResponse);
+              if (nextSearches.length > 0) {
+                // Run the next search(es) — append to existing toolCalls
+                const nextEntries: ToolCallEntry[] = nextSearches.map((ws) => ({
+                  id: crypto.randomUUID(),
+                  tool: "web_search" as const,
+                  header: ws.header || ws.query,
+                  params: { query: ws.query, count: ws.count, freshness: ws.freshness, fetch_urls: ws.fetch_urls, topic: ws.topic },
+                  status: "running" as const,
+                }));
+                const commentary = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "";
+
                 updateChat(chatId, {
                   messages: chat.messages.map((m) =>
                     m.id === toolMsgId
                       ? {
                           ...m,
-                          ...existingMsg,
-                          content: commentary || "Searching the web...",
-                          searchPhase: "done" as const,
+                          content: commentary,
+                          rawContent: rawResponse,
+                          toolCalls: [...(m.toolCalls || []), ...nextEntries],
                         }
                       : m,
                   ),
                 });
-                // Create new assistant message for the next search iteration
-                const nextSearchMsg: Message = {
-                  id: crypto.randomUUID(),
-                  role: "assistant",
-                  content: commentary || "Searching the web...",
-                  status: "done" as const,
-                  timestamp: Date.now(),
+
+                const runNextSearches = async () => {
+                  for (let i = 0; i < nextSearches.length; i++) {
+                    const currentMessages = useStore.getState().chats.find((c) => c.id === chatId)?.messages || chat.messages;
+                    await handleWebSearchTool(chatId, toolMsgId, nextSearches[i], currentMessages, i === nextSearches.length - 1);
+                    isSearchingRef.current = false;
+                    if (i < nextSearches.length - 1) await new Promise(r => setTimeout(r, 2000));
+                  }
                 };
-                const nextMessages = [...chat.messages, nextSearchMsg];
-                updateChat(chatId, { messages: nextMessages });
-                handleWebSearchTool(chatId, nextSearchMsg.id, nextSearch, nextMessages)
-                  .catch((err: Error) => console.error("[BYTE] Chained search error:", err));
-                return;
+                runNextSearches().catch((err) => console.error("[BYTE] Follow-up search error:", err));
+                return; // Don't mark as done — the next search will handle that
               }
 
-              searchDepthRef.current = 0; // Reset depth on successful completion
+              searchDepthRef.current = 0;
               let displayContent = rawResponse;
               updateChat(chatId, {
                 messages: chat.messages.map((m) =>
@@ -696,41 +1096,53 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             .chats.find((c) => c.id === chatId);
           if (!freshChat2) return;
 
-          // Check if AI wants to do another search (multi-tool chaining)
-          const nextSearch = parseWebSearchTool(response);
-          if (nextSearch && searchDepthRef.current < MAX_SEARCH_DEPTH) {
-            searchDepthRef.current++;
-            const commentary = extractToolCommentary(response, ["web_search", "news_search", "search"]);
-            const nextSearchMsg: Message = {
+          // Check if follow-up response contains another web search
+          const nextSearches = parseAllWebSearchTools(response);
+          if (nextSearches.length > 0) {
+            const nextEntries: ToolCallEntry[] = nextSearches.map((ws) => ({
               id: crypto.randomUUID(),
-              role: "assistant",
-              content: commentary || "Searching the web...",
-              status: "done" as const,
-              timestamp: Date.now(),
-            };
-            const nextMessages = [...freshChat2.messages, nextSearchMsg];
-            updateChat(chatId, { messages: nextMessages });
-            handleWebSearchTool(chatId, nextSearchMsg.id, nextSearch, nextMessages)
-              .catch((err: Error) => console.error("[BYTE] Chained search error:", err));
-            return;
-          }
+              tool: "web_search" as const,
+              header: ws.header || ws.query,
+              params: { query: ws.query, count: ws.count, freshness: ws.freshness, fetch_urls: ws.fetch_urls, topic: ws.topic },
+              status: "running" as const,
+            }));
+            const commentary = extractToolCommentary(response, ["web_search", "news_search", "search"]) || "";
 
-          searchDepthRef.current = 0; // Reset depth on successful completion
-          const existingMsg = freshChat2.messages.find(
-            (m) => m.id === toolMsgId,
-          );
-          updateChat(chatId, {
-            messages: withSearchResultsFinal.map((m) =>
-              m.id === toolMsgId
-                ? {
-                    ...m,
-                    ...existingMsg,
-                    content: response,
-                    status: "done" as const,
-                  }
-                : m,
-            ),
-          });
+            updateChat(chatId, {
+              messages: freshChat2.messages.map((m) =>
+                m.id === toolMsgId
+                  ? { ...m, content: commentary, rawContent: response, toolCalls: [...(m.toolCalls || []), ...nextEntries] }
+                  : m,
+              ),
+            });
+
+            const runNextSearches = async () => {
+              for (let i = 0; i < nextSearches.length; i++) {
+                const currentMessages = useStore.getState().chats.find((c) => c.id === chatId)?.messages || freshChat2.messages;
+                await handleWebSearchTool(chatId, toolMsgId, nextSearches[i], currentMessages, i === nextSearches.length - 1);
+                isSearchingRef.current = false;
+                if (i < nextSearches.length - 1) await new Promise(r => setTimeout(r, 2000));
+              }
+            };
+            runNextSearches().catch((err) => console.error("[BYTE] Follow-up non-stream search error:", err));
+          } else {
+            searchDepthRef.current = 0;
+            const existingMsg = freshChat2.messages.find(
+              (m) => m.id === toolMsgId,
+            );
+            updateChat(chatId, {
+              messages: withSearchResultsFinal.map((m) =>
+                m.id === toolMsgId
+                  ? {
+                      ...m,
+                      ...existingMsg,
+                      content: response,
+                      status: "done" as const,
+                    }
+                  : m,
+              ),
+            });
+          }
         }
       } catch (err) {
         console.error("[BYTE] Web search failed:", err);
@@ -747,6 +1159,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           ),
         });
       } finally {
+        clearTimeout(safetyTimeout);
         isSearchingRef.current = false;
       }
     },
@@ -763,6 +1176,8 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
   const handleContinueFromAnswer = useCallback(async () => {
     if (!activeChatId) return;
+
+    executedOpsRef.current.clear();
 
     // Get fresh chat data from store
     const currentChat = useStore
@@ -844,15 +1259,15 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
           let displayContent = accumulatedContent;
           if (isWebSearch)
-            displayContent = extractToolCommentary(accumulatedContent, ["web_search", "news_search", "search"]) || "Searching the web...";
+            displayContent = extractToolCommentary(accumulatedContent, ["web_search", "news_search", "search"]) || "";
           else if (isAskQuestion)
-            displayContent = extractToolCommentary(accumulatedContent, ["ask_question"]) || "Asking Question...";
+            displayContent = extractToolCommentary(accumulatedContent, ["ask_question"]) || "";
           else if (isConfirmAction)
-            displayContent = extractToolCommentary(accumulatedContent, ["confirm_action"]) || "Confirming...";
+            displayContent = extractToolCommentary(accumulatedContent, ["confirm_action"]) || "";
           else if (isFileRead)
-            displayContent = extractToolCommentary(accumulatedContent, ["file_read"]) || "Reading File...";
+            displayContent = extractToolCommentary(accumulatedContent, ["file_read"]) || "";
           else if (isSuggestMemory)
-            displayContent = extractToolCommentary(accumulatedContent, ["suggest_memory"]) || "Suggesting memory...";
+            displayContent = extractToolCommentary(accumulatedContent, ["suggest_memory"]) || "";
 
           updateChat(activeChatId, {
             messages: chat.messages.map((m) =>
@@ -873,10 +1288,6 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           if (!chat) return;
 
           const lastMsg = chat.messages[chat.messages.length - 1];
-          console.log(
-            "[BYTE DEBUG] AI returned:",
-            lastMsg?.rawContent || lastMsg?.content,
-          );
 
           const askQuestion = lastMsg
             ? parseAskQuestionTool(lastMsg.rawContent || lastMsg.content)
@@ -890,38 +1301,46 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           const suggestMemory = !askQuestion && !confirmAction && !fileRead
             ? parseSuggestMemory(lastMsg?.rawContent || lastMsg?.content || "")
             : null;
-          const webSearch =
+          const webSearches =
             !askQuestion && !confirmAction && !fileRead && !suggestMemory
-              ? parseWebSearchTool(
-                  lastMsg?.rawContent || lastMsg?.content || "",
-                )
-              : null;
+              ? parseAllWebSearchTools(lastMsg?.rawContent || lastMsg?.content || "")
+              : [];
+          if (webSearches.length > 0) console.log("[BYTE] Tool detected:", webSearches.map(w => ({ q: w.query.slice(0, 40), h: w.header })));
 
           const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
           let displayContent = rawResponse;
           if (askQuestion) {
-            displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "Asking Question...";
+            displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "";
           } else if (confirmAction) {
-            displayContent = extractToolCommentary(rawResponse, ["confirm_action"]) || "Confirming...";
+            displayContent = extractToolCommentary(rawResponse, ["confirm_action"]) || "";
           } else if (fileRead) {
-            displayContent = extractToolCommentary(rawResponse, ["file_read"]) || "Reading File...";
+            displayContent = extractToolCommentary(rawResponse, ["file_read"]) || "";
           } else if (suggestMemory) {
-            displayContent = extractToolCommentary(rawResponse, ["suggest_memory"]) || "Suggesting memory...";
-          } else if (webSearch) {
-            displayContent = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "Searching the web...";
+            displayContent = extractToolCommentary(rawResponse, ["suggest_memory"]) || "";
+          } else if (webSearches.length > 0) {
+            displayContent = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "";
           }
 
-          updateChat(activeChatId, {
-            messages: chat.messages.map((m) =>
-              m.id === assistantMsg.id
-                ? {
-                    ...m,
-                    content: displayContent,
-                    rawContent: rawResponse,
-                  }
-                : m,
-            ),
-          });
+          // Only update message if no tool was detected (tools do their own updates)
+          const hasAnyTool = askQuestion || confirmAction || fileRead || suggestMemory || webSearches.length > 0;
+          if (!hasAnyTool) {
+            updateChat(activeChatId, {
+              messages: chat.messages.map((m) =>
+                m.id === assistantMsg.id
+                  ? { ...m, content: displayContent, status: "done" as const }
+                  : m,
+              ),
+            });
+          } else {
+            // Update with display content first
+            updateChat(activeChatId, {
+              messages: chat.messages.map((m) =>
+                m.id === assistantMsg.id
+                  ? { ...m, content: displayContent, rawContent: rawResponse }
+                  : m,
+              ),
+            });
+          }
 
           if (askQuestion) {
             onAskQuestionDetected?.(askQuestion);
@@ -932,7 +1351,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           }
 
           if (fileRead) {
-            handleFileReadTool(activeChatId, fileRead.path);
+            handleFileReadTool(activeChatId, fileRead.path, fileRead.header);
           }
 
           if (suggestMemory) {
@@ -941,31 +1360,41 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             );
           }
 
-          updateChat(activeChatId, {
-            messages: chat.messages.map((m) =>
-              m.id === assistantMsg.id
-                ? { ...m, content: displayContent, status: "done" as const }
-                : m,
-            ),
-          });
+          if (webSearches.length > 0) {
+            // Create tool call entries for all web searches
+            const toolCallEntries: ToolCallEntry[] = webSearches.map((ws) => ({
+              id: crypto.randomUUID(),
+              tool: "web_search" as const,
+              header: ws.header || ws.query,
+              params: { query: ws.query, count: ws.count, freshness: ws.freshness, fetch_urls: ws.fetch_urls, topic: ws.topic },
+              status: "running" as const,
+            }));
 
-          if (askQuestion) {
-            onAskQuestionDetected?.(askQuestion);
-          }
+            // Update message with all tool call entries
+            updateChat(activeChatId, {
+              messages: chat.messages.map((m) =>
+                m.id === assistantMsg.id
+                  ? { ...m, content: displayContent, status: "done" as const, toolCalls: toolCallEntries }
+                  : m,
+              ),
+            });
 
-          if (suggestMemory) {
-            window.dispatchEvent(
-              new CustomEvent("byte:suggest-memory", { detail: suggestMemory }),
-            );
-          }
-
-          if (webSearch) {
-            handleWebSearchTool(
-              activeChatId,
-              assistantMsg.id,
-              webSearch,
-              chat.messages,
-            ).catch((err) => console.error("[BYTE] Web search error:", err));
+            // Run searches sequentially — only last search triggers follow-up AI response
+            const runSearches = async () => {
+              for (let i = 0; i < webSearches.length; i++) {
+                const currentMessages = useStore.getState().chats.find((c) => c.id === activeChatId)?.messages || chat.messages;
+                await handleWebSearchTool(
+                  activeChatId,
+                  assistantMsg.id,
+                  webSearches[i],
+                  currentMessages,
+                  i === webSearches.length - 1,
+                );
+                isSearchingRef.current = false;
+                if (i < webSearches.length - 1) await new Promise(r => setTimeout(r, 2000));
+              }
+            };
+            runSearches().catch((err) => console.error("[BYTE] Web search error:", err));
           }
 
           setIsLoading(false);
@@ -1011,45 +1440,45 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           getProjectContext(lastUserMessage(currentChat.messages)),
         );
 
-        const updatedMessages = [
-          ...currentChat.messages,
-          { ...assistantMsg, content: response, status: "done" as const },
-        ];
-
         const askQuestion = parseAskQuestionTool(response);
         const confirmAction = !askQuestion ? parseConfirmAction(response) : null;
         const fileRead = !askQuestion && !confirmAction ? parseFileReadTool(response) : null;
-        const webSearch = !askQuestion && !confirmAction && !fileRead ? parseWebSearchTool(response) : null;
+        const webSearches = !askQuestion && !confirmAction && !fileRead ? parseAllWebSearchTools(response) : [];
 
-        if (webSearch) {
+        if (webSearches.length > 0) {
           const commentary = extractToolCommentary(response, ["web_search", "news_search", "search"]);
-          const display = commentary || "Searching the web...";
-          // Patch updatedMessages so handleWebSearchTool receives commentary text not raw JSON
-          updatedMessages[updatedMessages.length - 1] = {
-            ...updatedMessages[updatedMessages.length - 1],
-            content: commentary || response,
-          };
+          const display = commentary || "";
+          const toolCallEntries: ToolCallEntry[] = webSearches.map((ws) => ({
+            id: crypto.randomUUID(),
+            tool: "web_search" as const,
+            header: ws.header || ws.query,
+            params: { query: ws.query, count: ws.count, freshness: ws.freshness, fetch_urls: ws.fetch_urls },
+            status: "running" as const,
+          }));
           updateChat(activeChatId, {
             messages: currentChat.messages.map((m) =>
               m.id === assistantMsg.id
-                ? { ...m, content: display, status: "done" as const }
+                ? { ...m, content: display, status: "done" as const, toolCalls: toolCallEntries }
                 : m,
             ),
           });
-          handleWebSearchTool(
-            activeChatId,
-            assistantMsg.id,
-            webSearch,
-            updatedMessages,
-          ).catch((err) => console.error("[BYTE] Web search error:", err));
+          const runSearches = async () => {
+            for (let i = 0; i < webSearches.length; i++) {
+              const currentMessages = useStore.getState().chats.find((c) => c.id === activeChatId)?.messages || currentChat.messages;
+              await handleWebSearchTool(activeChatId, assistantMsg.id, webSearches[i], currentMessages, i === webSearches.length - 1);
+              isSearchingRef.current = false;
+              if (i < webSearches.length - 1) await new Promise(r => setTimeout(r, 2000));
+            }
+          };
+          runSearches().catch((err) => console.error("[BYTE] Web search error:", err));
         } else if (fileRead) {
           updateChat(activeChatId, {
             messages: [
               ...currentChat.messages,
-              { ...assistantMsg, content: extractToolCommentary(response, ["file_read"]) || "Reading File...", status: "done" as const },
+              { ...assistantMsg, content: extractToolCommentary(response, ["file_read"]) || "", status: "done" as const },
             ],
           });
-          handleFileReadTool(activeChatId, fileRead.path);
+          handleFileReadTool(activeChatId, fileRead.path, fileRead.header);
         } else {
           updateChat(activeChatId, {
             messages: [
@@ -1093,21 +1522,6 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     onAskQuestionDetected,
     projects,
   ]);
-
-  // Extract commentary text that comes before a tool call JSON
-  // e.g. "Sure! {\"tool\":\"ask_question\"}" → "Sure!"
-  // Also handles ```tool_call fences
-  const extractToolCommentary = (content: string, toolNames: string[]): string | null => {
-    if (!content) return null;
-    const cleaned = content
-      .replace(/\\```[\w-]*\n?/g, "")
-      .replace(/```[\w-]*\n?/g, "");
-    const toolPattern = new RegExp(`\\{[\\s\\S]*?"tool"\\s*:\\s*"(?:${toolNames.join("|")})"[\\s\\S]*?\\}`);
-    const match = cleaned.match(toolPattern);
-    if (!match || match.index === undefined) return null;
-    const before = cleaned.slice(0, match.index).trim();
-    return before.length > 0 ? before : null;
-  };
 
   // Parse ask_question tool from assistant response
   // Format 1: {"tool":"ask_question","questions":[...]}
@@ -1283,6 +1697,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
   interface FileReadParams {
     path: string;
+    header?: string;
   }
 
   const parseFileReadTool = (content: string): FileReadParams | null => {
@@ -1291,9 +1706,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       .replace(/\\```[\w-]*\n?/g, "")
       .replace(/```[\w-]*\n?/g, "")
       .trim();
-    console.log("[file_read] raw cleaned:", cleaned.substring(0, 300));
     try {
-      // Try with escaped quotes (some models output \" instead of ")
       let jsonMatch = cleaned.match(/\{[\s\S]*\\?"tool\\?"\s*:\s*\\?"file_read\\?"[\s\S]*\}/);
       if (!jsonMatch) {
         jsonMatch = cleaned.match(/\{[\s\S]*"tool"\s*:\s*"file_read"[\s\S]*\}/);
@@ -1302,52 +1715,57 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         jsonMatch = cleaned.match(/\{[\s\S]*\"tool\"\s*:\s*\"file_read\"[\s\S]*\}/);
       }
       if (jsonMatch) {
-        console.log("[file_read] JSON match found:", jsonMatch[0].substring(0, 200));
-        // Unescape quotes before parsing
         let jsonStr = jsonMatch[0].replace(/\\"/g, '"');
         const payload = JSON.parse(jsonStr);
-        console.log("[file_read] parsed payload:", payload);
         if (payload.tool === "file_read") {
           const filePath = payload.path || payload.filename || payload.file;
           if (filePath) {
-            console.log("[file_read] file path:", filePath);
-            return { path: filePath };
+            return { path: filePath, header: payload.header };
           }
-          console.log("[file_read] no path/filename/file in payload");
         }
-      } else {
-        console.log("[file_read] no JSON match found");
       }
-    } catch (e) { console.log("[file_read] parse error:", e); }
+    } catch {}
     return null;
   };
 
-  const handleFileReadTool = useCallback(async (chatId: string, path: string) => {
-    console.log("[file_read] handleFileReadTool called with path:", path);
+  const handleFileReadTool = useCallback(async (chatId: string, path: string, header?: string) => {
     const chat = useStore.getState().chats.find((c) => c.id === chatId);
-    if (!chat) { console.log("[file_read] chat not found"); return; }
+    if (!chat) return;
     const project = projects.find((p) => p.chatIds.includes(chatId));
-    if (!project) { console.log("[file_read] project not found"); return; }
+    if (!project) return;
     const file = project.files.find((f) => f.name === path || f.name.toLowerCase() === path.toLowerCase());
-    if (!file) { console.log("[file_read] file not found in project:", path, "available:", project.files.map(f => f.name)); return; }
+    if (!file) return;
     const cached = projectFileContentsRef.current[file.id];
-    if (!cached) { console.log("[file_read] cached content empty for file:", file.id); return; }
-    console.log("[file_read] file found, cached length:", cached.length);
+    if (!cached) return;
 
-
-    // Find the last assistant message that triggered this file_read
     const lastMsg = chat.messages[chat.messages.length - 1];
     if (!lastMsg || lastMsg.role !== "assistant") return;
 
-    // Show file content in the card — use fresh state to not overwrite commentary
     const ext = file.name.split(".").pop() || "text";
     const fileContent = `\`\`\`${ext}\n${cached}\n\`\`\``;
     const freshChat = useStore.getState().chats.find((c) => c.id === chatId);
     if (!freshChat) return;
+
+    const toolCallEntry: ToolCallEntry = {
+      id: crypto.randomUUID(),
+      tool: "file_read",
+      header: header || `Reading ${file.name}`,
+      params: { path },
+      status: "done",
+      result: cached.length > 500 ? cached.slice(0, 500) + "..." : cached,
+    };
+
     updateChat(chatId, {
       messages: freshChat.messages.map((m) =>
         m.id === lastMsg.id
-          ? { ...m, fileReadResult: fileContent, fileReadFileName: file.name, fileReadPhase: "done" as const, status: "done" as const }
+          ? {
+              ...m,
+              fileReadResult: fileContent,
+              fileReadFileName: file.name,
+              fileReadPhase: "done" as const,
+              status: "done" as const,
+              toolCalls: [...(m.toolCalls || []), toolCallEntry],
+            }
           : m,
       ),
     });
@@ -1400,6 +1818,9 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     async (text: string, attachments?: ImageAttachment[]) => {
       if (!activeChatId || !text.trim()) return;
 
+      // Reset operation dedup set for this new send
+      executedOpsRef.current.clear();
+
       // Check if this is a slash command and get simplified prompt (skips MAIN.md + tools to save tokens)
       const { systemPrompt: simplifiedSystemPrompt } = getSlashCommandPrompt(
         text.trim(),
@@ -1439,37 +1860,6 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         : chat?.config;
 
       // DEBUG: Log everything being sent to the API
-      console.group("[BYTE DEBUG] Sending message");
-      console.log("User message:", text.trim());
-      console.log("Is slash command:", !!simplifiedSystemPrompt);
-      
-      // Log the actual system prompt if not using slash command
-      if (!simplifiedSystemPrompt) {
-        const { systemPrompt: actualPrompt } = assemblePrompt(
-          effectiveConfig || getDefaultChatConfig(),
-          memories,
-          model
-        );
-        console.log("System prompt (first 500 chars):", actualPrompt.substring(0, 500));
-        console.log("System prompt (full length):", actualPrompt.length);
-        // Check if ASK_QUESTION is in the prompt
-        if (actualPrompt.includes("ask_question")) {
-          console.log("✓ ASK_QUESTION tool found in prompt");
-        } else {
-          console.log("✗ ASK_QUESTION tool NOT found in prompt");
-        }
-      } else {
-        console.log("System prompt:", simplifiedSystemPrompt.substring(0, 500));
-      }
-      
-      console.log("Chat config:", effectiveConfig);
-      console.log("Enabled tools:", effectiveConfig?.enabledTools);
-      console.log("Memories enabled:", effectiveConfig?.memoryEnabled);
-      console.log("Memories:", memories);
-      console.log("Model:", model?.id);
-      console.log("Provider:", provider?.id);
-      console.groupEnd();
-
       // Handle describe-mode and OCR-mode attachments
       let processedAttachments = attachments;
       const hasDescribe = attachments?.some((a) => a.mode === "describe");
@@ -1480,8 +1870,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       const assistantMsg: Message = { id: genId(), role: "assistant", content: "", timestamp: Date.now(), status: "streaming" };
 
       if (hasOCR) {
-        // For OCR: show extracting phase on the assistant immediately (like web search)
         assistantMsg.ocrPhase = "extracting";
+        assistantMsg.toolCalls = [{
+          id: crypto.randomUUID(),
+          tool: "ocr",
+          header: "Extracting text from images",
+          params: { attachments: attachments?.filter(a => a.mode === "ocr").map(a => a.fileName) },
+          status: "running" as const,
+        }];
         updateChat(activeChatId, {
           messages: [...(chat?.messages || []), userMsg, assistantMsg],
           title: chat?.title === "New chat" ? text.trim().slice(0, 50) : chat?.title,
@@ -1546,7 +1942,12 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                     updateChat(activeChatId, {
                       messages: currentChat.messages.map((m) =>
                         m.id === assistantMsg.id
-                          ? { ...m, ocrPhase: "done" as const, ocrText: progressText, content: "" }
+                          ? {
+                              ...m, ocrPhase: "done" as const, ocrText: progressText, content: "",
+                              toolCalls: (m.toolCalls || []).map(tc =>
+                                tc.tool === "ocr" ? { ...tc, status: "done" as const, result: progressText.slice(0, 300) } : tc
+                              ),
+                            }
                           : m
                       ),
                     });
@@ -1574,7 +1975,11 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             updateChat(activeChatId, {
               messages: fresh.messages.map((m) =>
                 m.id === assistantMsg.id
-                  ? { ...m, status: "done" as const, ocrPhase: "done" as const, ocrText }
+                  ? { ...m, status: "done" as const, ocrPhase: "done" as const, ocrText,
+                      toolCalls: (m.toolCalls || []).map(tc =>
+                        tc.tool === "ocr" ? { ...tc, status: "done" as const, result: ocrText.slice(0, 300) } : tc
+                      ),
+                    }
                 : m.id === userMsg.id
                   ? { ...m, attachments: processedAttachments }
                   : m
@@ -1597,6 +2002,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       }
 
       setIsLoading(true);
+      console.log("[BYTE] Send:", text.trim().slice(0, 80));
 
       if (streamingEnabled) {
         // Use streaming - update message content as chunks arrive
@@ -1651,15 +2057,15 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
             let displayContent = accumulatedContent;
             if (isWebSearch) {
-              displayContent = extractToolCommentary(accumulatedContent, ["web_search", "news_search", "search"]) || "Searching the web...";
+              displayContent = extractToolCommentary(accumulatedContent, ["web_search", "news_search", "search"]) || "";
             } else if (isAskQuestion) {
-              displayContent = extractToolCommentary(accumulatedContent, ["ask_question"]) || "Asking Question...";
+              displayContent = extractToolCommentary(accumulatedContent, ["ask_question"]) || "";
             } else if (isConfirmAction) {
-              displayContent = extractToolCommentary(accumulatedContent, ["confirm_action"]) || "Confirming...";
+              displayContent = extractToolCommentary(accumulatedContent, ["confirm_action"]) || "";
             } else if (isFileRead) {
-              displayContent = extractToolCommentary(accumulatedContent, ["file_read"]) || "Reading File...";
+              displayContent = extractToolCommentary(accumulatedContent, ["file_read"]) || "";
             } else if (isSuggestMemory) {
-              displayContent = extractToolCommentary(accumulatedContent, ["suggest_memory"]) || "Suggesting memory...";
+              displayContent = extractToolCommentary(accumulatedContent, ["suggest_memory"]) || "";
             }
 
             updateChat(activeChatId, {
@@ -1683,12 +2089,6 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             const lastMsg =
               currentChat.messages[currentChat.messages.length - 1];
 
-            // DEBUG: Log exact raw AI response (not display content)
-            console.log(
-              "[BYTE DEBUG] AI returned:",
-              lastMsg?.rawContent || lastMsg?.content,
-            );
-
             const askQuestion = lastMsg
               ? parseAskQuestionTool(lastMsg.rawContent || lastMsg.content)
               : null;
@@ -1703,62 +2103,70 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                   lastMsg?.rawContent || lastMsg?.content || "",
                 )
               : null;
-            const webSearch =
+            const webSearches =
               !askQuestion && !confirmAction && !fileRead && !suggestMemory
-                ? parseWebSearchTool(
-                    lastMsg?.rawContent || lastMsg?.content || "",
-                  )
-                : null;
+                ? parseOperations(lastMsg?.rawContent || lastMsg?.content || "")
+                : [];
 
-            const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
+const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
+          console.log("[BYTE RAW]", rawResponse);
             let displayContent = rawResponse;
             if (askQuestion) {
-              displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "Asking Question...";
+              displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "";
             } else if (confirmAction) {
-              displayContent = extractToolCommentary(rawResponse, ["confirm_action"]) || "Confirming...";
+              displayContent = extractToolCommentary(rawResponse, ["confirm_action"]) || "";
             } else if (fileRead) {
-              displayContent = extractToolCommentary(rawResponse, ["file_read"]) || "Reading File...";
+              displayContent = extractToolCommentary(rawResponse, ["file_read"]) || "";
             } else if (suggestMemory) {
-              displayContent = extractToolCommentary(rawResponse, ["suggest_memory"]) || "Suggesting memory...";
-            } else if (webSearch) {
-              displayContent = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "Searching the web...";
+              displayContent = extractToolCommentary(rawResponse, ["suggest_memory"]) || "";
+            } else if (webSearches.length > 0) {
+              displayContent = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "";
             }
 
-            updateChat(activeChatId, {
-              messages: currentChat.messages.map((m) =>
-                m.id === assistantMsg.id
-                  ? { ...m, content: displayContent, status: "done" as const }
-                  : m,
-              ),
-            });
+            console.log("[HANDLE_SEND] onDone: webSearches=%d askQuestion=%s fileRead=%s", webSearches.length, !!askQuestion, !!fileRead);
+            if (webSearches.length > 0) {
+              console.log("[HANDLE_SEND] First op:", webSearches[0].type, "header:", webSearches[0].header);
+              // Update message with commentary
+              updateChat(activeChatId, {
+                messages: currentChat.messages.map((m) =>
+                  m.id === assistantMsg.id
+                    ? { ...m, content: displayContent }
+                    : m,
+                ),
+              });
 
-            if (askQuestion) {
-              onAskQuestionDetected?.(askQuestion);
-            }
+              // Store remaining ops in case the follow-up doesn't produce more
+              pendingOpsRef.current = webSearches.slice(1);
+              console.log("[HANDLE_SEND] Stored %d pending operations", pendingOpsRef.current.length);
 
-            if (confirmAction) {
-              handleConfirmAction(activeChatId, confirmAction.message);
-            }
-
-            if (fileRead) {
-              handleFileReadTool(activeChatId, fileRead.path);
-            }
-
-            if (suggestMemory) {
-              window.dispatchEvent(
-                new CustomEvent("byte:suggest-memory", {
-                  detail: suggestMemory,
-                }),
-              );
-            }
-
-            if (webSearch) {
-              handleWebSearchTool(
-                activeChatId,
-                assistantMsg.id,
-                webSearch,
-                currentChat.messages,
-              ).catch((err) => console.error("[BYTE] Web search error:", err));
+              // Process ONE operation — follow-up handles the rest
+              console.log("[HANDLE_SEND] Calling executeOneOp with first operation");
+              executeOneOp(activeChatId, assistantMsg.id, webSearches[0], currentChat.messages)
+                .catch(err => console.error("[BYTE] Operation error:", err));
+            } else {
+              if (askQuestion) {
+                onAskQuestionDetected?.(askQuestion);
+              }
+              if (confirmAction) {
+                handleConfirmAction(activeChatId, confirmAction.message);
+              }
+              if (fileRead) {
+                handleFileReadTool(activeChatId, fileRead.path, fileRead.header);
+              }
+              if (suggestMemory) {
+                window.dispatchEvent(
+                  new CustomEvent("byte:suggest-memory", {
+                    detail: suggestMemory,
+                  }),
+                );
+              }
+              updateChat(activeChatId, {
+                messages: currentChat.messages.map((m) =>
+                  m.id === assistantMsg.id
+                    ? { ...m, content: displayContent, status: "done" as const }
+                    : m,
+                ),
+              });
             }
 
             setIsLoading(false);
@@ -1813,47 +2221,61 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           const suggestMemory = !askQuestion && !confirmAction && !fileRead
             ? parseSuggestMemory(response)
             : null;
-          const webSearch =
+          const webSearches =
             !askQuestion && !confirmAction && !fileRead && !suggestMemory
-              ? parseWebSearchTool(response)
-              : null;
+              ? parseAllWebSearchTools(response)
+              : [];
 
           let displayContent = response;
           if (askQuestion) {
-            displayContent = extractToolCommentary(response, ["ask_question"]) || "Asking Question...";
+            displayContent = extractToolCommentary(response, ["ask_question"]) || "";
           } else if (confirmAction) {
-            displayContent = extractToolCommentary(response, ["confirm_action"]) || "Confirming...";
+            displayContent = extractToolCommentary(response, ["confirm_action"]) || "";
           } else if (fileRead) {
-            displayContent = extractToolCommentary(response, ["file_read"]) || "Reading File...";
+            displayContent = extractToolCommentary(response, ["file_read"]) || "";
           } else if (suggestMemory) {
-            displayContent = extractToolCommentary(response, ["suggest_memory"]) || "Suggesting memory...";
-          } else if (webSearch) {
-            displayContent = extractToolCommentary(response, ["web_search", "news_search", "search"]) || "Searching the web...";
+            displayContent = extractToolCommentary(response, ["suggest_memory"]) || "";
+          } else if (webSearches.length > 0) {
+            displayContent = extractToolCommentary(response, ["web_search", "news_search", "search"]) || "";
           }
 
-          const updatedMessages = newMessages.map((m) =>
-            m.id === assistantMsg.id
-              ? { ...m, content: displayContent, status: "done" as const }
-              : m,
-          );
-
-          updateChat(activeChatId, {
-            messages: updatedMessages,
-          });
-
-          if (webSearch) {
-            handleWebSearchTool(
-              activeChatId,
-              assistantMsg.id,
-              webSearch,
-              updatedMessages,
-            ).catch((err) => console.error("[BYTE] Web search error:", err));
-          } else if (askQuestion) {
-            onAskQuestionDetected?.(askQuestion);
-          } else if (confirmAction) {
-            handleConfirmAction(activeChatId, confirmAction.message);
-          } else if (fileRead) {
-            handleFileReadTool(activeChatId, fileRead.path);
+          if (webSearches.length > 0) {
+            const toolCallEntries: ToolCallEntry[] = webSearches.map((ws) => ({
+              id: crypto.randomUUID(),
+              tool: "web_search" as const,
+              header: ws.header || ws.query,
+              params: { query: ws.query, count: ws.count, freshness: ws.freshness, fetch_urls: ws.fetch_urls },
+              status: "running" as const,
+            }));
+            const updatedMessages = newMessages.map((m) =>
+              m.id === assistantMsg.id
+                ? { ...m, content: displayContent, status: "done" as const, toolCalls: toolCallEntries }
+                : m,
+            );
+            updateChat(activeChatId, { messages: updatedMessages });
+            const runSearches = async () => {
+              for (let i = 0; i < webSearches.length; i++) {
+                const currentMessages = useStore.getState().chats.find((c) => c.id === activeChatId)?.messages || updatedMessages;
+                await handleWebSearchTool(activeChatId, assistantMsg.id, webSearches[i], currentMessages, i === webSearches.length - 1);
+                isSearchingRef.current = false;
+                if (i < webSearches.length - 1) await new Promise(r => setTimeout(r, 2000));
+              }
+            };
+            runSearches().catch((err) => console.error("[BYTE] Web search error:", err));
+          } else {
+            const updatedMessages = newMessages.map((m) =>
+              m.id === assistantMsg.id
+                ? { ...m, content: displayContent, status: "done" as const }
+                : m,
+            );
+            updateChat(activeChatId, { messages: updatedMessages });
+            if (askQuestion) {
+              onAskQuestionDetected?.(askQuestion);
+            } else if (confirmAction) {
+              handleConfirmAction(activeChatId, confirmAction.message);
+            } else if (fileRead) {
+              handleFileReadTool(activeChatId, fileRead.path, fileRead.header);
+            }
           }
 
           if (suggestMemory) {
@@ -2018,7 +2440,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
   return (
     <div className="view on" style={{ flexDirection: "column" }}>
-      <div className="chat-msgs">
+      <div className="chat-msgs" ref={chatMsgsRef} onScroll={handleScroll}>
         <div className="chat-msgs-inner">
           {chat.messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} />
@@ -2026,6 +2448,16 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           <div ref={messagesEndRef} />
         </div>
       </div>
+      {showScrollButton && (
+        <button
+          onClick={scrollToBottom}
+          className="scroll-to-bottom-btn"
+          title="Scroll to bottom"
+          aria-label="Scroll to bottom"
+        >
+          ↓
+        </button>
+      )}
       {!activeAskQuestion && !activeSuggestMemory && (
         <div className="chat-in">
           <InputBox

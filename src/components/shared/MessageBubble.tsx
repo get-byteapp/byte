@@ -1,4 +1,4 @@
-import { useState, memo, useRef, useCallback, useMemo } from "react";
+import { useState, memo, useRef, useCallback } from "react";
 import {
   Copy,
   Check,
@@ -7,12 +7,11 @@ import {
   Share2,
   RefreshCw,
   ChevronDown,
-  Search,
   Loader2,
-  Globe,
+  FileText,
 } from "lucide-react";
 import { MarkdownRenderer } from "../../lib/markdown";
-import type { Message } from "../../types";
+import type { Message, ToolCallEntry } from "../../types";
 
 interface MessageBubbleProps {
   message: Message;
@@ -37,6 +36,175 @@ function LoadingDots() {
       <span style={{ animationDelay: "150ms" }} />
       <span style={{ animationDelay: "300ms" }} />
     </span>
+  );
+}
+
+// Simple inline tool row for non-web-search tools
+function ToolCallRow({ entry, isExpanded, onToggle }: {
+  entry: ToolCallEntry;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div style={{ margin: "4px 0", padding: "4px 0" }}>
+      <div
+        onClick={onToggle}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          cursor: "pointer", userSelect: "none",
+          fontSize: "calc(var(--fs) - 1px)", color: "var(--tx3)",
+        }}
+      >
+        {entry.status === "running" ? (
+          <Loader2 size={11} style={{ color: "var(--acc)", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+        ) : (
+          <span style={{ fontSize: 10, width: 11, flexShrink: 0, textAlign: "center" }}>▸</span>
+        )}
+        <FileText size={11} style={{ color: "var(--tx4)", flexShrink: 0 }} />
+        <span style={{ flex: 1, color: "var(--tx2)" }}>{entry.header}</span>
+        <ChevronDown
+          size={10}
+          style={{
+            color: "var(--tx4)",
+            transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.2s var(--ease-out-strong)",
+            flexShrink: 0,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Search commentary — shows per-entry commentary + status line with collapsible URL dropdown
+function SearchCommentary({ entries, commentary: globalCommentary }: {
+  entries: ToolCallEntry[];
+  commentary: string;
+}) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggleUrls = (id: string) => {
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  return (
+    <div
+      role="status"
+      aria-label="Searching the web"
+      className="search-commentary"
+      style={{ margin: "8px 0" }}
+    >
+      {/* Fallback: show global commentary if first entry has none */}
+      {globalCommentary && entries.length > 0 && !entries[0].commentary && (
+        <div style={{
+          fontSize: "calc(var(--fs) + .5px)",
+          color: "var(--tx)",
+          lineHeight: 1.7,
+          marginBottom: 6,
+        }}>
+          {globalCommentary}
+        </div>
+      )}
+
+      {/* One entry per search tool — each with its own commentary + status + urls */}
+      {entries.map((entry, i) => {
+        const isRunning = entry.status === "running";
+        const isError = entry.status === "error";
+        const label = entry.header || entry.params?.query || "Searching\u2026";
+        const sources = entry.fetchResults || [];
+        const okCount = sources.filter(s => s.status === "ok").length;
+        const isExpanded = expanded[entry.id] ?? true;
+
+        const statusText = isRunning
+          ? `${label}\u2026`
+          : isError
+            ? `Issue with ${label}`
+            : `Finished ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+
+        return (
+          <div key={entry.id} style={{ margin: i > 0 ? "6px 0 0" : 0 }}>
+            {/* Per-entry commentary */}
+            {entry.commentary && (
+              <div style={{
+                fontSize: "calc(var(--fs) + .5px)",
+                color: "var(--tx)",
+                lineHeight: 1.7,
+                marginBottom: 2,
+              }}>
+                {entry.commentary}
+              </div>
+            )}
+            {/* Status line — clickable to expand URLs */}
+            <div
+              onClick={sources.length > 0 ? () => toggleUrls(entry.id) : undefined}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "2px 0",
+                fontSize: "calc(var(--fs) - .5px)",
+                lineHeight: 1.5,
+                color: isError ? "var(--danger)" : "var(--tx3)",
+                cursor: sources.length > 0 ? "pointer" : "default",
+                userSelect: "none",
+                animation: `searchCommentaryIn 0.25s var(--ease-out-strong) ${i * 80}ms both`,
+              }}
+            >
+              {isRunning ? (
+                <Loader2 size={11} style={{ color: "var(--acc)", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+              ) : (
+                <ChevronDown
+                  size={11}
+                  style={{
+                    color: "var(--tx4)",
+                    flexShrink: 0,
+                    transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s var(--ease-out-strong)",
+                  }}
+                />
+              )}
+              <span style={{ flex: 1 }}>{statusText}</span>
+              {okCount > 0 && (
+                <span style={{ fontSize: "calc(var(--fs) - 3px)", color: "var(--tx4)" }}>
+                  {okCount} fetched
+                </span>
+              )}
+            </div>
+
+            {/* Collapsible URL list */}
+            {sources.length > 0 && (
+              <div style={{
+                maxHeight: isExpanded ? "300px" : "0",
+                opacity: isExpanded ? 1 : 0,
+                overflow: isExpanded ? "auto" : "hidden",
+                transition: "max-height 0.25s var(--ease-out-strong), opacity 0.15s ease-out",
+                marginLeft: 16,
+                marginBottom: isExpanded ? 4 : 0,
+              }}>
+                {sources.map((fr, j) => (
+                  <div key={j} style={{
+                    fontFamily: "var(--font)",
+                    fontSize: "calc(var(--fs) - 3px)",
+                    lineHeight: 1.65,
+                    color: fr.status === "deleted" ? "var(--tx4)" : fr.status === "ok" ? "var(--tx2)" : "var(--tx3)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    padding: "1px 0",
+                    textDecoration: fr.status === "deleted" ? "line-through" : "none",
+                  }}>
+                    {fr.status === "ok" && <span style={{ color: "var(--success)", marginRight: 4 }}>&#x2713;</span>}
+                    {fr.status === "declined" && <span style={{ color: "var(--tx4)", marginRight: 4 }}>&#x25CB;</span>}
+                    {fr.status === "deleted" && <span style={{ color: "var(--tx4)", marginRight: 4 }}>&#x2717;</span>}
+                    {fr.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -96,8 +264,7 @@ export const MessageBubble = memo(function MessageBubble({
   message,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
-  const [showSources, setShowSources] = useState(true);
-  const [showOcrText, setShowOcrText] = useState(true);
+  const [toolCallExpanded, setToolCallExpanded] = useState<Record<string, boolean>>({});
   const [lazyRef, visible] = useLazyVisible();
 
   const handleCopy = async () => {
@@ -119,68 +286,36 @@ export const MessageBubble = memo(function MessageBubble({
   let displayContent = message.content;
   let showContent = true;
 
-  // Hidden messages (e.g., search results context) are not rendered
+// Hidden messages (e.g., search results context) are not rendered
   if (message.hidden) return null;
 
-  // Strip tool calls from display — strip any {"tool":"..."} JSON blocks
-  if (
-    !isUser &&
-    displayContent.includes('"tool"')
-  ) {
-    // 1. Remove markdown code blocks containing any tool call JSON
-    displayContent = displayContent.replace(
-      /```[\w-]*\s*[\s\S]*?```/g,
-      (match) => {
-        if (match.includes('"tool"')) {
-          return "";
-        }
-        return match;
-      },
-    );
+  // Strip tool calls from display
+  if (!isUser) {
+    // 1. Remove ALL markdown code blocks (tool_call JSON lives in code blocks)
+    let stripped = displayContent.replace(/```[\s\S]*?```/g, "");
 
-    // 2. Remove any remaining raw JSON blocks containing "tool"
-    displayContent = displayContent.replace(
+    // 2. Remove raw JSON objects containing "tool" key
+    stripped = stripped.replace(
       /\{[\s\S]*?"tool"\s*:\s*"[^"]*"[\s\S]*?\}/g,
       "",
     );
 
-    displayContent = displayContent.trim();
-  }
+    // 3. Remove JSON objects that look like tool call params (no "tool" key but has "query"+"count")
+    stripped = stripped.replace(
+      /\{[\s\S]*?"query"\s*:\s*"[^"]*"[\s\S]*?"count"\s*:\s*\d+[\s\S]*?\}/g,
+      "",
+    );
+    stripped = stripped.replace(
+      /\{[\s\S]*?"count"\s*:\s*\d+[\s\S]*?"query"\s*:\s*"[^"]*"[\s\S]*?\}/g,
+      "",
+    );
 
-  // Web search sources dropdown - real-time with Searched/Fetched sections
-  const hasSearchSources =
-    message.webSearchSources && message.webSearchSources.length > 0;
-  const hasFetchedSources =
-    message.webSearchFetched && message.webSearchFetched.length > 0;
-  const isSearching = message.searchPhase === "searching";
-  const isFetching = message.searchPhase === "fetching";
-  const searchDone = message.searchPhase === "done";
-  const showSearchDropdown =
-    hasSearchSources || isSearching || isFetching || searchDone;
+    // Use stripped for display
+    displayContent = stripped.trim();
+  }
 
   // Describe phase handling
   const isDescribing = message.describePhase === "describing";
-
-  // OCR phase handling
-  const isExtractingOcr = message.ocrPhase === "extracting";
-  const ocrDone = message.ocrPhase === "done";
-  const [ocrPageIndex, setOcrPageIndex] = useState(0);
-  const [showFileContent, setShowFileContent] = useState(false);
-
-  // File read phase handling
-  const isReadingFile = message.fileReadPhase === "reading";
-  const fileReadDone = message.fileReadPhase === "done";
-
-  // Parse OCR text into pages for multi-page navigation
-  const ocrPages = useMemo(() => {
-    if (!message.ocrText) return [];
-    const parts = message.ocrText.split(/\n--- Page \d+ ---\n/);
-    return parts.filter(Boolean);
-  }, [message.ocrText]);
-  const ocrPageCount = ocrPages.length;
-  if (isExtractingOcr) {
-    displayContent = "";
-  }
 
   if (isUser && isAskQuestionResult) {
     displayContent = "Sent Answers";
@@ -209,6 +344,17 @@ export const MessageBubble = memo(function MessageBubble({
     );
   }
 
+  // ── Tool state (used by both content rendering and tool sections) ──
+  const hasToolCalls = !!(message.toolCalls && message.toolCalls.length > 0);
+  const allToolsDone = hasToolCalls && message.toolCalls!.every(tc => tc.status === "done");
+
+  // Capture commentary ONCE when tools first appear
+  const commentaryRef = useRef("");
+  if (hasToolCalls && !isUser && displayContent && !commentaryRef.current) {
+    commentaryRef.current = displayContent;
+  }
+  if (!hasToolCalls || isUser) commentaryRef.current = "";
+
   // Decide what to render
   let content: React.ReactNode;
   if (isUser) {
@@ -221,8 +367,8 @@ export const MessageBubble = memo(function MessageBubble({
     );
   } else if (isGenerating) {
     content = <LoadingDots />;
-  } else if (isStreaming || visible) {
-    // Streaming or visible — render full markdown
+  } else if (isStreaming || visible || (hasToolCalls && allToolsDone)) {
+    // Streaming, visible, or tools done (answer streaming in) — render markdown
     content = <MarkdownRenderer content={displayContent} />;
   } else {
     // Offscreen — show plain text as a lightweight placeholder
@@ -276,415 +422,44 @@ export const MessageBubble = memo(function MessageBubble({
     );
   }
 
-  // Prepend web search sources for assistant messages with real-time updates
-  if (showSearchDropdown && !isUser) {
-    content = (
+  // ── Claude-style Inline Tool Sections ──
+  // Commentary text — shown for non-web-search tools only (web search commentary is inside SearchCommentaryBox)
+  const hasWebSearchTool = hasToolCalls && message.toolCalls!.some(tc => tc.tool === "web_search");
+  const commentaryText = hasToolCalls && !isUser && commentaryRef.current && !hasWebSearchTool ? (
+    <p style={{ margin: 0 }}>{commentaryRef.current}</p>
+  ) : null;
+
+  // Inline tool sections — search commentary box for web searches, individual for other tools
+  const toolSections = hasToolCalls && !isUser ? (() => {
+    const webSearches = message.toolCalls!.filter(tc => tc.tool === "web_search");
+    const others = message.toolCalls!.filter(tc => tc.tool !== "web_search");
+
+    return (
       <>
-        <div
-          style={{
-            background: "var(--sf2)",
-            border: "1px solid var(--bd)",
-            borderRadius: 10,
-            overflow: "hidden",
-            transition: "all 0.25s ease-out",
-            marginBottom: 12,
-          }}
-        >
-          {/* Header - always clickable to toggle */}
-          <div
-            onClick={() => setShowSources(!showSources)}
-            style={{
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 12px",
-              userSelect: "none",
-              transition: "background 0.15s ease",
-            }}
-          >
-            <Search size={13} style={{ color: "var(--acc)", flexShrink: 0 }} />
-            <span
-              style={{
-                flex: 1,
-                fontSize: "calc(var(--fs) - 1px)",
-                color: "var(--tx2)",
-                fontWeight: 500,
-              }}
-            >
-              {isSearching && "Searching..."}
-              {isFetching && "Fetching pages..."}
-              {searchDone && "Search complete"}
-            </span>
-            {(isSearching || isFetching) && (
-              <Loader2
-                size={13}
-                style={{
-                  color: "var(--tx3)",
-                  animation: "spin 1s linear infinite",
-                }}
-              />
-            )}
-            <ChevronDown
-              size={13}
-              style={{
-                color: "var(--tx3)",
-                transform: showSources ? "rotate(180deg)" : "none",
-                transition: "transform 0.2s ease-out",
-              }}
-            />
-          </div>
-
-          {/* Expandable content - animated with height transition */}
-          <div
-            style={{
-              maxHeight: showSources ? "800px" : "0",
-              opacity: showSources ? 1 : 0,
-              overflow: showSources ? "auto" : "hidden",
-              transition: "max-height 0.25s ease-out, opacity 0.2s ease-out, padding 0.2s ease-out",
-              padding: showSources ? "0 12px 10px" : "0 12px",
-            }}
-          >
-              {/* Divider */}
-              <div
-                style={{ height: 1, background: "var(--bd)", marginBottom: 10 }}
-              />
-
-              {/* Searched section */}
-              {hasSearchSources && (
-                <div style={{ marginBottom: hasFetchedSources ? 10 : 0 }}>
-                  <div
-                    style={{
-                      fontSize: "10px",
-                      fontWeight: 600,
-                      color: "var(--tx3)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Searched
-                  </div>
-                  <div
-                    style={{ display: "flex", flexDirection: "column", gap: 1 }}
-                  >
-                    {message.webSearchSources!.map((s, i) => (
-                      <a
-                        key={`searched-${i}`}
-                        href={s.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: "calc(var(--fs) - 2px)",
-                          color: "var(--acc)",
-                          textDecoration: "none",
-                          padding: "3px 0",
-                          transition: "opacity 0.2s ease-out",
-                          animation: "fadeIn 0.2s ease-out",
-                        }}
-                        title={s.url}
-                      >
-                        <Globe
-                          size={11}
-                          style={{ flexShrink: 0, opacity: 0.6 }}
-                        />
-                        <span
-                          style={{
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {s.title || s.url}
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Fetched section */}
-              {hasFetchedSources && (
-                <div>
-                  <div
-                    style={{
-                      fontSize: "10px",
-                      fontWeight: 600,
-                      color: "var(--acc)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Fetched
-                  </div>
-                  <div
-                    style={{ display: "flex", flexDirection: "column", gap: 1 }}
-                  >
-                    {message.webSearchFetched!.map((s, i) => (
-                      <a
-                        key={`fetched-${i}`}
-                        href={s.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: "calc(var(--fs) - 2px)",
-                          color: "var(--acc)",
-                          textDecoration: "none",
-                          padding: "3px 0",
-                          transition: "opacity 0.2s ease-out",
-                          animation: "fadeIn 0.2s ease-out",
-                        }}
-                        title={s.url}
-                      >
-                        <Globe
-                          size={11}
-                          style={{ flexShrink: 0, opacity: 0.6 }}
-                        />
-                        <span
-                          style={{
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {s.title || s.url}
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-        <div style={{ marginTop: 8 }}>{content}</div>
+        {webSearches.length > 0 && (
+          <SearchCommentary
+            entries={webSearches}
+            commentary={commentaryRef.current}
+          />
+        )}
+        {others.map((tc) => (
+          <ToolCallRow
+            key={tc.id}
+            entry={tc}
+            isExpanded={toolCallExpanded[tc.id] ?? false}
+            onToggle={() => setToolCallExpanded(prev => ({ ...prev, [tc.id]: !prev[tc.id] }))}
+          />
+        ))}
       </>
     );
-  }
+  })() : null;
 
-  // OCR phase rendering — prepended above content like web search
-  const fileReadCard =
-    (isReadingFile || fileReadDone) && !isUser ? (
-      <div
-        style={{
-          background: "var(--sf2)",
-          border: "1px solid var(--bd)",
-          borderRadius: 10,
-          overflow: "hidden",
-          marginBottom: fileReadDone && message.content ? 12 : 0,
-        }}
-      >
-        <div
-          onClick={() => fileReadDone && message.fileReadResult && setShowFileContent(!showFileContent)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "8px 12px",
-            cursor: fileReadDone && message.fileReadResult ? "pointer" : "default",
-            userSelect: "none",
-          }}
-        >
-          <svg
-            width={13}
-            height={13}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ color: "var(--acc)", flexShrink: 0 }}
-          >
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-          </svg>
-          <span
-            style={{
-              flex: 1,
-              fontSize: "calc(var(--fs) - 1px)",
-              color: isReadingFile ? "var(--tx2)" : "var(--tx)",
-              fontWeight: 500,
-            }}
-            >
-              {isReadingFile ? "Reading File..." : `Read: ${message.fileReadFileName || "file"}`}
-          </span>
-          {isReadingFile && (
-            <Loader2
-              size={13}
-              style={{
-                color: "var(--acc)",
-                animation: "spin 1s linear infinite",
-              }}
-            />
-          )}
-          {fileReadDone && message.fileReadResult && (
-            <ChevronDown
-              size={13}
-              style={{
-                color: "var(--tx3)",
-                transform: showFileContent ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 0.2s ease",
-              }}
-            />
-          )}
-        </div>
-        {showFileContent && message.fileReadResult && (
-          <div
-            style={{
-              padding: "0 12px 12px",
-              fontSize: "calc(var(--fs) - 1px)",
-              color: "var(--tx2)",
-              whiteSpace: "pre-wrap",
-              lineHeight: 1.5,
-              maxHeight: 300,
-              overflowY: "auto",
-            }}
-          >
-            {message.fileReadResult}
-          </div>
-        )}
-      </div>
-    ) : null;
-
-  const ocrCard =
-    (isExtractingOcr || ocrDone) && !isUser ? (
-      <div
-        style={{
-          background: "var(--sf2)",
-          border: "1px solid var(--bd)",
-          borderRadius: 10,
-          overflow: "hidden",
-          transition: "all 0.25s ease-out",
-          marginBottom: ocrDone && message.content ? 12 : 0,
-        }}
-      >
-        <div
-          onClick={() => ocrDone && setShowOcrText(!showOcrText)}
-          style={{
-            cursor: ocrDone ? "pointer" : "default",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "8px 12px",
-            userSelect: "none",
-            transition: "background 0.15s ease",
-          }}
-        >
-          <svg
-            width={13}
-            height={13}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ color: "var(--acc)", flexShrink: 0 }}
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          <span
-            style={{
-              flex: 1,
-              fontSize: "calc(var(--fs) - 1px)",
-              color: isExtractingOcr ? "var(--tx2)" : "var(--tx)",
-              fontWeight: 500,
-            }}
-          >
-            {isExtractingOcr
-              ? (message.content || "Extracting text...")
-              : `OCR · ${message.ocrText ? message.ocrText.length : 0} chars`}
-          </span>
-          {isExtractingOcr && (
-            <Loader2
-              size={13}
-              style={{
-                color: "var(--acc)",
-                animation: "spin 1s linear infinite",
-              }}
-            />
-          )}
-          {ocrDone && (
-            <ChevronDown
-              size={13}
-              style={{
-                color: "var(--tx3)",
-                transform: showOcrText ? "rotate(180deg)" : "none",
-                transition: "transform 0.2s ease-out",
-              }}
-            />
-          )}
-        </div>
-
-        {/* Expandable content - animated with height transition */}
-        <div
-          style={{
-            maxHeight: ocrDone && showOcrText && message.ocrText ? "800px" : "0",
-            opacity: ocrDone && showOcrText && message.ocrText ? 1 : 0,
-            overflow: ocrDone && showOcrText && message.ocrText ? "auto" : "hidden",
-            transition: "max-height 0.25s ease-out, opacity 0.2s ease-out, padding 0.2s ease-out",
-            padding: ocrDone && showOcrText && message.ocrText ? "0 12px 10px" : "0 12px",
-          }}
-        >
-            <div
-              style={{ height: 1, background: "var(--bd)", marginBottom: 10 }}
-            />
-
-            {/* Page navigation for multi-page */}
-            {ocrPageCount > 1 && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 8 }}>
-                <button
-                  onClick={() => setOcrPageIndex(Math.max(0, ocrPageIndex - 1))}
-                  disabled={ocrPageIndex === 0}
-                  style={{
-                    background: "none", border: "none", cursor: ocrPageIndex > 0 ? "pointer" : "default",
-                    color: ocrPageIndex > 0 ? "var(--tx2)" : "var(--tx4)", padding: 2,
-                  }}
-                >
-                  <ChevronDown size={13} style={{ transform: "rotate(90deg)" }} />
-                </button>
-                <span style={{ fontSize: "calc(var(--fs) - 1px)", color: "var(--tx2)", fontWeight: 500 }}>
-                  Page {ocrPageIndex + 1} / {ocrPageCount}
-                </span>
-                <button
-                  onClick={() => setOcrPageIndex(Math.min(ocrPageCount - 1, ocrPageIndex + 1))}
-                  disabled={ocrPageIndex >= ocrPageCount - 1}
-                  style={{
-                    background: "none", border: "none", cursor: ocrPageIndex < ocrPageCount - 1 ? "pointer" : "default",
-                    color: ocrPageIndex < ocrPageCount - 1 ? "var(--tx2)" : "var(--tx4)", padding: 2,
-                  }}
-                >
-                  <ChevronDown size={13} style={{ transform: "rotate(-90deg)" }} />
-                </button>
-              </div>
-            )}
-
-            <pre
-              style={{
-                fontSize: "calc(var(--fs) - 1.5px)",
-                color: "var(--tx2)",
-                lineHeight: 1.6,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                margin: 0,
-                fontFamily: "var(--font)",
-              }}
-            >
-              {ocrPageCount > 1 ? ocrPages[ocrPageIndex] : message.ocrText}
-            </pre>
-          </div>
-        </div>
-    ) : null;
+  // Main answer content — show when tools are done or there's more than just commentary
+  // With SearchCommentaryBox, commentary is shown inside the box; only show main content
+  // when there's actual answer text beyond the commentary
+  const isOnlyCommentary = allToolsDone && commentaryRef.current && displayContent === commentaryRef.current;
+  const showMainContent = !hasToolCalls || (allToolsDone && !isOnlyCommentary);
+  const mainContent = showMainContent ? content : null;
 
   // Render image attachments
   const attachmentContent =
@@ -778,9 +553,9 @@ export const MessageBubble = memo(function MessageBubble({
       <div className="msg-body">
         <div className="msg-txt">
           {attachmentContent}
-          {ocrCard}
-          {content}
-          {fileReadCard}
+          {commentaryText}
+          {toolSections}
+          {mainContent}
         </div>
         <div className="msg-acts">
           <button

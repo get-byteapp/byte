@@ -10,6 +10,13 @@ function preprocessMath(content: string): string {
   return content
     .replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$')
     .replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$')
+    .replace(/\u2011/g, '-')   // non-breaking hyphen → regular hyphen
+    .replace(/\u2010/g, '-')   // hyphen character → regular hyphen
+    .replace(/\u2012/g, '-')   // figure dash → regular hyphen
+    .replace(/\u2013/g, '-')   // en dash → hyphen
+    .replace(/\u2014/g, '-')   // em dash → hyphen
+    .replace(/\u202F/g, ' ')   // narrow no-break space → regular space
+    .replace(/\u00A0/g, ' ')   // non-breaking space → regular space
 }
 
 function decodeHtmlEntities(text: string): string {
@@ -167,11 +174,11 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: { co
       {contentParts.map((part, index) => {
         if (part.startsWith('DETAIL_')) {
           const detailEl = detailElements.find(d => d.id === part)
-          return detailEl ? <div key={index}>{detailEl.element}</div> : null
+          return detailEl ? <div key={index} style={{ overflowX: 'auto', maxWidth: '100%' }}>{detailEl.element}</div> : null
         }
         if (!part.trim()) return null
         return (
-          <div key={index}>
+          <div key={index} style={{ overflowX: 'auto', maxWidth: '100%' }}>
             <MarkdownContent content={part} />
           </div>
         )

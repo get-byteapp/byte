@@ -75,6 +75,9 @@
 
 /* Tool card */
 .tool-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:9px 12px;margin:12px 0;display:flex;align-items:center;gap:10px}
+
+/* Search commentary — inline, no box */
+.search-commentary{animation:searchCommentaryIn 0.25s var(--ease-out-strong) both}
 .tc-icon{width:28px;height:28px;border-radius:var(--r-sm);background:var(--sf2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
 .tc-body{flex:1;min-width:0}
 .tc-label{font-size:calc(var(--fs) - 3px);color:var(--tx3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:2px}
@@ -88,3 +91,8 @@
 
 /* Streaming stop state */
 .send-stopping{background:var(--danger-fill) !important}
+
+/* Scroll to bottom button */
+.scroll-to-bottom-btn{position:absolute;bottom:120px;right:20px;width:40px;height:40px;border-radius:50%;background:var(--sf2);border:1px solid var(--bd);color:var(--tx2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--ease);font-size:18px;z-index:10}
+.scroll-to-bottom-btn:hover{background:var(--sf3);color:var(--tx);border-color:var(--bd2)}
+.scroll-to-bottom-btn:active{transform:scale(0.95)}

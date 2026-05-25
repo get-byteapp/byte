@@ -876,6 +876,13 @@ async function streamGroq(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let doneCalled = false;
+  const callDone = () => {
+    if (!doneCalled) {
+      doneCalled = true;
+      onDone();
+    }
+  };
 
   try {
     while (true) {
@@ -890,11 +897,11 @@ async function streamGroq(
         if (!line.trim() || !line.startsWith("data: ")) continue;
         const data = line.slice(6).trim();
         if (data === "[DONE]") {
-          onDone();
+          callDone();
           return;
         }
         // Skip error objects that may appear in stream
-        if (data.startsWith("{") && data.includes("error")) {
+        if (data.startsWith("{\"error\"")) {
           console.warn("[Groq] Ignoring error in stream:", data);
           continue;
         }
@@ -915,7 +922,7 @@ async function streamGroq(
       }
     }
     reader.releaseLock();
-    onDone();
+    callDone();
   }
 }
 
@@ -1139,6 +1146,13 @@ async function streamOpenAICompatible(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let doneCalled = false;
+  const callDone = () => {
+    if (!doneCalled) {
+      doneCalled = true;
+      onDone();
+    }
+  };
 
   try {
     while (true) {
@@ -1154,11 +1168,11 @@ async function streamOpenAICompatible(
         if (!trimmed || !trimmed.startsWith("data:")) continue;
         const data = trimmed.slice(5).trim();
         if (data === "[DONE]") {
-          onDone();
+          callDone();
           return;
         }
         // Skip error objects that may appear in stream
-        if (data.startsWith("{") && data.includes("error")) {
+        if (data.startsWith("{\"error\"")) {
           console.warn("[OpenAI-compat] Ignoring error in stream:", data);
           continue;
         }
@@ -1174,12 +1188,12 @@ async function streamOpenAICompatible(
   } finally {
     // Read any remaining buffered data
     if (buffer.trim()) {
-      if (buffer.includes("error")) {
+      if (buffer.includes("\"error\"")) {
         console.warn("[OpenAI-compat] Ignoring error in buffered data:", buffer);
       }
     }
     reader.releaseLock();
-    onDone();
+    callDone();
   }
 }
 
@@ -1771,29 +1785,47 @@ export async function searchWithLangSearch(
   apiKey: string,
   options?: { count?: number; freshness?: string },
 ): Promise<LangSearchResult[]> {
-  const response = await tauriFetch("https://api.langsearch.com/v1/web-search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      query,
-      freshness: options?.freshness || "oneYear",
-      summary: false,
-      count: options?.count || 5,
-    }),
-  });
+  const maxRetries = 3;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await tauriFetch("https://api.langsearch.com/v1/web-search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          query,
+          freshness: options?.freshness || "oneYear",
+          summary: false,
+          count: options?.count || 5,
+        }),
+      });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`LangSearch API error: ${response.status} ${error}`);
+      if (!response.ok) {
+        const error = await response.text();
+        if (response.status === 429 && attempt < maxRetries) {
+          const wait = 1000 * Math.pow(2, attempt);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+        throw new Error(`LangSearch API error: ${response.status} ${error}`);
+      }
+
+      const result: LangSearchResponse = await response.json();
+      if (result.code !== 200)
+        throw new Error("LangSearch API returned non-200 status");
+      return result.data?.webPages?.value || [];
+    } catch (err: any) {
+      if (attempt < maxRetries && err.message?.includes("429")) {
+        const wait = 1000 * Math.pow(2, attempt);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      throw err;
+    }
   }
-
-  const result: LangSearchResponse = await response.json();
-  if (result.code !== 200)
-    throw new Error("LangSearch API returned non-200 status");
-  return result.data?.webPages?.value || [];
+  return [];
 }
 
 // Rate limit for Jina API calls - with exponential backoff on 429

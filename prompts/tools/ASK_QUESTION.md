@@ -16,21 +16,22 @@ When you need input from the user to give a better answer, use the `ask_question
 
 ## Output Format
 
-Output ONLY a raw JSON object. No extra text, no explanation, no markdown fences.
+Output a brief natural language sentence explaining why you're asking, followed by the raw JSON object on a new line:
+
+Let me ask you a quick question first.
 
 {"tool":"ask_question","questions":[{"id":"q1","question":"What style?","type":"single_select","options":["Casual","Professional","Humorous"]}]}
 
 Wrong (do not do this):
 - "Asking Question... {"tool":..."
-- Any text before or after the JSON
 - Wrapping in code blocks or backticks
+- Multiple questions in separate tool calls — put them all in one
 
 ## Rules
-1. Output the JSON object and NOTHING else
+1. Always precede the JSON with a brief explanatory sentence
 2. Keep questions few and targeted — 1-2 questions max unless genuinely complex
 3. Do NOT use this tool for chitchat or trivial clarifications you can handle inline
-4. Do NOT narrate, explain, or comment on what you're doing
-5. Prefer asking simple clarifications in plain text when it's one quick thing
+4. Prefer asking simple clarifications in plain text when it's one quick thing
 
 ## Question Types
 

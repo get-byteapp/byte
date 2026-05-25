@@ -1,9 +1,9 @@
-import { MessageCircle, Folder, Clock, Zap, Users, Palette } from 'lucide-react'
+import { MessageSquare, Folder, Clock, Zap, Users, Palette } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import type { ActiveView } from '../../types'
 
 const navItems: { id: ActiveView; label: string; icon: React.ReactNode }[] = [
-  { id: 'chats', label: 'Chats', icon: <MessageCircle size={18} /> },
+  { id: 'chats', label: 'Chats', icon: <MessageSquare size={18} /> },
   { id: 'projects', label: 'Projects', icon: <Folder size={18} /> },
   { id: 'council', label: 'Council', icon: <Clock size={18} /> },
   { id: 'sparks', label: 'Sparks', icon: <Zap size={18} /> },

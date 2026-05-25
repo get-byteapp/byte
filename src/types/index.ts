@@ -27,6 +27,18 @@ export interface FileAttachment {
 
 export type Attachment = ImageAttachment | FileAttachment;
 
+export interface ToolCallEntry {
+  id: string;
+  tool: string;
+  header: string;
+  commentary?: string; // AI's natural language sentence shown to user
+  params: Record<string, any>;
+  status: "running" | "done" | "error";
+  result?: string;
+  error?: string;
+  fetchResults?: { url: string; title: string; status: "ok" | "error" | "declined" | "deleted" }[];
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system";
@@ -37,15 +49,17 @@ export interface Message {
   pinned?: boolean;
   hidden?: boolean;
   attachments?: Attachment[];
+  toolCalls?: ToolCallEntry[];
+  // Legacy fields — kept for backward compat during transition
   webSearchSources?: { url: string; title: string }[];
   webSearchFetched?: { url: string; title: string }[];
   searchPhase?: "searching" | "fetching" | "done";
-  describePhase?: "describing" | "done"; // for describe-mode interstitial
-  ocrPhase?: "extracting" | "done"; // for OCR processing phase
-  fileReadPhase?: "reading" | "done"; // for file_read tool phase
-  fileReadResult?: string; // file content returned by file_read
-  fileReadFileName?: string; // name of file that was read
-  ocrText?: string; // extracted OCR text for display
+  describePhase?: "describing" | "done";
+  ocrPhase?: "extracting" | "done";
+  fileReadPhase?: "reading" | "done";
+  fileReadResult?: string;
+  fileReadFileName?: string;
+  ocrText?: string;
 }
 
 export type ToolId =

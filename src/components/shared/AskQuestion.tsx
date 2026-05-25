@@ -442,11 +442,16 @@ export function AskQuestion({ payload, onComplete, onCancel }: AskQuestionProps)
               
               {/* Far right: Forward arrow - only show if multiple questions */}
               {visibleQuestions.length > 1 && (
-                <button 
-                  className="aq-footer-arrow" 
-                  onClick={() => setCurrentIndex(Math.min(visibleQuestions.length - 1, currentIndex + 1))}
-                  disabled={currentIndex === visibleQuestions.length - 1}
-                  title="Next (→)"
+                <button
+                  className="aq-footer-arrow"
+                  onClick={() => {
+                    if (currentIndex < visibleQuestions.length - 1) {
+                      setCurrentIndex(currentIndex + 1);
+                    } else {
+                      setShowConfirm(true);
+                    }
+                  }}
+                  title={currentIndex < visibleQuestions.length - 1 ? "Next (→)" : "Submit"}
                 >
                   →
                 </button>

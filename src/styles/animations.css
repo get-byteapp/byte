@@ -260,6 +260,22 @@
   transform: translateY(-2px);
 }
 
+/* ── SEARCH COMMENTARY ANIMATION ── */
+@keyframes searchCommentaryIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.search-commentary {
+  animation: searchCommentaryIn 0.3s var(--ease-out-strong) both;
+}
+
 /* ── REDUCED MOTION ── */
 @media (prefers-reduced-motion: reduce) {
   .msg,
@@ -267,7 +283,8 @@
   .mm-box,
   .sug-menu,
   .chat-menu-dropdown,
-  .selection-bar {
+  .selection-bar,
+  .search-commentary {
     animation: none;
   }
   
