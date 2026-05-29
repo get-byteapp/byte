@@ -585,7 +585,7 @@ pre code{background:transparent;padding:0}
 .pc-acts{display:flex;gap:5px}
 
 /* chat input */
-.chat-in{padding:10px 20px 16px;flex-shrink:0}
+.chat-in{padding:10px 20px 16px;flex-shrink:0;background:transparent}
 
 /* ─────────────────────────────────────
    PROJECTS VIEW

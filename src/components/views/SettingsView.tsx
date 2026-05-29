@@ -214,7 +214,7 @@ function ProviderModal({
     replicate: "https://api.replicate.com/v1",
     "aleph-alpha": "https://api.aleph-alpha.com/v1",
     ollama: "http://localhost:11434/v1",
-    "ollama-cloud": "https://api.ollama.com/v1",
+    "ollama-cloud": "https://ollama.com",
     lmstudio: "http://localhost:1234/v1",
     cerebras: "https://api.cerebras.ai/v1",
   };

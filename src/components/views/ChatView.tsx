@@ -264,17 +264,13 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
   const handleScroll = useCallback(() => {
     if (!chatMsgsRef.current) return;
     const currentScrollTop = chatMsgsRef.current.scrollTop;
+    const atBottom = checkIfAtBottom();
     
-    // If scrolling up, don't auto-scroll
-    if (currentScrollTop < lastScrollTopRef.current) {
-      setIsAtBottom(false);
-    } else {
-      const atBottom = checkIfAtBottom();
+    // If scrolling up or not at bottom, stop auto-scroll
+    if (currentScrollTop < lastScrollTopRef.current || !atBottom) {
       setIsAtBottom(atBottom);
-      // If scrolled back to bottom, re-enable auto-scroll
-      if (atBottom) {
-        setIsAtBottom(true);
-      }
+    } else {
+      setIsAtBottom(true);
     }
     
     lastScrollTopRef.current = currentScrollTop;
@@ -2448,18 +2444,18 @@ const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
           <div ref={messagesEndRef} />
         </div>
       </div>
-      {showScrollButton && (
-        <button
-          onClick={scrollToBottom}
-          className="scroll-to-bottom-btn"
-          title="Scroll to bottom"
-          aria-label="Scroll to bottom"
-        >
-          ↓
-        </button>
-      )}
       {!activeAskQuestion && !activeSuggestMemory && (
         <div className="chat-in">
+          {showScrollButton && (
+            <button
+              onClick={scrollToBottom}
+              className="scroll-to-bottom-btn"
+              title="Scroll to bottom"
+              aria-label="Scroll to bottom"
+            >
+              ↓
+            </button>
+          )}
           <InputBox
             variant="chat"
             onSend={handleSend}

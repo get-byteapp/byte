@@ -155,7 +155,10 @@ export function modelSupportsVision(
       id.includes("llava") ||
       id.includes("bakllava") ||
       id.includes("moondream") ||
-      id.includes("pixtral")
+      id.includes("pixtral") ||
+      id.includes("gemma3") ||
+      id.includes("gemma4") ||
+      id.includes("minicpm")
     );
   return false;
 }
@@ -165,6 +168,105 @@ export function formatContextWindow(contextWindow: number): string {
     return `${Math.floor(contextWindow / 1000000)}M`;
   if (contextWindow >= 1000) return `${Math.floor(contextWindow / 1000)}K`;
   return contextWindow.toString();
+}
+
+function formatOllamaModelName(modelId: string): string {
+  // Ollama model IDs look like "gemma3:12b" or "deepseek-v3.2" or "qwen3-vl:235b-instruct"
+  // The format is: family-variant:size-quant or family-variant
+  if (modelId.includes(":")) {
+    const [family, variant] = modelId.split(":");
+    const familyDisplay = family
+      .split("-")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+    const variantDisplay = variant
+      .split("-")
+      .map((w) => {
+        const upper = w.toUpperCase();
+        if (/^\d/.test(w) && (upper.endsWith("B") || upper.endsWith("M") || upper.endsWith("T")))
+          return upper;
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      })
+      .join(" ");
+    return `${familyDisplay} (${variantDisplay})`;
+  }
+  // No colon — just format the dashes
+  return modelId
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function getOllamaContextWindow(modelId: string): number {
+  const id = modelId.toLowerCase();
+
+  // Model family context window lookup (based on Ollama library pages)
+  const familyMap: [RegExp, number][] = [
+    [/^gemma4/, 131072],
+    [/^gemma3.*(270m|1b)/, 32768],
+    [/^gemma3/, 131072],
+    [/^gemini-3/, 1048576],
+    [/^deepseek-(v3|v4|r1)/, 131072],
+    [/^qwen3\.5/, 131072],
+    [/^qwen3-(vl|next|coder)/, 131072],
+    [/^qwen3/, 131072],
+    [/^kimi-k2/, 131072],
+    [/^glm-[45]/, 131072],
+    [/^minimax-m2/, 1048576],
+    [/^mistral-large-3/, 131072],
+    [/^ministral-3/, 131072],
+    [/^devstral/, 131072],
+    [/^nemotron-3/, 131072],
+    [/^gpt-oss/, 131072],
+    [/^cogito/, 131072],
+    [/^rnj-/, 131072],
+    [/^llama3\.3/, 131072],
+    [/^llama3\.[12]/, 131072],
+    [/^llama3/, 8192],
+    [/^mistral/, 32768],
+    [/^mixtral/, 32768],
+    [/^phi[34]/, 131072],
+    [/^phi/, 4096],
+    [/^command-r/, 131072],
+    [/^qwq/, 131072],
+    [/^deepscaler/, 8192],
+    [/^opencoder/, 131072],
+    [/^granite/, 131072],
+    [/^nomic/, 8192],
+    [/^dolphin/, 32768],
+    [/^orca/, 8192],
+    [/^tinyllama/, 4096],
+    [/^codellama/, 16384],
+    [/^snowflake/, 131072],
+  ];
+
+  for (const [pattern, ctxWindow] of familyMap) {
+    if (pattern.test(id)) return ctxWindow;
+  }
+
+  // Infer from parameter size in tag: very small models tend to have smaller context
+  const sizeMatch = id.match(/:(\d+)(m|b|t)/i);
+  if (sizeMatch) {
+    const size = parseInt(sizeMatch[1]);
+    const unit = sizeMatch[2].toLowerCase();
+    if (unit === "m" && size <= 500) return 32768; // sub-1B models
+    if (unit === "t") return 131072; // 1T parameter models
+  }
+
+  return 131072; // default for modern models
+}
+
+function ollamaModelSupportsVision(modelId: string): boolean {
+  const id = modelId.toLowerCase();
+  const visionPatterns = [
+    "vision", "llava", "bakllava", "moondream", "pixtral",
+    "gemma3", "gemma4", "minicpm", "phi-3.5", "qwen-vl",
+    "llama3.2-vision", "llava-llama3",
+  ];
+  for (const pattern of visionPatterns) {
+    if (id.includes(pattern)) return true;
+  }
+  return false;
 }
 
 export async function fetchModels(provider: Provider): Promise<Model[]> {
@@ -421,22 +523,24 @@ export async function fetchModels(provider: Provider): Promise<Model[]> {
     }));
   } else if (provider.id === "ollama-cloud") {
     headers["Authorization"] = `Bearer ${provider.apiKey}`;
-    const response = await tauriFetch(`${provider.baseUrl}/models`, { headers });
+    const response = await tauriFetch(`${provider.baseUrl}/api/tags`, { headers });
     if (!response.ok)
-      throw new Error(`Failed to fetch models: ${response.statusText}`);
+      throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
     const data = await response.json();
-    const modelsData = data.data || [];
-    return modelsData.map((m: any) => ({
-      id: m.id,
-      name: getDisplayName(m.id),
-      providerId: provider.id,
-      contextWindow: m.context_length || 128000,
-      enabled: false,
-      capabilities: {
-        webSearch: false,
-        supportsVision: modelSupportsVision(provider.id, m.id),
-      },
-    }));
+    const modelsData: any[] = data.models || [];
+    return modelsData
+      .filter((m: any) => m.name)
+      .map((m: any) => ({
+        id: m.name,
+        name: formatOllamaModelName(m.name),
+        providerId: provider.id,
+        contextWindow: getOllamaContextWindow(m.name),
+        enabled: false,
+        capabilities: {
+          webSearch: false,
+          supportsVision: ollamaModelSupportsVision(m.name),
+        },
+      }));
   } else if (provider.id === "ollama" || provider.id === "lmstudio") {
     let modelsData: any[] = [];
 
@@ -758,6 +862,84 @@ export async function describeImage(
   return data.choices?.[0]?.message?.content || "Could not describe image.";
 }
 
+async function streamOllamaCloud(
+  provider: Provider,
+  model: Model,
+  messages: Message[],
+  systemPrompt: string,
+  onChunk: (text: string) => void,
+  onDone: () => void,
+  _onError: (error: Error) => void,
+  controller: AbortController,
+  _useNativeSearch: boolean = false,
+  _attachments?: ImageAttachment[],
+) {
+  const response = await tauriFetch(`${provider.baseUrl}/api/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${provider.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: model.id,
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      system: systemPrompt || undefined,
+      stream: true,
+    }),
+    signal: controller.signal,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`API error: ${response.status} ${error}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let doneCalled = false;
+  const callDone = () => {
+    if (!doneCalled) {
+      doneCalled = true;
+      onDone();
+    }
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          const content = parsed.message?.content;
+          if (content) onChunk(content);
+          if (parsed.done) {
+            callDone();
+            return;
+          }
+        } catch {
+          // skip malformed JSON
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+    callDone();
+  }
+}
+
 async function streamGroq(
   provider: Provider,
   model: Model,
@@ -975,6 +1157,19 @@ export function streamChat(
         );
       } else if (provider.id === "google") {
         await streamGoogle(
+          provider,
+          model,
+          messages,
+          systemPrompt,
+          onChunk,
+          onDone,
+          onError,
+          controller,
+          useNativeSearch,
+          attachments,
+        );
+      } else if (provider.id === "ollama-cloud") {
+        await streamOllamaCloud(
           provider,
           model,
           messages,
