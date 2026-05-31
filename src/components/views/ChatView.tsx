@@ -247,54 +247,38 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
   const messagesLength = chat?.messages.length ?? 0;
   const lastContent = chat?.messages[messagesLength - 1]?.content;
-  const [isAtBottom, setIsAtBottom] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const chatMsgsRef = useRef<HTMLDivElement>(null);
-  const lastScrollTopRef = useRef<number>(0);
+  const wasAtBottomRef = useRef(true);
 
-  // Check if user is at the bottom of the chat
   const checkIfAtBottom = useCallback(() => {
     if (!chatMsgsRef.current) return true;
     const { scrollHeight, scrollTop, clientHeight } = chatMsgsRef.current;
-    // Consider "at bottom" if within 100px of the bottom
-    return scrollHeight - scrollTop - clientHeight < 100;
+    return scrollHeight - scrollTop - clientHeight < 20;
   }, []);
 
-  // Handle scroll events
   const handleScroll = useCallback(() => {
     if (!chatMsgsRef.current) return;
-    const currentScrollTop = chatMsgsRef.current.scrollTop;
-    const atBottom = checkIfAtBottom();
-    
-    // If scrolling up or not at bottom, stop auto-scroll
-    if (currentScrollTop < lastScrollTopRef.current || !atBottom) {
-      setIsAtBottom(atBottom);
-    } else {
-      setIsAtBottom(true);
-    }
-    
-    lastScrollTopRef.current = currentScrollTop;
-    setShowScrollButton(!checkIfAtBottom());
+    wasAtBottomRef.current = checkIfAtBottom();
+    setShowScrollButton(!wasAtBottomRef.current);
   }, [checkIfAtBottom]);
 
-  // Auto-scroll only if at bottom
-  useEffect(() => {
-    if (isAtBottom && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messagesLength, lastContent, isAtBottom]);
-
-  // Scroll to bottom button handler
   const scrollToBottom = useCallback(() => {
     if (chatMsgsRef.current) {
+      wasAtBottomRef.current = true;
+      setShowScrollButton(false);
       chatMsgsRef.current.scrollTo({
         top: chatMsgsRef.current.scrollHeight,
         behavior: "smooth",
       });
-      setIsAtBottom(true);
-      setShowScrollButton(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (wasAtBottomRef.current && chatMsgsRef.current) {
+      chatMsgsRef.current.scrollTop = chatMsgsRef.current.scrollHeight;
+    }
+  }, [messagesLength, lastContent]);
 
   const handleStop = useCallback(() => {
     if (streamAbortRef.current) {
@@ -372,7 +356,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
   // Parsed tool operation from the AI response
   interface Op {
-    type: "web_search" | "fetch" | "delete";
+    type: "web_search" | "fetch" | "delete" | "save";
     commentary?: string; // only for tools
     // web_search
     header?: string;
@@ -381,6 +365,9 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     freshness?: string;
     // fetch / delete
     indices?: number[];
+    // save
+    index?: number;
+    summary?: string;
   }
 
   // Parse ALL operations from the AI response — tools + subtools
@@ -437,6 +424,13 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         } else if (tool === "delete" && Array.isArray(payload.indices)) {
           results.push({ type: "delete", indices: payload.indices });
           console.log("[PARSE] Found delete: indices=%s", JSON.stringify(payload.indices));
+        } else if (tool === "save" && typeof payload.index === "number") {
+          results.push({
+            type: "save",
+            index: payload.index,
+            summary: typeof payload.summary === "string" ? payload.summary : "",
+          });
+          console.log("[PARSE] Found save: index=%s", JSON.stringify(payload.index));
         } else {
           console.log("[PARSE] Unknown operation: tool=%s", tool);
         }
@@ -447,6 +441,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     }
     console.log("[PARSE] Total operations found:", results.length);
     return results;
+  };
+
+  // Extract commentary: text before the first tool-fence line
+  const commentaryBeforeFence = (content: string): string => {
+    if (!content) return "";
+    const fenceIdx = content.search(/```tool_calls?\b/);
+    if (fenceIdx < 0) return content.trim();
+    return content.slice(0, fenceIdx);
   };
 
   // Extract per-tool commentary from response text between blocks
@@ -485,7 +487,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       currentMessages: Message[],
       ) => {
         // Dedup: skip if this exact operation was already executed
-        const opKey = `${op.type}:${op.header || ""}:${op.query || ""}:${JSON.stringify(op.indices || [])}`;
+        const opKey = `${op.type}:${op.header || ""}:${op.query || ""}:${JSON.stringify(op.indices || [])}:${op.index ?? ""}:${op.summary ?? ""}`;
         if (executedOpsRef.current.has(opKey)) {
           console.log("[EXEC] SKIP duplicate op:", opKey);
           return currentMessages;
@@ -535,7 +537,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           role: "user",
           content: `[Web search results for "${query}"]\n\n${searchResults
             .map((r: any, i: number) => `${i + 1}. **${r.name || r.displayUrl}**\n   URL: ${r.url}\n   ${r.snippet || ""}`)
-            .join("\n\n")}`,
+            .join("\n\n")}\n\nHIGHLY RECOMMENDED: Fetch at least 1 URL with {"subtool":"fetch","indices":[0]} to get full page content before answering. After fetching, synthesize the results and provide your answer — do not ask the user more questions unless you have to. Subtools (fetch/delete/save) must not have any commentary text before them — just the bare fenced block.`,
           timestamp: Date.now(),
           status: "sent",
           hidden: true,
@@ -543,9 +545,12 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       } else if (op.type === "fetch" && op.indices) {
         console.log("[EXEC] Fetching indices:", JSON.stringify(op.indices));
         const chatNow = useStore.getState().chats.find(c => c.id === chatId);
-        const msg = chatNow?.messages.find(m => m.id === toolMsgId);
-        const entries = msg?.toolCalls?.filter(tc => tc.tool === "web_search") || [];
-        const latestSearch = entries[entries.length - 1];
+        const allEntries = (chatNow?.messages || []).flatMap(m => m.toolCalls || []);
+        const webSearchEntries = allEntries.filter(tc => tc.tool === "web_search");
+        const latestSearch = webSearchEntries[webSearchEntries.length - 1];
+        const parentMsgId = latestSearch
+          ? (chatNow?.messages.find(m => (m.toolCalls || []).some(tc => tc.id === latestSearch.id))?.id || toolMsgId)
+          : toolMsgId;
         if (!latestSearch || !latestSearch.fetchResults) {
           console.log("[EXEC] No web_search entry found for fetch, skipping");
         } else {
@@ -575,7 +580,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             const c2 = useStore.getState().chats.find(c => c.id === chatId);
             if (c2) updateChat(chatId, {
               messages: c2.messages.map(m =>
-                m.id === toolMsgId
+                m.id === parentMsgId
                   ? {
                       ...m,
                       toolCalls: (m.toolCalls || []).map(tc =>
@@ -589,21 +594,26 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                   : m
               ),
             });
+            console.log("[EXEC] Updated UI: marked index", idx, "as ok for url:", result.url);
           } catch {
             // skip unscrapeable
+            console.log("[EXEC] Fetch FAILED:", result.url);
           }
         }
       } else if (op.type === "delete" && op.indices) {
         console.log("[EXEC] Deleting indices:", JSON.stringify(op.indices));
         const chatNow = useStore.getState().chats.find(c => c.id === chatId);
-        const msg = chatNow?.messages.find(m => m.id === toolMsgId);
-        const entries = msg?.toolCalls?.filter(tc => tc.tool === "web_search") || [];
-        const latestSearch = entries[entries.length - 1];
+        const allEntries = (chatNow?.messages || []).flatMap(m => m.toolCalls || []);
+        const webSearchEntries = allEntries.filter(tc => tc.tool === "web_search");
+        const latestSearch = webSearchEntries[webSearchEntries.length - 1];
+        const parentMsgId = latestSearch
+          ? (chatNow?.messages.find(m => (m.toolCalls || []).some(tc => tc.id === latestSearch.id))?.id || toolMsgId)
+          : toolMsgId;
         if (latestSearch && chatNow) {
           console.log("[EXEC] Delete on web_search:", latestSearch.header);
           updateChat(chatId, {
             messages: chatNow.messages.map(m =>
-              m.id === toolMsgId
+              m.id === parentMsgId
                 ? {
                     ...m,
                     toolCalls: (m.toolCalls || []).map(tc =>
@@ -617,6 +627,44 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                 : m
             ),
           });
+        }
+      } else if (op.type === "save" && op.index !== undefined) {
+        console.log("[EXEC] Saving index:", op.index);
+        const chatNow = useStore.getState().chats.find(c => c.id === chatId);
+        const allEntries = (chatNow?.messages || []).flatMap(m => m.toolCalls || []);
+        const webSearchEntries = allEntries.filter(tc => tc.tool === "web_search");
+        const latestSearch = webSearchEntries[webSearchEntries.length - 1];
+        const parentMsgId = latestSearch
+          ? (chatNow?.messages.find(m => (m.toolCalls || []).some(tc => tc.id === latestSearch.id))?.id || toolMsgId)
+          : toolMsgId;
+        if (latestSearch && chatNow) {
+          const savedUrl = (latestSearch.fetchResults || [])[op.index]?.url || "";
+          updateChat(chatId, {
+            messages: chatNow.messages.map(m =>
+              m.id === parentMsgId
+                ? {
+                    ...m,
+                    toolCalls: (m.toolCalls || []).map(tc =>
+                      tc.id === latestSearch.id
+                        ? { ...tc, fetchResults: (tc.fetchResults || []).map((fr, fi) =>
+                            fi === op.index ? { ...fr, status: "deleted" as const } : fr
+                          )}
+                        : tc
+                    ),
+                  }
+                : m
+            ),
+          });
+          if ((op.summary || "").trim()) {
+            hiddenMessages.push({
+              id: crypto.randomUUID(),
+              role: "user",
+              content: `[Saved summary from ${savedUrl}]\n${op.summary}`,
+              timestamp: Date.now(),
+              status: "sent",
+              hidden: true,
+            });
+          }
         }
       }
 
@@ -649,9 +697,10 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             let acc: string;
             if (!followUpStarted) { followUpStarted = true; acc = chunk; }
             else { acc = (ex?.rawContent || ex?.content || "") + chunk; }
-            const hasSearch = /"tool"\s*:\s*"(web_search|search)"/.test(acc);
-            const disp = hasSearch
-              ? (extractToolCommentary(acc, ["web_search", "news_search", "search"]) || "")
+            const hasFence = /```tool_calls?\b/.test(acc);
+            const isSubtool = hasFence && /"subtool"\s*:/.test(acc);
+            const disp = hasFence
+              ? (isSubtool ? "" : commentaryBeforeFence(acc))
               : acc;
             updateChat(chatId, {
               messages: c.messages.map(m =>
@@ -968,12 +1017,12 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               }
 
               // Detect web_search tool call during post-search streaming
-              const hasNextSearch =
-                /"tool"\s*:\s*"(web_search|news_search|search)"/.test(accumulated);
-              let displayContent = accumulated;
-              if (hasNextSearch) {
-                displayContent = extractToolCommentary(accumulated, ["web_search", "news_search", "search"]) || "";
-              }
+              const hasNextFence =
+                /```tool_calls?\b/.test(accumulated);
+              const isSubtool = hasNextFence && /"subtool"\s*:/.test(accumulated);
+              const displayContent = hasNextFence
+                ? (isSubtool ? "" : commentaryBeforeFence(accumulated))
+                : accumulated;
 
               updateChat(chatId, {
                 messages: chat.messages.map((m) =>
@@ -1231,39 +1280,13 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             existingMsg?.rawContent || existingMsg?.content || "";
           const accumulatedContent = currentRaw + chunk;
 
-          const isAskQuestion =
-            accumulatedContent.includes('"tool":"ask_question"') ||
-            accumulatedContent.includes('"tool": "ask_question"');
+          const hasAnyFence =
+            /```tool_calls?\b/.test(accumulatedContent);
+          const isSubtool = hasAnyFence && /"subtool"\s*:/.test(accumulatedContent);
 
-          const isConfirmAction =
-            accumulatedContent.includes('"tool":"confirm_action"') ||
-            accumulatedContent.includes('"tool": "confirm_action"');
-
-          const isFileRead =
-            accumulatedContent.includes('"tool":"file_read"') ||
-            accumulatedContent.includes('"tool": "file_read"') ||
-            accumulatedContent.includes('\\"tool\\":\\"file_read\\"');
-
-          const isSuggestMemory =
-            accumulatedContent.includes('"tool":"suggest_memory"') ||
-            accumulatedContent.includes('"tool": "suggest_memory"');
-
-          const isWebSearch =
-            /"tool"\s*:\s*"(web_search|news_search|search)"/.test(
-              accumulatedContent,
-            );
-
-          let displayContent = accumulatedContent;
-          if (isWebSearch)
-            displayContent = extractToolCommentary(accumulatedContent, ["web_search", "news_search", "search"]) || "";
-          else if (isAskQuestion)
-            displayContent = extractToolCommentary(accumulatedContent, ["ask_question"]) || "";
-          else if (isConfirmAction)
-            displayContent = extractToolCommentary(accumulatedContent, ["confirm_action"]) || "";
-          else if (isFileRead)
-            displayContent = extractToolCommentary(accumulatedContent, ["file_read"]) || "";
-          else if (isSuggestMemory)
-            displayContent = extractToolCommentary(accumulatedContent, ["suggest_memory"]) || "";
+          const displayContent = hasAnyFence
+            ? (isSubtool ? "" : commentaryBeforeFence(accumulatedContent))
+            : accumulatedContent;
 
           updateChat(activeChatId, {
             messages: chat.messages.map((m) =>
@@ -2022,47 +2045,12 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               existingMsg?.rawContent || existingMsg?.content || "";
             const accumulatedContent = currentRaw + chunk;
 
-            // Strip escaped backticks and unescape JSON quotes for tool detection
-            const cleanedForDetection = accumulatedContent
-              .replace(/\\```[\w-]*\n?/g, "")
-              .replace(/```[\w-]*\n?/g, "")
-              .replace(/\\"/g, '"');
-
-            // Check if this looks like an ask_question tool call
-            // Only match the specific "tool":"ask_question" pattern - avoid false positives
-            const isAskQuestion =
-              cleanedForDetection.includes('"tool":"ask_question"') ||
-              cleanedForDetection.includes('"tool": "ask_question"');
-
-            const isSuggestMemory =
-              cleanedForDetection.includes('"tool":"suggest_memory"') ||
-              cleanedForDetection.includes('"tool": "suggest_memory"');
-
-            const isConfirmAction =
-              cleanedForDetection.includes('"tool":"confirm_action"') ||
-              cleanedForDetection.includes('"tool": "confirm_action"');
-
-            const isFileRead =
-              cleanedForDetection.includes('"tool":"file_read"') ||
-              cleanedForDetection.includes('"tool": "file_read"');
-
-            const isWebSearch =
-              /"tool"\s*:\s*"(web_search|news_search|search)"/.test(
-                cleanedForDetection,
-              );
-
-            let displayContent = accumulatedContent;
-            if (isWebSearch) {
-              displayContent = extractToolCommentary(accumulatedContent, ["web_search", "news_search", "search"]) || "";
-            } else if (isAskQuestion) {
-              displayContent = extractToolCommentary(accumulatedContent, ["ask_question"]) || "";
-            } else if (isConfirmAction) {
-              displayContent = extractToolCommentary(accumulatedContent, ["confirm_action"]) || "";
-            } else if (isFileRead) {
-              displayContent = extractToolCommentary(accumulatedContent, ["file_read"]) || "";
-            } else if (isSuggestMemory) {
-              displayContent = extractToolCommentary(accumulatedContent, ["suggest_memory"]) || "";
-            }
+            // Detect tool fence to strip display content — keeps full rawContent for tool parsing
+            const hasAnyFence = /```tool_calls?\b/.test(accumulatedContent);
+            const isSubtool = hasAnyFence && /"subtool"\s*:/.test(accumulatedContent);
+            const displayContent = hasAnyFence
+              ? (isSubtool ? "" : commentaryBeforeFence(accumulatedContent))
+              : accumulatedContent;
 
             updateChat(activeChatId, {
               messages: currentChat.messages.map((m) =>

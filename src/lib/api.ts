@@ -9,6 +9,26 @@ import type {
 } from "../types";
 import { assemblePrompt, getDefaultChatConfig } from "./prompts";
 
+function formatLocalTimestamp(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mi = pad(d.getMinutes());
+  const ss = pad(d.getSeconds());
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+}
+
+function withUserTimestampPrefix(m: Message): Message {
+  if (m.role !== "user") return m;
+  // Only real user inputs (not tool-injected hidden messages).
+  if (m.hidden) return m;
+  const ts = formatLocalTimestamp(m.timestamp);
+  return { ...m, content: `[${ts}] ${m.content}` };
+}
+
 export function formatModelName(modelId: string): {
   displayName: string;
   organizationName: string;
@@ -1140,13 +1160,15 @@ export function streamChat(
     ? `${extraContext}\n\n${basePrompt}`
     : basePrompt;
 
+  const outboundMessages = messages.map(withUserTimestampPrefix);
+
   (async () => {
     try {
       if (provider.id === "anthropic") {
         await streamAnthropic(
           provider,
           model,
-          messages,
+          outboundMessages,
           systemPrompt,
           onChunk,
           onDone,
@@ -1159,7 +1181,7 @@ export function streamChat(
         await streamGoogle(
           provider,
           model,
-          messages,
+          outboundMessages,
           systemPrompt,
           onChunk,
           onDone,
@@ -1172,7 +1194,7 @@ export function streamChat(
         await streamOllamaCloud(
           provider,
           model,
-          messages,
+          outboundMessages,
           systemPrompt,
           onChunk,
           onDone,
@@ -1185,7 +1207,7 @@ export function streamChat(
         await streamGroq(
           provider,
           model,
-          messages,
+          outboundMessages,
           systemPrompt,
           onChunk,
           onDone,
@@ -1198,7 +1220,7 @@ export function streamChat(
         await streamOpenAICompatible(
           provider,
           model,
-          messages,
+          outboundMessages,
           systemPrompt,
           onChunk,
           onDone,
@@ -1211,7 +1233,7 @@ export function streamChat(
         await streamOpenAICompatible(
           provider,
           model,
-          messages,
+          outboundMessages,
           systemPrompt,
           onChunk,
           onDone,
@@ -1618,11 +1640,13 @@ export async function sendChatMessage(
     ? `${extraContext}\n\n${basePrompt}`
     : basePrompt;
 
+  const outboundMessages = messages.map(withUserTimestampPrefix);
+
   if (provider.id === "anthropic") {
     return sendAnthropicMessage(
       provider,
       model,
-      messages,
+      outboundMessages,
       systemPrompt,
       signal,
       useNativeSearch,
@@ -1632,7 +1656,7 @@ export async function sendChatMessage(
     return sendGoogleMessage(
       provider,
       model,
-      messages,
+      outboundMessages,
       systemPrompt,
       signal,
       useNativeSearch,
@@ -1642,7 +1666,7 @@ export async function sendChatMessage(
     return sendOpenAICompatibleMessage(
       provider,
       model,
-      messages,
+      outboundMessages,
       systemPrompt,
       signal,
       useNativeSearch,

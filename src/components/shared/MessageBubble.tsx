@@ -113,7 +113,10 @@ function SearchCommentary({ entries, commentary: globalCommentary }: {
         const label = entry.header || entry.params?.query || "Searching\u2026";
         const sources = entry.fetchResults || [];
         const okCount = sources.filter(s => s.status === "ok").length;
-        const isExpanded = expanded[entry.id] ?? true;
+        const errorCount = sources.filter(s => s.status === "error").length;
+        const declinedCount = sources.filter(s => s.status === "declined").length;
+        const deletedCount = sources.filter(s => s.status === "deleted").length;
+        const isExpanded = expanded[entry.id] ?? entry.status === "running";
 
         const statusText = isRunning
           ? `${label}\u2026`
@@ -164,15 +167,22 @@ function SearchCommentary({ entries, commentary: globalCommentary }: {
                 />
               )}
               <span style={{ flex: 1 }}>{statusText}</span>
-              {okCount > 0 && (
+              {(
+                okCount > 0 || errorCount > 0 || declinedCount > 0 || deletedCount > 0
+              ) && (
                 <span style={{ fontSize: "calc(var(--fs) - 3px)", color: "var(--tx4)" }}>
-                  {okCount} fetched
+                  {[
+                    okCount > 0 ? `${okCount} fetched` : null,
+                    errorCount > 0 ? `${errorCount} failed` : null,
+                    deletedCount > 0 ? `${deletedCount} removed` : null,
+                    declinedCount > 0 ? `${declinedCount} pending` : null,
+                  ].filter(Boolean).join("\u00A0\u00B7\u00A0")}
                 </span>
               )}
             </div>
 
             {/* Collapsible URL list */}
-            {sources.length > 0 && (
+              {sources.length > 0 && (
               <div style={{
                 maxHeight: isExpanded ? "300px" : "0",
                 opacity: isExpanded ? 1 : 0,
@@ -181,21 +191,28 @@ function SearchCommentary({ entries, commentary: globalCommentary }: {
                 marginLeft: 16,
                 marginBottom: isExpanded ? 4 : 0,
               }}>
-                {sources.map((fr, j) => (
-                  <div key={j} style={{
+                {[...sources]
+                  .sort((a, b) => {
+                    const order: Record<string, number> = { ok: 0, error: 1, declined: 2, deleted: 3 };
+                    return (order[a.status] ?? 3) - (order[b.status] ?? 3);
+                  })
+                  .map((fr, j) => (
+                  <div key={fr.url} style={{
                     fontFamily: "var(--font)",
                     fontSize: "calc(var(--fs) - 3px)",
                     lineHeight: 1.65,
-                    color: fr.status === "deleted" ? "var(--tx4)" : fr.status === "ok" ? "var(--tx2)" : "var(--tx3)",
+                    color: fr.status === "error" ? "var(--danger)" : fr.status === "deleted" ? "var(--tx4)" : fr.status === "ok" ? "var(--tx2)" : "var(--tx3)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
                     padding: "1px 0",
                     textDecoration: fr.status === "deleted" ? "line-through" : "none",
+                    animation: `sourceFadeIn 0.3s var(--ease-out-strong) ${j * 60}ms both`,
                   }}>
-                    {fr.status === "ok" && <span style={{ color: "var(--success)", marginRight: 4 }}>&#x2713;</span>}
-                    {fr.status === "declined" && <span style={{ color: "var(--tx4)", marginRight: 4 }}>&#x25CB;</span>}
-                    {fr.status === "deleted" && <span style={{ color: "var(--tx4)", marginRight: 4 }}>&#x2717;</span>}
+                      {fr.status === "ok" && <span style={{ color: "var(--success)", marginRight: 4 }}>&#x2713;</span>}
+                      {fr.status === "error" && <span style={{ color: "var(--danger)", marginRight: 4 }}>&#x2717;</span>}
+                      {fr.status === "declined" && <span style={{ color: "var(--tx4)", marginRight: 4 }}>&#x25CB;</span>}
+                      {fr.status === "deleted" && <span style={{ color: "var(--tx4)", marginRight: 4 }}>&#x2717;</span>}
                     {fr.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
                   </div>
                 ))}
