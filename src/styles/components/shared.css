@@ -156,7 +156,8 @@
 /* ─────────────────────────────────────
    APP SHELL (Claude-inspired layout)
    ───────────────────────────────────── */
-#s-app{flex-direction:row;width:100%;height:100vh;overflow:hidden}
+#s-app{flex-direction:column;width:100%;height:100vh;overflow:hidden}
+.app-body{flex:1;display:flex;flex-direction:row;overflow:hidden;width:100%}
 
 /* ── SIDEBAR ── */
 .sb{
