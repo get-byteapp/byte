@@ -162,6 +162,12 @@ interface AppState {
   autoUpdateEnabled: boolean;
   setAutoUpdateEnabled: (val: boolean) => void;
 
+  // Input Glow
+  inputGlowEnabled: boolean;
+  inputGlowColor: string;
+  setInputGlowEnabled: (enabled: boolean) => void;
+  setInputGlowColor: (color: string) => void;
+
   // Skills Actions
   setSkills: (skills: Skill[]) => void;
   addSkill: (skill: Omit<Skill, "id" | "createdAt">) => string;
@@ -246,6 +252,8 @@ export const useStore = create<AppState>()(
       activeProjectId: null,
       skills: [],
       autoUpdateEnabled: true,
+      inputGlowEnabled: false,
+      inputGlowColor: '#8c8c8c',
 
       setTheme: (theme) => set({ theme }),
       setLayoutMode: (layoutMode) => set({ layoutMode }),
@@ -598,6 +606,8 @@ export const useStore = create<AppState>()(
           ),
         })),
 
+      setInputGlowEnabled: (inputGlowEnabled) => set({ inputGlowEnabled }),
+      setInputGlowColor: (inputGlowColor) => set({ inputGlowColor }),
       setAutoUpdateEnabled: (autoUpdateEnabled) => set({ autoUpdateEnabled }),
 
       // Skills Actions
