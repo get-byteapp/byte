@@ -18,7 +18,7 @@ export function SidebarHeader() {
   return (
     <div className="sb-head">
       <div className="sb-brand" onClick={goHome}>
-        <ByteLogo size={18} />
+        <ByteLogo size={24} />
         <span className="sb-brand-name">Byte</span>
       </div>
 

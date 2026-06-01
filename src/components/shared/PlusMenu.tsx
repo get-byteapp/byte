@@ -68,22 +68,30 @@ export function PlusMenu({
   const projectItemRef = useRef<HTMLButtonElement>(null)
   const projectSubmenuRef = useRef<HTMLDivElement>(null)
 
+  // Sync open class with showMenu state
+  useEffect(() => {
+    if (showMenu) {
+      btnRef.current?.classList.add('open')
+    } else {
+      btnRef.current?.classList.remove('open')
+    }
+  }, [showMenu])
+
   // Handle click outside to close menu
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node
-      const isOutsideDropdown = dropdownRef.current && !dropdownRef.current.contains(target)
-      const isOutsideBtn = btnRef.current && !btnRef.current.contains(target)
-      const isOutsideStyleIndicator = styleIndicatorRef.current && !styleIndicatorRef.current.contains(target)
-      const isOutsideStyleSubmenu = styleSubmenuRef.current && !styleSubmenuRef.current.contains(target)
-      const isOutsideProjectSubmenu = projectSubmenuRef.current && !projectSubmenuRef.current.contains(target)
-      const isOutsideProjectItem = projectItemRef.current && !projectItemRef.current.contains(target)
+      const isOutsideDropdown = !dropdownRef.current || !dropdownRef.current.contains(target)
+      const isOutsideBtn = !btnRef.current || !btnRef.current.contains(target)
+      const isOutsideStyleIndicator = !styleIndicatorRef.current || !styleIndicatorRef.current.contains(target)
+      const isOutsideStyleSubmenu = !styleSubmenuRef.current || !styleSubmenuRef.current.contains(target)
+      const isOutsideProjectSubmenu = !projectSubmenuRef.current || !projectSubmenuRef.current.contains(target)
+      const isOutsideProjectItem = !projectItemRef.current || !projectItemRef.current.contains(target)
       
       if (isOutsideDropdown && isOutsideBtn && isOutsideStyleIndicator && isOutsideStyleSubmenu && isOutsideProjectSubmenu && isOutsideProjectItem) {
         setShowMenu(false)
         setShowStyleSubmenu(false)
         setShowProjectSubmenu(false)
-        btnRef.current?.classList.remove('open')
       }
     }
     if (showMenu || showStyleSubmenu || showProjectSubmenu) {
@@ -120,11 +128,6 @@ export function PlusMenu({
 
   const toggleMenu = () => {
     setShowMenu(!showMenu)
-    if (!showMenu) {
-      btnRef.current?.classList.add('open')
-    } else {
-      btnRef.current?.classList.remove('open')
-    }
   }
 
   const handleStyleReset = () => {
@@ -565,7 +568,7 @@ export function PlusMenu({
         title="Add"
         onClick={toggleMenu}
       >
-        <Plus size={15} />
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>
       </button>
       
       {/* Style indicator button - appears when style is not normal, to the right of + */}

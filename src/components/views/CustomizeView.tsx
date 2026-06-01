@@ -425,6 +425,10 @@ export function CustomizeView() {
     addSkill,
     updateSkill,
     removeSkill,
+    inputGlowEnabled,
+    setInputGlowEnabled,
+    inputGlowColor,
+    setInputGlowColor,
   } = useStore()
 
   const [section, setSection] = useState<CustomizeSection>('quick-prompts')
@@ -1849,6 +1853,39 @@ export function CustomizeView() {
                     : 'Reset to defaults'}
                 </button>
 
+                {/* Input Glow */}
+                <h3 className="app-section-label" style={{ marginTop: 24 }}>Input Glow</h3>
+                <div className="chat-setting-row">
+                  <div className="chat-setting-label">
+                    <span>Glow effect</span>
+                    <span className="chat-setting-desc">Soft glow around the chat input</span>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={inputGlowEnabled}
+                      onChange={(e) => setInputGlowEnabled(e.target.checked)}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                </div>
+                {inputGlowEnabled && (
+                  <div className="chat-setting-row">
+                    <div className="chat-setting-label">
+                      <span>Glow color</span>
+                    </div>
+                    <div className="chat-setting-control" style={{ gap: 8 }}>
+                      <input
+                        type="color"
+                        value={inputGlowColor}
+                        onChange={(e) => setInputGlowColor(e.target.value)}
+                        style={{ width: 28, height: 28, border: 'none', borderRadius: 6, cursor: 'pointer', padding: 0 }}
+                      />
+                      <span style={{ fontSize: 11, color: 'var(--tx3)', fontFamily: 'var(--font)' }}>{inputGlowColor}</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Designer Mode Toggle */}
                 <div className="designer-toggle-area" style={{ marginTop: 32 }}>
                   <button
@@ -1877,9 +1914,12 @@ export function CustomizeView() {
                 {/* Designer Mode Panel */}
                 {designerMode && (
                   <div className="designer-panel">
-                    {/* Preview Section */}
-                    <div className="designer-preview">
-                      <h4 className="designer-group-title">Preview</h4>
+                    <div className="designer-sticky">
+                      <div className="designer-header">
+                        <span>Theme Designer</span>
+                      </div>
+                      <div className="designer-preview">
+                        <h4 className="designer-group-title">Preview</h4>
                       <div className="preview-cards">
                         <div className="preview-card" style={{ background: getTokenValue('--sf'), borderColor: getTokenValue('--bd2') }}>
                           <div className="preview-card-title" style={{ color: getTokenValue('--tx') }}>Surface Card</div>
@@ -1918,6 +1958,7 @@ export function CustomizeView() {
                         <div className="preview-swatch" style={{ background: getTokenValue('--danger') }}><span style={{ color: getTokenValue('--white'), fontSize: 8 }}>!</span></div>
                         <div className="preview-swatch" style={{ background: getTokenValue('--warning') }}><span style={{ color: getTokenValue('--white'), fontSize: 8 }}>⚠</span></div>
                       </div>
+                    </div>
                     </div>
 
                     {DESIGNER_SECTIONS.map((group) => (

@@ -32,6 +32,8 @@ export function AppShell() {
     activeChatId,
     updateChat,
     addMemory,
+    inputGlowEnabled,
+    inputGlowColor,
   } = useStore();
   const [updateAvailable, setUpdateAvailable] = useState<{
     version: string;
@@ -54,6 +56,14 @@ export function AppShell() {
     document.body.style.setProperty("--font", fontFamily);
     document.body.style.setProperty("--font-d", headingFont);
   }, [fontFamily, headingFont]);
+
+  useEffect(() => {
+    if (inputGlowEnabled) {
+      document.body.style.setProperty("--input-glow", `${inputGlowColor}1a`);
+    } else {
+      document.body.style.setProperty("--input-glow", "transparent");
+    }
+  }, [inputGlowEnabled, inputGlowColor]);
 
   // Check for updates on startup and periodically
   useEffect(() => {
@@ -290,57 +300,55 @@ export function AppShell() {
 
   return (
     <div id="s-app" className="scr on">
-      <Topbar />
-      <div className="app-body">
-        <Sidebar />
-        <div className="main">
-          {updateAvailable && (
-            <div className="upd-banner">
-              <span>Byte {updateAvailable.version} available</span>
-              <button
-                className="upd-link"
-                onClick={handleInstallUpdate}
-                disabled={updateAvailable.installing}
-              >
-                {updateAvailable.installing
-                  ? "Installing..."
-                  : updateAvailable.installed
-                    ? "Restart to apply"
-                    : navigator.userAgent.toLowerCase().includes("mac")
-                      ? "Download Update"
-                      : "Install Update"}
-              </button>
-              <button
-                className="upd-dismiss"
-                onClick={() => setUpdateAvailable(null)}
-              >
-                &times;
-              </button>
-            </div>
-          )}
-          {renderView()}
-          {activeAskQuestion && (
-            <AskQuestion
-              payload={activeAskQuestion}
-              onComplete={(answers) => {
-                handleAskQuestionComplete(answers);
-                setActiveAskQuestion(null);
-              }}
-              onCancel={() => {
-                handleAskQuestionCancel();
-                setActiveAskQuestion(null);
-              }}
-            />
-          )}
-          {activeSuggestMemory && (
-            <SuggestMemory
-              initialName={activeSuggestMemory.name}
-              initialContent={activeSuggestMemory.content}
-              onSave={handleSaveMemory}
-              onDecline={handleDeclineMemory}
-            />
-          )}
-        </div>
+      <Sidebar />
+      <div className="main">
+        {updateAvailable && (
+          <div className="upd-banner">
+            <span>Byte {updateAvailable.version} available</span>
+            <button
+              className="upd-link"
+              onClick={handleInstallUpdate}
+              disabled={updateAvailable.installing}
+            >
+              {updateAvailable.installing
+                ? "Installing..."
+                : updateAvailable.installed
+                  ? "Restart to apply"
+                  : navigator.userAgent.toLowerCase().includes("mac")
+                    ? "Download Update"
+                    : "Install Update"}
+            </button>
+            <button
+              className="upd-dismiss"
+              onClick={() => setUpdateAvailable(null)}
+            >
+              &times;
+            </button>
+          </div>
+        )}
+        <Topbar />
+        {renderView()}
+        {activeAskQuestion && (
+          <AskQuestion
+            payload={activeAskQuestion}
+            onComplete={(answers) => {
+              handleAskQuestionComplete(answers);
+              setActiveAskQuestion(null);
+            }}
+            onCancel={() => {
+              handleAskQuestionCancel();
+              setActiveAskQuestion(null);
+            }}
+          />
+        )}
+        {activeSuggestMemory && (
+          <SuggestMemory
+            initialName={activeSuggestMemory.name}
+            initialContent={activeSuggestMemory.content}
+            onSave={handleSaveMemory}
+            onDecline={handleDeclineMemory}
+          />
+        )}
       </div>
     </div>
   );
