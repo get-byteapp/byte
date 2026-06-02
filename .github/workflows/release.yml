@@ -32,9 +32,6 @@ jobs:
             updater-id: windows-x86_64
 
     runs-on: ${{ matrix.platform }}
-    env:
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -135,15 +132,6 @@ jobs:
                 UPDATER_SRC="$UPDATER_DIR/$UPDATER_NAME"
               fi
             fi
-          fi
-
-          # Sign the updater archive if no .sig file exists yet
-          if [ -f "$UPDATER_SRC" ] && [ ! -f "$UPDATER_SRC.sig" ] && [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "Signing updater archive..."
-            # Strip newlines from the key — GitHub secrets can inject a trailing \n
-            # which breaks base64 decoding inside the Tauri signer.
-            CLEAN_KEY=$(echo "$TAURI_SIGNING_PRIVATE_KEY" | tr -d '\n')
-            TAURI_SIGNING_PRIVATE_KEY="$CLEAN_KEY" npx tauri signer sign "$UPDATER_SRC" > "$UPDATER_SRC.sig"
           fi
 
           # Copy updater artifacts to artifacts/
@@ -315,7 +303,7 @@ jobs:
           TAG=${GITHUB_REF_NAME}
           VERSION=${TAG#v}
 
-          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/usebyte/homebrew-byte.git tap-repo
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/get-byteapp/homebrew-byte.git tap-repo
           mkdir -p tap-repo/Casks
           cp byte.rb tap-repo/Casks/byte.rb
 
