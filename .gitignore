@@ -4,3 +4,13 @@ dist/
 *.local
 src-tauri/keys/
 .worktrees/
+tsconfig.tsbuildinfo
+.impeccable.md
+.superpowers/
+docs/
+plans/
+tool-*.html
+*.jpg
+*.jpeg
+research/
+.svg
