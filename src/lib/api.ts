@@ -1140,6 +1140,7 @@ export function streamChat(
   simplifiedSystemPrompt?: string | null,
   extraContext?: string,
   attachments?: ImageAttachment[],
+  langSearchAvailable?: boolean,
 ): StreamHandle {
   let isAborted = false;
 
@@ -1155,7 +1156,7 @@ export function streamChat(
     config.enabledTools.includes("WEB_SEARCH") && model.capabilities?.webSearch;
   const basePrompt =
     simplifiedSystemPrompt ||
-    assemblePrompt(config, memories, model).systemPrompt;
+    assemblePrompt(config, memories, model, langSearchAvailable).systemPrompt;
   const systemPrompt = extraContext
     ? `${extraContext}\n\n${basePrompt}`
     : basePrompt;
@@ -1629,13 +1630,14 @@ export async function sendChatMessage(
   simplifiedSystemPrompt?: string | null,
   extraContext?: string,
   attachments?: ImageAttachment[],
+  langSearchAvailable?: boolean,
 ): Promise<string> {
   const config = chatConfig || getDefaultChatConfig();
   const useNativeSearch =
     config.enabledTools.includes("WEB_SEARCH") && model.capabilities?.webSearch;
   const basePrompt =
     simplifiedSystemPrompt ||
-    assemblePrompt(config, memories, model).systemPrompt;
+    assemblePrompt(config, memories, model, langSearchAvailable).systemPrompt;
   const systemPrompt = extraContext
     ? `${extraContext}\n\n${basePrompt}`
     : basePrompt;

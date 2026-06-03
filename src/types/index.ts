@@ -69,7 +69,7 @@ export type ToolId =
   | "ASK_QUESTION"
   | "CONFIRM_ACTION";
 
-export type ModeId = "CANVAS" | "COUNCIL";
+export type ModeId = "CANVAS" | "COUNCIL" | "OPERATION";
 
 export type ResponseStyleId = "normal" | "concise" | "explanatory" | "learning";
 
@@ -86,7 +86,7 @@ export interface ChatConfig {
   agentId: string; // Agent file name (without .md), e.g., 'DEFAULT'
   memoryEnabled: boolean; // Whether to include memories
   enabledTools: ToolId[]; // Which tools are active for this chat
-  mode: ModeId | null; // Active mode (CANVAS, COUNCIL) or null
+  mode: ModeId | null; // Active mode (CANVAS, COUNCIL, OPERATION) or null
   responseStyle: ResponseStyleId; // How verbose/concise AI responses should be
   memories?: { name: string; content: string }[]; // User memories to include in context
   includeDateContext?: boolean; // Whether to include current date in system prompt

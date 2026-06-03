@@ -313,6 +313,17 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     [activeChatId, chat?.config, updateChat],
   );
 
+  const handleOperationToggle = useCallback(
+    (enabled: boolean) => {
+      if (activeChatId && chat?.config) {
+        updateChat(activeChatId, {
+          config: { ...chat.config, mode: enabled ? "OPERATION" as const : null },
+        });
+      }
+    },
+    [activeChatId, chat?.config, updateChat],
+  );
+
   const handleWebSearchToggle = useCallback(
     (enabled: boolean) => {
       if (activeChatId && chat?.config) {
@@ -743,6 +754,8 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           },
           freshChat.config, memories, undefined,
           getProjectContext(lastUserMessage(currentMessages)),
+          undefined,
+          !!effectiveLangSearchApiKey,
         );
       }
       return resultMessages;
@@ -1123,6 +1136,8 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             memories,
             undefined,
             getProjectContext(lastUserMessage(withSearchResultsFinal)),
+            undefined,
+            !!effectiveLangSearchApiKey,
           );
           streamAbortRef.current = handle.abort;
         } else {
@@ -1135,6 +1150,8 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             memories,
             undefined,
             getProjectContext(lastUserMessage(withSearchResultsFinal)),
+            undefined,
+            !!effectiveLangSearchApiKey,
           );
           const freshChat2 = useStore
             .getState()
@@ -1244,9 +1261,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     const projectHasFiles = activeChatId && projects.some(
       (p) => p.chatIds.includes(activeChatId) && p.files.length > 0
     );
+    const webSearchCanRun =
+      model?.capabilities?.webSearch || !!effectiveLangSearchApiKey;
+    const filteredTools = currentChat.config.enabledTools.filter(
+      (t) => t !== "WEB_SEARCH" || webSearchCanRun
+    );
     const effectiveConfig = projectHasFiles
-      ? { ...currentChat.config, enabledTools: [...new Set([...currentChat.config.enabledTools, "FILE_READ" as ToolId])] }
-      : currentChat.config;
+      ? { ...currentChat.config, enabledTools: [...new Set([...filteredTools, "FILE_READ" as ToolId])] }
+      : { ...currentChat.config, enabledTools: filteredTools };
 
     const assistantMsg: Message = {
       id: crypto.randomUUID(),
@@ -1874,9 +1896,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       const projectHasFiles = activeChatId && projects.some(
         (p) => p.chatIds.includes(activeChatId) && p.files.length > 0
       );
+      const webSearchCanRun =
+        model?.capabilities?.webSearch || !!effectiveLangSearchApiKey;
+      const baseTools = (chat?.config?.enabledTools || []).filter(
+        (t) => t !== "WEB_SEARCH" || webSearchCanRun
+      );
       const effectiveConfig = projectHasFiles && chat?.config
-        ? { ...chat.config, enabledTools: [...new Set([...chat.config.enabledTools, "FILE_READ" as ToolId])] }
-        : chat?.config;
+        ? { ...chat.config, enabledTools: [...new Set([...baseTools, "FILE_READ" as ToolId])] }
+        : chat?.config ? { ...chat.config, enabledTools: baseTools } : chat?.config;
 
       // DEBUG: Log everything being sent to the API
       // Handle describe-mode and OCR-mode attachments
@@ -2455,6 +2482,8 @@ const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
             onMemoryToggle={handleMemoryToggle}
             webSearchEnabled={webSearchEnabled}
             onWebSearchToggle={handleWebSearchToggle}
+            operationMode={chat?.config?.mode === "OPERATION"}
+            onOperationToggle={handleOperationToggle}
           />
         </div>
       )}

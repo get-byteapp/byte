@@ -24,6 +24,7 @@ import TOOL_CONFIRM_ACTION from '../../prompts/tools/CONFIRM_ACTION.md?raw';
 // Modes
 import MODE_CANVAS from '../../prompts/modes/CANVAS.md?raw';
 import MODE_COUNCIL from '../../prompts/modes/COUNCIL.md?raw';
+import MODE_OPERATION from '../../prompts/modes/OPERATION.md?raw';
 
 // Styles
 import STYLE_NORMAL from '../../prompts/styles/normal.md?raw';
@@ -50,6 +51,7 @@ const TOOLS: Record<ToolId, string> = {
 const MODES: Record<ModeId, string> = {
   CANVAS: MODE_CANVAS,
   COUNCIL: MODE_COUNCIL,
+  OPERATION: MODE_OPERATION,
 };
 
 const STYLES: Record<ResponseStyleId, string> = {
@@ -76,7 +78,7 @@ export interface AssembledPrompt {
  * 6. Tools (for each enabled tool)
  * 7. Mode (if active)
  */
-export function assemblePrompt(config: ChatConfig, memories?: { name: string; content: string }[], model?: Model): AssembledPrompt {
+export function assemblePrompt(config: ChatConfig, memories?: { name: string; content: string }[], model?: Model, langSearchAvailable?: boolean): AssembledPrompt {
   const parts: string[] = [];
   const includedFiles: string[] = [];
 
@@ -119,10 +121,14 @@ export function assemblePrompt(config: ChatConfig, memories?: { name: string; co
 
   // 6. Tools (conditional, multiple)
   // Skip WEB_SEARCH tool instructions for models with native search
-  // (they handle search internally via API config)
+  // (they handle search internally via API config).
+  // Also skip when LangSearch is unavailable (no API key) for non-native models.
   const modelHasNativeSearch = model?.capabilities?.webSearch
   for (const toolId of config.enabledTools) {
-    if (modelHasNativeSearch && toolId === 'WEB_SEARCH') continue
+    if (toolId === 'WEB_SEARCH') {
+      if (modelHasNativeSearch) continue
+      if (!langSearchAvailable) continue
+    }
     const toolPrompt = TOOLS[toolId];
     if (toolPrompt?.trim()) {
       parts.push(toolPrompt);

@@ -161,6 +161,13 @@ interface AppState {
   // Auto Update
   autoUpdateEnabled: boolean;
   setAutoUpdateEnabled: (val: boolean) => void;
+  updateAvailable: {
+    version: string;
+    installing: boolean;
+    installed: boolean;
+    releaseNotes: string;
+  } | null;
+  setUpdateAvailable: (val: AppState["updateAvailable"]) => void;
 
   // Input Glow
   inputGlowEnabled: boolean;
@@ -252,6 +259,7 @@ export const useStore = create<AppState>()(
       activeProjectId: null,
       skills: [],
       autoUpdateEnabled: true,
+      updateAvailable: null,
       inputGlowEnabled: false,
       inputGlowColor: '#8c8c8c',
 
@@ -609,6 +617,7 @@ export const useStore = create<AppState>()(
       setInputGlowEnabled: (inputGlowEnabled) => set({ inputGlowEnabled }),
       setInputGlowColor: (inputGlowColor) => set({ inputGlowColor }),
       setAutoUpdateEnabled: (autoUpdateEnabled) => set({ autoUpdateEnabled }),
+      setUpdateAvailable: (updateAvailable) => set({ updateAvailable }),
 
       // Skills Actions
       setSkills: (skills) => set({ skills }),

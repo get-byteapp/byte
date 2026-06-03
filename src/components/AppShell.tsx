@@ -1,4 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, lazy, Suspense } from "react";
+
+const Agentation = lazy(() =>
+  import("agentation").then((m) => ({ default: m.Agentation }))
+);
 import { useStore } from "../store/useStore";
 import { Sidebar } from "./sidebar/Sidebar";
 import { Topbar } from "./topbar/Topbar";
@@ -34,12 +38,8 @@ export function AppShell() {
     addMemory,
     inputGlowEnabled,
     inputGlowColor,
+    setUpdateAvailable,
   } = useStore();
-  const [updateAvailable, setUpdateAvailable] = useState<{
-    version: string;
-    installing: boolean;
-    installed: boolean;
-  } | null>(null);
   const [activeAskQuestion, setActiveAskQuestion] =
     useState<AskQuestionPayload | null>(null);
   const [activeSuggestMemory, setActiveSuggestMemory] =
@@ -67,16 +67,33 @@ export function AppShell() {
 
   // Check for updates on startup and periodically
   useEffect(() => {
+    const fetchReleaseNotes = async (version: string) => {
+      try {
+        const res = await fetch(
+          `https://api.github.com/repos/usebyte/byte/releases/tags/v${version}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          return data.body || "";
+        }
+      } catch {
+        // ignore
+      }
+      return "";
+    };
+
     const checkForUpdates = async () => {
       if (!useStore.getState().autoUpdateEnabled) return;
       try {
         const { check } = await import("@tauri-apps/plugin-updater");
         const update = await check();
         if (update?.version && update.version !== "0.1.0") {
+          const releaseNotes = await fetchReleaseNotes(update.version);
           setUpdateAvailable({
             version: update.version,
             installing: false,
             installed: false,
+            releaseNotes,
           });
         }
       } catch {
@@ -91,45 +108,6 @@ export function AppShell() {
     const interval = setInterval(checkForUpdates, 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleInstallUpdate = async () => {
-    if (!updateAvailable) return;
-
-    // Detect if we are on macOS
-    const isMac = navigator.userAgent.toLowerCase().includes("mac");
-
-    if (isMac) {
-      // On macOS without code signing, auto-update fails.
-      // Redirect user to download manually from GitHub Releases.
-      window.open("https://github.com/usebyte/byte/releases/latest", "_blank");
-      return;
-    }
-
-    setUpdateAvailable({
-      ...updateAvailable,
-      installing: true,
-      installed: false,
-    });
-    try {
-      const { check } = await import("@tauri-apps/plugin-updater");
-      const update = await check();
-      if (update) {
-        await update.downloadAndInstall();
-        setUpdateAvailable({
-          version: updateAvailable.version,
-          installing: false,
-          installed: true,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to install update:", error);
-      setUpdateAvailable({
-        ...updateAvailable,
-        installing: false,
-        installed: false,
-      });
-    }
-  };
 
   // Listen for suggest_memory events from ChatView/HomeView
   useEffect(() => {
@@ -302,30 +280,6 @@ export function AppShell() {
     <div id="s-app" className="scr on">
       <Sidebar />
       <div className="main">
-        {updateAvailable && (
-          <div className="upd-banner">
-            <span>Byte {updateAvailable.version} available</span>
-            <button
-              className="upd-link"
-              onClick={handleInstallUpdate}
-              disabled={updateAvailable.installing}
-            >
-              {updateAvailable.installing
-                ? "Installing..."
-                : updateAvailable.installed
-                  ? "Restart to apply"
-                  : navigator.userAgent.toLowerCase().includes("mac")
-                    ? "Download Update"
-                    : "Install Update"}
-            </button>
-            <button
-              className="upd-dismiss"
-              onClick={() => setUpdateAvailable(null)}
-            >
-              &times;
-            </button>
-          </div>
-        )}
         <Topbar />
         {renderView()}
         {activeAskQuestion && (
@@ -348,6 +302,11 @@ export function AppShell() {
             onSave={handleSaveMemory}
             onDecline={handleDeclineMemory}
           />
+        )}
+        {import.meta.env.DEV && (
+          <Suspense fallback={null}>
+            <Agentation />
+          </Suspense>
         )}
       </div>
     </div>

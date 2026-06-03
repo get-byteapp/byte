@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Plus, Paperclip, Camera, Folder, BookOpen, Zap, Search, Pen, ChevronRight, Check, X, Brain, Info,
+  Plus, Paperclip, Camera, Folder, BookOpen, Zap, Search, Pen, ChevronRight, Check, X, Brain, Info, Terminal,
 } from 'lucide-react'
 import { getProjectIcon } from '../../lib/projectIcons'
 import type { ResponseStyleId, Project } from '../../types'
@@ -25,6 +25,8 @@ interface PlusMenuProps {
   activeChatId?: string | null
   onAddChatToProject?: (projectId: string) => void
   onRemoveChatFromProject?: (projectId: string, chatId: string) => void
+  operationMode?: boolean
+  onOperationToggle?: (enabled: boolean) => void
 }
 
 // Menu position can use either top or bottom for vertical positioning
@@ -53,6 +55,8 @@ export function PlusMenu({
   activeChatId,
   onAddChatToProject,
   onRemoveChatFromProject,
+  operationMode = false,
+  onOperationToggle,
 }: PlusMenuProps) {
   const [showMenu, setShowMenu] = useState(false)
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false)
@@ -455,6 +459,13 @@ export function PlusMenu({
           onClick={() => { onMemoryToggle?.(Boolean(!memoryEnabled)); }}
           isToggle
           isActive={Boolean(memoryEnabled)}
+        />
+        <MenuItem
+          icon={Terminal}
+          label="Operation"
+          onClick={() => { onOperationToggle?.(!operationMode); }}
+          isToggle
+          isActive={Boolean(operationMode)}
         />
         {/* Wrapper div with no gap - submenu attaches directly to button edge */}
         <div

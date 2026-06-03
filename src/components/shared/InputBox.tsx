@@ -31,6 +31,8 @@ interface InputBoxProps {
   onMemoryToggle?: (enabled: boolean) => void;
   webSearchEnabled?: boolean;
   onWebSearchToggle?: (enabled: boolean) => void;
+  operationMode?: boolean;
+  onOperationToggle?: (enabled: boolean) => void;
 }
 
 export function InputBox({
@@ -46,6 +48,8 @@ export function InputBox({
   onMemoryToggle,
   webSearchEnabled: extWebSearchEnabled,
   onWebSearchToggle,
+  operationMode = false,
+  onOperationToggle,
 }: InputBoxProps) {
   const [internalValue, setInternalValue] = useState("");
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
@@ -894,6 +898,8 @@ export function InputBox({
                 activeChatId={activeChatId}
                 onAddChatToProject={handleAddChatToProject}
                 onRemoveChatFromProject={removeChatFromProject}
+                operationMode={operationMode}
+                onOperationToggle={onOperationToggle}
               />
               {activeProject && (
                 <button
