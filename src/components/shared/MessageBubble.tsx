@@ -8,7 +8,6 @@ import {
   RefreshCw,
   ChevronDown,
   Loader2,
-  FileText,
 } from "lucide-react";
 import { MarkdownRenderer } from "../../lib/markdown";
 import type { Message, ToolCallEntry } from "../../types";
@@ -45,32 +44,86 @@ function ToolCallRow({ entry, isExpanded, onToggle }: {
   isExpanded: boolean;
   onToggle: () => void;
 }) {
+  const code = entry.params?.code as string | undefined;
+  const result = entry.result;
+  const hasDetail = !!(code || result);
+  const isRunning = entry.status === "running";
+  const isError = entry.status === "error";
+  const label = entry.header || "Running code";
+  const statusText = isRunning
+    ? `${label}…`
+    : isError
+      ? `Error in ${label.charAt(0).toLowerCase()}${label.slice(1)}`
+      : `Finished ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+
   return (
-    <div style={{ margin: "4px 0", padding: "4px 0" }}>
+    <div style={{ margin: "4px 0" }}>
       <div
-        onClick={onToggle}
+        onClick={hasDetail ? onToggle : undefined}
         style={{
-          display: "flex", alignItems: "center", gap: 6,
-          cursor: "pointer", userSelect: "none",
-          fontSize: "calc(var(--fs) - 1px)", color: "var(--tx3)",
+          display: "flex", alignItems: "center", gap: 5,
+          cursor: hasDetail ? "pointer" : "default", userSelect: "none",
+          fontSize: "calc(var(--fs) - .5px)",
+          lineHeight: 1.5,
+          color: isError ? "var(--danger)" : "var(--tx3)",
+          padding: "2px 0",
         }}
       >
-        {entry.status === "running" ? (
+        {isRunning ? (
           <Loader2 size={11} style={{ color: "var(--acc)", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
         ) : (
-          <span style={{ fontSize: 10, width: 11, flexShrink: 0, textAlign: "center" }}>▸</span>
+          <ChevronDown
+            size={11}
+            style={{
+              color: "var(--tx4)",
+              flexShrink: 0,
+              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s var(--ease-out-strong)",
+            }}
+          />
         )}
-        <FileText size={11} style={{ color: "var(--tx4)", flexShrink: 0 }} />
-        <span style={{ flex: 1, color: "var(--tx2)" }}>{entry.header}</span>
-        <ChevronDown
-          size={10}
-          style={{
-            color: "var(--tx4)",
-            transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "transform 0.2s var(--ease-out-strong)",
-            flexShrink: 0,
-          }}
-        />
+        <span style={{ flex: 1 }}>{statusText}</span>
+      </div>
+      <div style={{
+        maxHeight: hasDetail && isExpanded ? "500px" : "0",
+        opacity: hasDetail && isExpanded ? 1 : 0,
+        overflow: "hidden",
+        transition: "max-height 0.25s var(--ease-out-strong), opacity 0.15s ease-out",
+        marginLeft: 16,
+        marginBottom: hasDetail && isExpanded ? 4 : 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        marginTop: hasDetail && isExpanded ? 4 : 0,
+      }}>
+        {code && (
+          <pre style={{
+            margin: 0,
+            padding: "6px 8px",
+            background: "var(--sf2)",
+            borderRadius: 6,
+            fontSize: "calc(var(--fs) - 2px)",
+            color: "var(--tx2)",
+            overflowX: "auto",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all",
+            fontFamily: "var(--font-mono, monospace)",
+          }}>{code}</pre>
+        )}
+        {result && (
+          <pre style={{
+            margin: 0,
+            padding: "6px 8px",
+            background: isError ? "color-mix(in srgb, var(--danger) 8%, var(--sf2))" : "var(--sf2)",
+            borderRadius: 6,
+            fontSize: "calc(var(--fs) - 2px)",
+            color: isError ? "var(--danger)" : "var(--tx3)",
+            overflowX: "auto",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all",
+            fontFamily: "var(--font-mono, monospace)",
+          }}>{result}</pre>
+        )}
       </div>
     </div>
   );
@@ -308,8 +361,8 @@ export const MessageBubble = memo(function MessageBubble({
 
   // Strip tool calls from display
   if (!isUser) {
-    // 1. Remove ALL markdown code blocks (tool_call JSON lives in code blocks)
-    let stripped = displayContent.replace(/```[\s\S]*?```/g, "");
+    // 1. Remove tool_call fenced blocks only — NOT render or other display blocks
+    let stripped = displayContent.replace(/```tool_call[\s\S]*?```/g, "");
 
     // 2. Remove raw JSON objects containing "tool" key
     stripped = stripped.replace(
