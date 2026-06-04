@@ -1,4 +1,7 @@
 node_modules/
+graphify-out/
+.claude/
+CLAUDE.md
 .DS_Store
 dist/
 *.local
