@@ -34,7 +34,7 @@ function buildByteScript(): string {
     bg: g('--bg'), sf: g('--sf'), sf2: g('--sf2'), sf3: g('--sf3'),
     bd: g('--bd'), bd2: g('--bd2'),
     tx: g('--tx'), tx2: g('--tx2'), tx3: g('--tx3'), tx4: g('--tx4'),
-    acc: g('--acc'), accSoft: g('--acc-soft'), accBorder: g('--acc-border'), accGlow: g('--acc-glow'),
+    acc: g('--acc'), accSoft: g('--acc-soft'), accBorder: g('--acc-border'), accGlow: g('--acc-glow'), accHover: g('--acc-hover'),
     danger: g('--danger'), dangerBg: g('--danger-bg'), dangerFill: g('--danger-fill'),
     warning: g('--warning'), success: g('--success'),
     font: g('--font'), fontD: g('--font-d'), fs: g('--fs'),
