@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useContext } from 'react'
+import { StreamingContext } from '../../lib/markdown'
 
 const SKELETON_STYLE = `@keyframes byte-skeleton{0%,100%{opacity:.35}50%{opacity:.7}}`
 
@@ -40,7 +41,7 @@ function buildByteScript(): string {
     font: g('--font'), fontD: g('--font-d'), fs: g('--fs'),
     r: g('--r'), rSm: g('--r-sm'), rLg: g('--r-lg'),
   }
-  return `<script>window.BYTE=${JSON.stringify(tokens)}<\/script>`
+  return `<script>window.BYTE=${JSON.stringify(tokens)};window.BYTE.suggestPrompt=function(t){window.parent.dispatchEvent(new CustomEvent('byte-suggest-prompt',{detail:{prompt:t}}))} <\/script>`
 }
 
 // Component library injected into every artifact — gives the AI ready-to-use classes
@@ -48,8 +49,8 @@ const BASE_STYLES = `
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{background:var(--bg)}
 body{font-family:var(--font);font-size:var(--fs);color:var(--tx);background:var(--bg);line-height:1.6;padding:16px}
-h1{font-family:var(--font-d);font-size:calc(var(--fs) + 6px);font-weight:400;color:var(--tx);margin-bottom:12px}
-h2{font-family:var(--font-d);font-size:calc(var(--fs) + 3px);font-weight:400;color:var(--tx);margin-bottom:8px}
+h1{font-family:var(--font);font-size:calc(var(--fs) + 6px);font-weight:600;color:var(--tx);margin-bottom:12px}
+h2{font-family:var(--font);font-size:calc(var(--fs) + 3px);font-weight:600;color:var(--tx);margin-bottom:8px}
 h3{font-size:calc(var(--fs) + 1px);font-weight:600;color:var(--tx);margin-bottom:6px}
 p{color:var(--tx2);margin-bottom:8px}
 small,.muted{color:var(--tx3);font-size:calc(var(--fs) - 1px)}
@@ -155,11 +156,12 @@ function buildSrcdoc(html: string): string {
 }
 
 export function ArtifactFrame({ html }: ArtifactFrameProps) {
+  const isStreaming = useContext(StreamingContext)
   const [height, setHeight] = useState(0)
   const [loaded, setLoaded] = useState(false)
   const [renderError, setRenderError] = useState<string | null>(null)
 
-  const srcdoc = useMemo(() => buildSrcdoc(html), [html])
+  const srcdoc = useMemo(() => isStreaming ? '' : buildSrcdoc(html), [html, isStreaming])
 
   useEffect(() => {
     if (document.getElementById('byte-skeleton-style')) return
@@ -188,7 +190,7 @@ export function ArtifactFrame({ html }: ArtifactFrameProps) {
     setLoaded(false)
     setHeight(0)
     setRenderError(null)
-  }, [html])
+  }, [html, isStreaming])
 
   return (
     <div style={{ margin: '16px 0', borderRadius: 'var(--r)', overflow: 'hidden' }}>
@@ -205,25 +207,27 @@ export function ArtifactFrame({ html }: ArtifactFrameProps) {
         </div>
       ) : (
         <>
-          {!loaded && (
+          {(!loaded || isStreaming) && (
             <div style={{
               height: 120,
               background: 'var(--sf2)',
               animation: 'byte-skeleton 1.4s ease-in-out infinite',
             }} />
           )}
-          <iframe
-            srcDoc={srcdoc}
-            sandbox="allow-scripts allow-downloads allow-popups"
-            style={{
-              width: '100%',
-              height: loaded ? height : 0,
-              border: 'none',
-              display: 'block',
-              background: 'transparent',
-            }}
-            title="Preview"
-          />
+          {!isStreaming && (
+            <iframe
+              srcDoc={srcdoc}
+              sandbox="allow-scripts allow-downloads allow-popups"
+              style={{
+                width: '100%',
+                height: loaded ? height : 0,
+                border: 'none',
+                display: 'block',
+                background: 'transparent',
+              }}
+              title="Preview"
+            />
+          )}
         </>
       )}
     </div>

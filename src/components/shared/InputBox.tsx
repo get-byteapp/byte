@@ -31,6 +31,8 @@ interface InputBoxProps {
   onMemoryToggle?: (enabled: boolean) => void;
   webSearchEnabled?: boolean;
   onWebSearchToggle?: (enabled: boolean) => void;
+  codeExecutionEnabled?: boolean;
+  onCodeExecutionToggle?: (enabled: boolean) => void;
   operationMode?: boolean;
   onOperationToggle?: (enabled: boolean) => void;
 }
@@ -48,6 +50,8 @@ export function InputBox({
   onMemoryToggle,
   webSearchEnabled: extWebSearchEnabled,
   onWebSearchToggle,
+  codeExecutionEnabled: extCodeExecutionEnabled,
+  onCodeExecutionToggle,
   operationMode = false,
   onOperationToggle,
 }: InputBoxProps) {
@@ -56,6 +60,7 @@ export function InputBox({
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
   const [localWebSearch, setLocalWebSearch] = useState(false);
+  const [localCodeExecution, setLocalCodeExecution] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [showFilesHelp, setShowFilesHelp] = useState(false);
@@ -143,6 +148,20 @@ export function InputBox({
     },
     [onChange],
   );
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      const { prompt } = e.detail;
+      handleTextChange(prompt);
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+        }
+      }, 0);
+    };
+    window.addEventListener('byte-suggest-prompt', handler);
+    return () => window.removeEventListener('byte-suggest-prompt', handler);
+  }, [handleTextChange]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -511,6 +530,9 @@ export function InputBox({
   const webSearchEnabled =
     extWebSearchEnabled !== undefined ? extWebSearchEnabled : localWebSearch;
   const handleWebSearchToggle = onWebSearchToggle || setLocalWebSearch;
+  const codeExecutionEnabled =
+    extCodeExecutionEnabled !== undefined ? extCodeExecutionEnabled : localCodeExecution;
+  const handleCodeExecutionToggle = onCodeExecutionToggle || setLocalCodeExecution;
 
   return (
     <>
@@ -888,6 +910,8 @@ export function InputBox({
                 currentStyle={responseStyle}
                 webSearchEnabled={webSearchEnabled}
                 onWebSearchToggle={handleWebSearchToggle}
+                codeExecutionEnabled={codeExecutionEnabled}
+                onCodeExecutionToggle={handleCodeExecutionToggle}
                 memoryEnabled={memoryEnabled}
                 onMemoryToggle={onMemoryToggle}
                 direction="up"

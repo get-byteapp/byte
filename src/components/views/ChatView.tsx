@@ -55,6 +55,7 @@ export function ChatView({
     langSearchApiKey,
     langSearchEnabled,
     setDefaultWebSearchEnabled,
+    setDefaultCodeExecutionEnabled,
     projects,
     ocrEnabled,
   } = useStore();
@@ -323,6 +324,30 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     },
     [activeChatId, chat?.config, updateChat],
   );
+
+  const handleCodeExecutionToggle = useCallback(
+    (enabled: boolean) => {
+      if (activeChatId && chat?.config) {
+        const newTools = enabled
+          ? [...(chat.config.enabledTools || []).filter((t) => t !== "CODE_EXECUTION"), "CODE_EXECUTION" as ToolId]
+          : (chat.config.enabledTools || []).filter((t) => t !== "CODE_EXECUTION");
+        updateChat(activeChatId, { config: { ...chat.config, enabledTools: newTools } });
+        setDefaultCodeExecutionEnabled(enabled);
+      }
+    },
+    [activeChatId, chat?.config, updateChat, setDefaultCodeExecutionEnabled],
+  );
+
+  // Sync defaultCodeExecutionEnabled when switching chats
+  useEffect(() => {
+    if (chat?.config) {
+      setDefaultCodeExecutionEnabled(
+        chat.config.enabledTools?.includes("CODE_EXECUTION") ?? false,
+      );
+    }
+  }, [activeChatId, chat?.config, setDefaultCodeExecutionEnabled]);
+
+  const codeExecutionEnabled = chat?.config?.enabledTools?.includes("CODE_EXECUTION") ?? false;
 
   const handleWebSearchToggle = useCallback(
     (enabled: boolean) => {
@@ -1342,8 +1367,12 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           const suggestMemory = !askQuestion && !confirmAction && !fileRead
             ? parseSuggestMemory(lastMsg?.rawContent || lastMsg?.content || "")
             : null;
+          console.log("[CODE_EXEC] handler1 conditions — ask:", !!askQuestion, "confirm:", !!confirmAction, "file:", !!fileRead, "memory:", !!suggestMemory, "lastMsg:", !!lastMsg);
+          const codeExec = !askQuestion && !confirmAction && !fileRead && !suggestMemory
+            ? parseCodeExecutionTool(lastMsg?.rawContent || lastMsg?.content || "")
+            : null;
           const webSearches =
-            !askQuestion && !confirmAction && !fileRead && !suggestMemory
+            !askQuestion && !confirmAction && !fileRead && !suggestMemory && !codeExec
               ? parseAllWebSearchTools(lastMsg?.rawContent || lastMsg?.content || "")
               : [];
           if (webSearches.length > 0) console.log("[BYTE] Tool detected:", webSearches.map(w => ({ q: w.query.slice(0, 40), h: w.header })));
@@ -1358,12 +1387,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             displayContent = extractToolCommentary(rawResponse, ["file_read"]) || "";
           } else if (suggestMemory) {
             displayContent = extractToolCommentary(rawResponse, ["suggest_memory"]) || "";
+          } else if (codeExec) {
+            displayContent = extractToolCommentary(rawResponse, ["code_execution"]) || "";
           } else if (webSearches.length > 0) {
             displayContent = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "";
           }
 
           // Only update message if no tool was detected (tools do their own updates)
-          const hasAnyTool = askQuestion || confirmAction || fileRead || suggestMemory || webSearches.length > 0;
+          const hasAnyTool = askQuestion || confirmAction || fileRead || suggestMemory || codeExec || webSearches.length > 0;
           if (!hasAnyTool) {
             updateChat(activeChatId, {
               messages: chat.messages.map((m) =>
@@ -1393,6 +1424,10 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
           if (fileRead) {
             handleFileReadTool(activeChatId, fileRead.path, fileRead.header);
+          }
+
+          if (codeExec) {
+            handleCodeExecutionTool(activeChatId, codeExec);
           }
 
           if (suggestMemory) {
@@ -1484,7 +1519,8 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         const askQuestion = parseAskQuestionTool(response);
         const confirmAction = !askQuestion ? parseConfirmAction(response) : null;
         const fileRead = !askQuestion && !confirmAction ? parseFileReadTool(response) : null;
-        const webSearches = !askQuestion && !confirmAction && !fileRead ? parseAllWebSearchTools(response) : [];
+        const codeExec = !askQuestion && !confirmAction && !fileRead ? parseCodeExecutionTool(response) : null;
+        const webSearches = !askQuestion && !confirmAction && !fileRead && !codeExec ? parseAllWebSearchTools(response) : [];
 
         if (webSearches.length > 0) {
           const commentary = extractToolCommentary(response, ["web_search", "news_search", "search"]);
@@ -1512,6 +1548,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             }
           };
           runSearches().catch((err) => console.error("[BYTE] Web search error:", err));
+        } else if (codeExec) {
+          updateChat(activeChatId, {
+            messages: [
+              ...currentChat.messages,
+              { ...assistantMsg, content: extractToolCommentary(response, ["code_execution"]) || "", status: "done" as const },
+            ],
+          });
+          handleCodeExecutionTool(activeChatId, codeExec);
         } else if (fileRead) {
           updateChat(activeChatId, {
             messages: [
@@ -1714,6 +1758,191 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     }
     return null;
   };
+
+  const executeCodeInSandbox = (code: string, language: string): Promise<{ output: string; error?: string }> => {
+    return new Promise((resolve) => {
+      if (language !== "javascript" && language !== "js") {
+        resolve({ output: "", error: `Language '${language}' is not supported. Only JavaScript is currently supported.` });
+        return;
+      }
+      const html = `<!DOCTYPE html><html><body><script>
+        const logs = [];
+        console.log = (...a) => logs.push(a.map(x => typeof x === 'object' ? JSON.stringify(x, null, 2) : String(x)).join(' '));
+        console.error = (...a) => logs.push('[ERROR] ' + a.map(x => String(x)).join(' '));
+        console.warn = (...a) => logs.push('[WARN] ' + a.map(x => String(x)).join(' '));
+        try { eval(${JSON.stringify(code)}); window.parent.postMessage({ type: 'done', output: logs.join('\\n') }, '*'); }
+        catch(e) { window.parent.postMessage({ type: 'error', output: logs.join('\\n'), error: e.message }, '*'); }
+      <\/script></body></html>`;
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.setAttribute("sandbox", "allow-scripts");
+      iframe.src = url;
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve({ output: "", error: "Code execution timed out (10s limit)" });
+      }, 10000);
+      const cleanup = () => {
+        clearTimeout(timer);
+        window.removeEventListener("message", handler);
+        if (iframe.parentNode) document.body.removeChild(iframe);
+        URL.revokeObjectURL(url);
+      };
+      const handler = (event: MessageEvent) => {
+        if (event.source !== iframe.contentWindow) return;
+        if (done) return;
+        done = true;
+        cleanup();
+        if (event.data.type === "done") resolve({ output: event.data.output || "" });
+        else resolve({ output: event.data.output || "", error: event.data.error });
+      };
+      window.addEventListener("message", handler);
+      document.body.appendChild(iframe);
+    });
+  };
+
+  interface CodeExecutionParams {
+    language: string;
+    code: string;
+    header?: string;
+  }
+
+  const parseCodeExecutionTool = (content: string): CodeExecutionParams | null => {
+    console.log("[CODE_EXEC parse] called, length:", content?.length, "| preview:", content?.slice(0, 120));
+    if (!content || content.trim().length < 10) return null;
+    const cleaned = content.replace(/\\```[\w-]*\n?/g, "").replace(/```[\w-]*\n?/g, "").trim();
+    console.log("[CODE_EXEC parse] cleaned:", cleaned);
+    try {
+      const jsonMatch = cleaned.match(/\{[\s\S]*"tool"\s*:\s*"code_execution"[\s\S]*\}/);
+      console.log("[CODE_EXEC parse] jsonMatch:", jsonMatch);
+      if (jsonMatch) {
+        const payload = JSON.parse(jsonMatch[0]);
+        if (payload.tool === "code_execution" && payload.code) {
+          return { language: payload.language || "javascript", code: payload.code, header: payload.header };
+        }
+      }
+    } catch (e) { console.log("[CODE_EXEC parse] error:", e); }
+    return null;
+  };
+
+  const handleCodeExecutionTool = useCallback(async (chatId: string, params: CodeExecutionParams) => {
+    const chat = useStore.getState().chats.find((c) => c.id === chatId);
+    if (!chat) return;
+    const lastMsg = chat.messages[chat.messages.length - 1];
+    if (!lastMsg || lastMsg.role !== "assistant") return;
+
+    const toolCallEntry: ToolCallEntry = {
+      id: crypto.randomUUID(),
+      tool: "code_execution",
+      header: params.header || `Running ${params.language}`,
+      params: { language: params.language, code: params.code },
+      status: "running" as const,
+    };
+
+    updateChat(chatId, {
+      messages: chat.messages.map((m) =>
+        m.id === lastMsg.id ? { ...m, toolCalls: [...(m.toolCalls || []), toolCallEntry] } : m,
+      ),
+    });
+
+    const result = await executeCodeInSandbox(params.code, params.language);
+    const output = result.error
+      ? `Error: ${result.error}${result.output ? `\n\nOutput before error:\n${result.output}` : ""}`
+      : result.output || "(no output)";
+
+    const freshChat = useStore.getState().chats.find((c) => c.id === chatId);
+    if (!freshChat) return;
+
+    updateChat(chatId, {
+      messages: freshChat.messages.map((m) =>
+        m.id === lastMsg.id
+          ? {
+              ...m,
+              toolCalls: (m.toolCalls || []).map((tc) =>
+                tc.id === toolCallEntry.id
+                  ? { ...tc, status: (result.error ? "error" : "done") as "error" | "done", result: output }
+                  : tc,
+              ),
+            }
+          : m,
+      ),
+    });
+
+    const freshChat2 = useStore.getState().chats.find((c) => c.id === chatId);
+    if (!freshChat2) return;
+
+    const resultMsg: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: `Code execution result:\n\`\`\`\n${output}\n\`\`\``,
+      timestamp: Date.now(),
+      status: "sent",
+      hidden: true,
+    };
+    const messagesWithResult = [...freshChat2.messages, resultMsg];
+    updateChat(chatId, { messages: messagesWithResult });
+
+    // Trigger follow-up stream so AI can respond with a structured answer
+    const state = useStore.getState();
+    let { provider, model } = resolveModel(state.providers, state.selectedModelId);
+    if (!provider || !model) return;
+
+    const chatConfig = freshChat2.config;
+    const memories = state.memories;
+    const langSearchAvailable = state.langSearchEnabled ? state.langSearchApiKey : "";
+
+    let followUpStarted = false;
+    streamChat(
+      provider,
+      model,
+      messagesWithResult,
+      (chunk) => {
+        const currentChat = useStore.getState().chats.find(c => c.id === chatId);
+        if (!currentChat) return;
+        let accumulated: string;
+        if (!followUpStarted) {
+          followUpStarted = true;
+          accumulated = chunk;
+        } else {
+          const existingMsg = currentChat.messages.find(m => m.id === lastMsg.id);
+          accumulated = (existingMsg?.rawContent || existingMsg?.content || "") + chunk;
+        }
+        const hasAnyFence = /```tool_calls?\b/.test(accumulated);
+        const displayContent = hasAnyFence ? commentaryBeforeFence(accumulated) : accumulated;
+        updateChat(chatId, {
+          messages: currentChat.messages.map(m =>
+            m.id === lastMsg.id
+              ? { ...m, content: displayContent, rawContent: accumulated, toolCalls: m.toolCalls }
+              : m
+          ),
+        });
+      },
+      () => {
+        const currentChat = useStore.getState().chats.find(c => c.id === chatId);
+        if (!currentChat) return;
+        const existingMsg = currentChat.messages.find(m => m.id === lastMsg.id);
+        const rawResponse = existingMsg?.rawContent || existingMsg?.content || "";
+        updateChat(chatId, {
+          messages: currentChat.messages.map(m =>
+            m.id === lastMsg.id
+              ? { ...m, content: rawResponse, rawContent: rawResponse, status: "done" as const, toolCalls: m.toolCalls }
+              : m
+          ),
+        });
+      },
+      (error) => { console.error("[CODE_EXEC] Follow-up error:", error); },
+      chatConfig,
+      memories,
+      null,
+      undefined,
+      undefined,
+      !!langSearchAvailable,
+    );
+  }, [updateChat, commentaryBeforeFence]);
 
   // Parse confirm_action tool from assistant response
   const parseConfirmAction = (content: string): { tool: string; message: string } | null => {
@@ -2114,13 +2343,17 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                   lastMsg?.rawContent || lastMsg?.content || "",
                 )
               : null;
+            const codeExec2 = !askQuestion && !confirmAction && !fileRead && !suggestMemory
+              ? parseCodeExecutionTool(lastMsg?.rawContent || lastMsg?.content || "")
+              : null;
             const webSearches =
-              !askQuestion && !confirmAction && !fileRead && !suggestMemory
+              !askQuestion && !confirmAction && !fileRead && !suggestMemory && !codeExec2
                 ? parseOperations(lastMsg?.rawContent || lastMsg?.content || "")
                 : [];
 
-const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
-          console.log("[BYTE RAW]", rawResponse);
+            const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
+            console.log("[CODE_EXEC] rawResponse:", rawResponse.slice(0, 200));
+            console.log("[CODE_EXEC] codeExec2:", codeExec2);
             let displayContent = rawResponse;
             if (askQuestion) {
               displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "";
@@ -2130,6 +2363,8 @@ const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
               displayContent = extractToolCommentary(rawResponse, ["file_read"]) || "";
             } else if (suggestMemory) {
               displayContent = extractToolCommentary(rawResponse, ["suggest_memory"]) || "";
+            } else if (codeExec2) {
+              displayContent = extractToolCommentary(rawResponse, ["code_execution"]) || "";
             } else if (webSearches.length > 0) {
               displayContent = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "";
             }
@@ -2164,6 +2399,9 @@ const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
               if (fileRead) {
                 handleFileReadTool(activeChatId, fileRead.path, fileRead.header);
               }
+              if (codeExec2) {
+                handleCodeExecutionTool(activeChatId, codeExec2);
+              }
               if (suggestMemory) {
                 window.dispatchEvent(
                   new CustomEvent("byte:suggest-memory", {
@@ -2171,8 +2409,9 @@ const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
                   }),
                 );
               }
+              const freshChat = useStore.getState().chats.find(c => c.id === activeChatId) || currentChat;
               updateChat(activeChatId, {
-                messages: currentChat.messages.map((m) =>
+                messages: freshChat.messages.map((m) =>
                   m.id === assistantMsg.id
                     ? { ...m, content: displayContent, status: "done" as const }
                     : m,
@@ -2229,11 +2468,12 @@ const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
           const askQuestion = parseAskQuestionTool(response);
           const confirmAction = !askQuestion ? parseConfirmAction(response) : null;
           const fileRead = !askQuestion && !confirmAction ? parseFileReadTool(response) : null;
-          const suggestMemory = !askQuestion && !confirmAction && !fileRead
+          const codeExec = !askQuestion && !confirmAction && !fileRead ? parseCodeExecutionTool(response) : null;
+          const suggestMemory = !askQuestion && !confirmAction && !fileRead && !codeExec
             ? parseSuggestMemory(response)
             : null;
           const webSearches =
-            !askQuestion && !confirmAction && !fileRead && !suggestMemory
+            !askQuestion && !confirmAction && !fileRead && !codeExec && !suggestMemory
               ? parseAllWebSearchTools(response)
               : [];
 
@@ -2244,6 +2484,8 @@ const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
             displayContent = extractToolCommentary(response, ["confirm_action"]) || "";
           } else if (fileRead) {
             displayContent = extractToolCommentary(response, ["file_read"]) || "";
+          } else if (codeExec) {
+            displayContent = extractToolCommentary(response, ["code_execution"]) || "";
           } else if (suggestMemory) {
             displayContent = extractToolCommentary(response, ["suggest_memory"]) || "";
           } else if (webSearches.length > 0) {
@@ -2284,6 +2526,8 @@ const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
               onAskQuestionDetected?.(askQuestion);
             } else if (confirmAction) {
               handleConfirmAction(activeChatId, confirmAction.message);
+            } else if (codeExec) {
+              handleCodeExecutionTool(activeChatId, codeExec);
             } else if (fileRead) {
               handleFileReadTool(activeChatId, fileRead.path, fileRead.header);
             }
@@ -2482,6 +2726,8 @@ const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
             onMemoryToggle={handleMemoryToggle}
             webSearchEnabled={webSearchEnabled}
             onWebSearchToggle={handleWebSearchToggle}
+            codeExecutionEnabled={codeExecutionEnabled}
+            onCodeExecutionToggle={handleCodeExecutionToggle}
             operationMode={chat?.config?.mode === "OPERATION"}
             onOperationToggle={handleOperationToggle}
           />

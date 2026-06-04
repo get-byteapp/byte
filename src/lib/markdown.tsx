@@ -3,8 +3,11 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import rehypeHighlight from 'rehype-highlight'
-import { useMemo, memo } from 'react'
+import { useMemo, memo, createContext } from 'react'
 import { CodeBlock } from '../components/shared/CodeBlock'
+import { ArtifactFrame } from '../components/shared/ArtifactFrame'
+
+export const StreamingContext = createContext(false)
 
 function preprocessMath(content: string): string {
   return content
@@ -80,6 +83,10 @@ const mdComponents = {
     let lang = fullLang[1]
     let blockNoRun = false
 
+    if (lang === 'render') {
+      return <ArtifactFrame html={codeText} />
+    }
+
     if (lang.endsWith(':norun')) {
       lang = lang.replace(/:norun$/, '')
       blockNoRun = true
@@ -109,6 +116,7 @@ const mdComponentsNoRun = {
     const codeText = extractTextFromReactNode(children).replace(/\n$/, '')
     if (isInline) return <code className={className} {...props}>{children}</code>
     let lang = fullLang[1]
+    if (lang === 'render') return <ArtifactFrame html={codeText} />
     if (lang.endsWith(':norun')) lang = lang.replace(/:norun$/, '')
     else if (lang.endsWith(':n')) lang = lang.replace(/:n$/, '')
     return <MemoedCodeBlock language={lang} code={codeText} noRun />
@@ -142,7 +150,7 @@ const DetailBody = memo(function DetailBody({ body }: { body: string }) {
 })
 
 // Exported MarkdownRenderer — memoized on content string
-export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: { content: string }) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
   const { processedContent, detailElements } = useMemo(() => {
     const { content: mainContent, details } = extractDetails(preprocessMath(content))
     
@@ -170,19 +178,21 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: { co
   const contentParts = processedContent.split(/(DETAIL_\d+)/)
   
   return (
-    <>
-      {contentParts.map((part, index) => {
-        if (part.startsWith('DETAIL_')) {
-          const detailEl = detailElements.find(d => d.id === part)
-          return detailEl ? <div key={index} style={{ overflowX: 'auto', maxWidth: '100%' }}>{detailEl.element}</div> : null
-        }
-        if (!part.trim()) return null
-        return (
-          <div key={index} style={{ overflowX: 'auto', maxWidth: '100%' }}>
-            <MarkdownContent content={part} />
-          </div>
-        )
-      })}
-    </>
+    <StreamingContext.Provider value={isStreaming ?? false}>
+      <>
+        {contentParts.map((part, index) => {
+          if (part.startsWith('DETAIL_')) {
+            const detailEl = detailElements.find(d => d.id === part)
+            return detailEl ? <div key={index} style={{ overflowX: 'auto', maxWidth: '100%' }}>{detailEl.element}</div> : null
+          }
+          if (!part.trim()) return null
+          return (
+            <div key={index} style={{ overflowX: 'auto', maxWidth: '100%' }}>
+              <MarkdownContent content={part} />
+            </div>
+          )
+        })}
+      </>
+    </StreamingContext.Provider>
   )
 })

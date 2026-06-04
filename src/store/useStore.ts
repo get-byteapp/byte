@@ -42,6 +42,7 @@ interface AppState {
   defaultResponseStyle: ResponseStyleId;
   defaultMemoryEnabled: boolean;
   defaultWebSearchEnabled: boolean;
+  defaultCodeExecutionEnabled: boolean;
 
   // Memories
   memories: { id: string; name: string; content: string; createdAt: number }[];
@@ -107,6 +108,7 @@ interface AppState {
   setDefaultResponseStyle: (style: ResponseStyleId) => void;
   setDefaultMemoryEnabled: (enabled: boolean) => void;
   setDefaultWebSearchEnabled: (enabled: boolean) => void;
+  setDefaultCodeExecutionEnabled: (enabled: boolean) => void;
   setLangSearchApiKey: (key: string) => void;
   setLangSearchEnabled: (enabled: boolean) => void;
   addMemory: (memory: { name: string; content: string }) => void;
@@ -246,6 +248,7 @@ export const useStore = create<AppState>()(
       defaultResponseStyle: "normal",
       defaultMemoryEnabled: false,
       defaultWebSearchEnabled: false,
+      defaultCodeExecutionEnabled: false,
       langSearchApiKey: "",
       langSearchEnabled: false,
       imageDescriptionModelId: null,
@@ -363,6 +366,9 @@ export const useStore = create<AppState>()(
         defaultConfig.enabledTools = get().defaultWebSearchEnabled
           ? [...defaultConfig.enabledTools, "WEB_SEARCH" as ToolId]
           : defaultConfig.enabledTools.filter((t) => t !== "WEB_SEARCH");
+        defaultConfig.enabledTools = get().defaultCodeExecutionEnabled
+          ? [...defaultConfig.enabledTools.filter((t) => t !== "CODE_EXECUTION"), "CODE_EXECUTION" as ToolId]
+          : defaultConfig.enabledTools.filter((t) => t !== "CODE_EXECUTION");
         const chat: Chat = {
           id: crypto.randomUUID(),
           title: initialMessage ? initialMessage.slice(0, 50) : "New chat",
@@ -409,6 +415,8 @@ export const useStore = create<AppState>()(
         set({ defaultMemoryEnabled: enabled }),
       setDefaultWebSearchEnabled: (enabled: boolean) =>
         set({ defaultWebSearchEnabled: enabled }),
+      setDefaultCodeExecutionEnabled: (enabled: boolean) =>
+        set({ defaultCodeExecutionEnabled: enabled }),
       setLangSearchApiKey: (langSearchApiKey) =>
         set({ langSearchApiKey, langSearchEnabled: !!langSearchApiKey }),
       setLangSearchEnabled: (langSearchEnabled) => set({ langSearchEnabled }),

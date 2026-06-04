@@ -439,7 +439,7 @@ export const MessageBubble = memo(function MessageBubble({
     content = <LoadingDots />;
   } else if (isStreaming || visible || (hasToolCalls && allToolsDone)) {
     // Streaming, visible, or tools done (answer streaming in) — render markdown
-    content = <MarkdownRenderer content={displayContent} />;
+    content = <MarkdownRenderer content={displayContent} isStreaming={isStreaming} />;
   } else {
     // Offscreen — show plain text as a lightweight placeholder
     content = (

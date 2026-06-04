@@ -20,6 +20,8 @@ import TOOL_URL_FETCH from '../../prompts/tools/URL_FETCH.md?raw';
 import TOOL_FILE_READ from '../../prompts/tools/FILE_READ.md?raw';
 import TOOL_ASK_QUESTION from '../../prompts/tools/ASK_QUESTION.md?raw';
 import TOOL_CONFIRM_ACTION from '../../prompts/tools/CONFIRM_ACTION.md?raw';
+import TOOL_CODE_EXECUTION from '../../prompts/tools/CODE_EXECUTION.md?raw';
+import TOOL_RENDER from '../../prompts/tools/RENDER.md?raw';
 
 // Modes
 import MODE_CANVAS from '../../prompts/modes/CANVAS.md?raw';
@@ -46,6 +48,7 @@ const TOOLS: Record<ToolId, string> = {
   FILE_READ: TOOL_FILE_READ,
   ASK_QUESTION: TOOL_ASK_QUESTION,
   CONFIRM_ACTION: TOOL_CONFIRM_ACTION,
+  CODE_EXECUTION: TOOL_CODE_EXECUTION,
 };
 
 const MODES: Record<ModeId, string> = {
@@ -86,6 +89,12 @@ export function assemblePrompt(config: ChatConfig, memories?: { name: string; co
   if (MAIN.trim()) {
     parts.push(MAIN);
     includedFiles.push('MAIN.md');
+  }
+
+  // 1b. Render blocks (always available — injected after MAIN)
+  if (TOOL_RENDER.trim()) {
+    parts.push(TOOL_RENDER);
+    includedFiles.push('tools/RENDER.md');
   }
 
   // 2. Response Style (inject if not 'normal')

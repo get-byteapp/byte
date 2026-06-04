@@ -48,7 +48,7 @@ Let me research the atomic bomb from multiple angles.
 {"tool":"web_search","header":"Comparing accounts","query":"Hiroshima Nagasaki bombing first-hand accounts"}
 ```
 
-Only use a tool when it would meaningfully improve your answer. Don't search the web for things you already know well. Don't execute code just to show off.
+Only use a tool when it would meaningfully improve your answer. Don't search the web for things you already know well. When the code_execution tool is available, use it for computational tasks instead of the runnable code block format — real output is more trustworthy than pre-written OUTPUT:.
 
 ## Formatting
 

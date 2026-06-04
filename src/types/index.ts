@@ -67,7 +67,8 @@ export type ToolId =
   | "URL_FETCH"
   | "FILE_READ"
   | "ASK_QUESTION"
-  | "CONFIRM_ACTION";
+  | "CONFIRM_ACTION"
+  | "CODE_EXECUTION";
 
 export type ModeId = "CANVAS" | "COUNCIL" | "OPERATION";
 

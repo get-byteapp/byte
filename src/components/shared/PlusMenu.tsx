@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Plus, Paperclip, Camera, Folder, BookOpen, Zap, Search, Pen, ChevronRight, Check, X, Brain, Info, Terminal,
+  Plus, Paperclip, Camera, Folder, BookOpen, Zap, Search, Pen, ChevronRight, Check, X, Brain, Info, Terminal, Code2,
 } from 'lucide-react'
 import { getProjectIcon } from '../../lib/projectIcons'
 import type { ResponseStyleId, Project } from '../../types'
@@ -25,6 +25,8 @@ interface PlusMenuProps {
   activeChatId?: string | null
   onAddChatToProject?: (projectId: string) => void
   onRemoveChatFromProject?: (projectId: string, chatId: string) => void
+  codeExecutionEnabled?: boolean
+  onCodeExecutionToggle?: (enabled: boolean) => void
   operationMode?: boolean
   onOperationToggle?: (enabled: boolean) => void
 }
@@ -55,6 +57,8 @@ export function PlusMenu({
   activeChatId,
   onAddChatToProject,
   onRemoveChatFromProject,
+  codeExecutionEnabled = false,
+  onCodeExecutionToggle,
   operationMode = false,
   onOperationToggle,
 }: PlusMenuProps) {
@@ -466,6 +470,13 @@ export function PlusMenu({
           onClick={() => { onOperationToggle?.(!operationMode); }}
           isToggle
           isActive={Boolean(operationMode)}
+        />
+        <MenuItem
+          icon={Code2}
+          label="Code execution"
+          onClick={() => onCodeExecutionToggle?.(!codeExecutionEnabled)}
+          isToggle
+          isActive={Boolean(codeExecutionEnabled)}
         />
         {/* Wrapper div with no gap - submenu attaches directly to button edge */}
         <div

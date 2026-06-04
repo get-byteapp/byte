@@ -4,15 +4,17 @@ import { useStore } from "../../store/useStore";
 import type { Message } from "../../types";
 import { InputBox } from "../shared/InputBox";
 import { sendChatMessage, resolveModel } from "../../lib/api";
+import { getDefaultChatConfig } from "../../lib/prompts";
 
 export function NewChatView() {
-  const { providers, selectedModelId, activeProjectId, setActiveProjectId } = useStore();
+  const { providers, selectedModelId, activeProjectId, setActiveProjectId, defaultCodeExecutionEnabled } = useStore();
 
   // Clear active project when entering new chat page
   useEffect(() => {
     if (activeProjectId) setActiveProjectId(null);
   }, []);
   const [isLoading, setIsLoading] = useState(false);
+  const [codeExecutionEnabled, setCodeExecutionEnabled] = useState(() => defaultCodeExecutionEnabled);
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -73,11 +75,16 @@ export function NewChatView() {
       abortControllerRef.current = new AbortController();
 
       try {
+        const chatConfig = getDefaultChatConfig();
+        if (codeExecutionEnabled) {
+          chatConfig.enabledTools = [...chatConfig.enabledTools, "CODE_EXECUTION" as const];
+        }
         const response = await sendChatMessage(
           provider,
           model,
           newMessages.slice(0, -1),
           abortControllerRef.current.signal,
+          chatConfig,
         );
 
         setMessages((prev) =>
@@ -138,6 +145,8 @@ export function NewChatView() {
           onSend={handleSend}
           isStreaming={isLoading}
           onStop={handleStop}
+          codeExecutionEnabled={codeExecutionEnabled}
+          onCodeExecutionToggle={setCodeExecutionEnabled}
         />
       </div>
     </div>

@@ -119,6 +119,16 @@ BYTE.warning  BYTE.success
 BYTE.font  BYTE.fontD  BYTE.fs   BYTE.r   BYTE.rSm  BYTE.rLg
 ```
 
+**Suggest prompt to user:** Use `BYTE.suggestPrompt(text)` to populate the chat input with a follow-up question. Useful for buttons that guide the user to the next step:
+
+```jsx
+<button className="btn" onClick={() => BYTE.suggestPrompt('Tell me more about emergent capabilities')}>
+  More Info
+</button>
+```
+
+When clicked, the text appears in the chat input box — the user reviews it and presses Enter to send.
+
 **Chart.js scale config (copy this every time):**
 ```js
 scales: {

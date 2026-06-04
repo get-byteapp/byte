@@ -4,7 +4,7 @@ import { useStore } from "../../store/useStore";
 import { InputBox } from "../shared/InputBox";
 import { makeModelKey, resolveModel } from "../../lib/api";
 import { ICON_MAP } from "../../lib/quickPrompts";
-import type { ResponseStyleId, ImageAttachment } from "../../types";
+import type { ResponseStyleId, ImageAttachment, ToolId } from "../../types";
 import type { Prompt } from "../../lib/quickPrompts";
 
 interface PlaceholderWizardState {
@@ -26,6 +26,8 @@ export function HomeView() {
     setDefaultMemoryEnabled,
     defaultWebSearchEnabled,
     setDefaultWebSearchEnabled,
+    defaultCodeExecutionEnabled,
+    setDefaultCodeExecutionEnabled,
     quickPrompts,
   } = useStore();
   const [inputValue, setInputValue] = useState("");
@@ -93,11 +95,12 @@ export function HomeView() {
 
   const handleSend = (text: string, attachments?: ImageAttachment[]) => {
     if (!text.trim()) return;
+    const tools: ToolId[] = ["ASK_QUESTION"];
+    if (defaultWebSearchEnabled) tools.push("WEB_SEARCH");
+    if (defaultCodeExecutionEnabled) tools.push("CODE_EXECUTION");
     const chatId = newChat(
       text,
-      defaultWebSearchEnabled
-        ? { enabledTools: ["ASK_QUESTION", "WEB_SEARCH"] }
-        : undefined,
+      tools.length > 1 ? { enabledTools: tools } : undefined,
     );
     setTimeout(() => {
       window.dispatchEvent(
@@ -128,6 +131,13 @@ export function HomeView() {
       setDefaultWebSearchEnabled(enabled);
     },
     [setDefaultWebSearchEnabled],
+  );
+
+  const handleCodeExecutionToggle = useCallback(
+    (enabled: boolean) => {
+      setDefaultCodeExecutionEnabled(enabled);
+    },
+    [setDefaultCodeExecutionEnabled],
   );
 
   const handlePillClick = (pillId: string) => {
@@ -293,6 +303,8 @@ export function HomeView() {
             onMemoryToggle={handleMemoryToggle}
             webSearchEnabled={defaultWebSearchEnabled}
             onWebSearchToggle={handleWebSearchToggle}
+            codeExecutionEnabled={defaultCodeExecutionEnabled}
+            onCodeExecutionToggle={handleCodeExecutionToggle}
           />
         </div>
 
