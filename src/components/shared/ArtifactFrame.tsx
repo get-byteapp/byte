@@ -109,11 +109,34 @@ const RESIZE_SCRIPT = `<script>(function(){
   if(window.ResizeObserver){new ResizeObserver(report).observe(document.body)}
 })()</script>`
 
+const ERROR_SCRIPT = `<script>(function(){function r(m){parent.postMessage({type:'byte-artifact-error',message:String(m)},'*')}window.onerror=function(_,_2,_3,_4,e){r(e&&e.message||'Script error')};window.addEventListener('unhandledrejection',function(e){r(e.reason&&e.reason.message||'Unhandled rejection')})})()</script>`
+
+const REACT_CDN_SCRIPTS = [
+  'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js',
+  'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js',
+  'https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js',
+].map(src => `<script crossorigin src="${src}"></script>`).join('')
+
+const REACT_PREAMBLE = `const{useState,useEffect,useRef,useMemo,useCallback,createContext,useContext,useReducer,Fragment}=React;`
+
+const REACT_POSTAMBLE = `\nif(typeof App!=='undefined'&&document.getElementById('root')&&!document.getElementById('root').firstChild){ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App))}`
+
+function isHtmlContent(code: string): boolean {
+  const t = code.trimStart()
+  return t.startsWith('<!DOCTYPE') || t.startsWith('<html')
+}
+
 function buildSrcdoc(html: string): string {
   const cssVars = collectCssVars()
   const byteScript = buildByteScript()
-  const injection = `<style>${cssVars}${BASE_STYLES}</style>${byteScript}`
+  const injection = `<style>${cssVars}${BASE_STYLES}</style>${byteScript}${ERROR_SCRIPT}`
 
+  if (!isHtmlContent(html)) {
+    // React/JSX mode — model writes JSX, we wrap it in a full React shell
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">${injection}${REACT_CDN_SCRIPTS}</head><body><div id="root"></div><script type="text/babel" data-presets="react">${REACT_PREAMBLE}\n${html}\n${REACT_POSTAMBLE}<\/script>${RESIZE_SCRIPT}</body></html>`
+  }
+
+  // HTML mode — existing behavior, unchanged
   const trimmed = html.trimStart()
   if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
     let out = html
