@@ -27,6 +27,10 @@ function initGenericCarousel(containerSelector, slideSelector, dotSelector, hasC
 
     slides.forEach((slide, i) => {
       slide.classList.toggle('active', i === currentSlide);
+      if (i === currentSlide) {
+        const img = slide.querySelector('img[src$=".gif"]');
+        if (img) { const s = img.src; img.src = ''; img.src = s; }
+      }
     });
 
     dots.forEach((dot, i) => {
