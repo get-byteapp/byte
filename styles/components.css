@@ -32,8 +32,10 @@
 }
 
 .btn-primary:hover {
+  background: linear-gradient(180deg, #1aadff, #006ab5);
+  color: white;
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(45, 91, 255, 0.25), 0 0 0 1px rgba(45, 91, 255, 0.15) inset;
+  box-shadow: 0 4px 16px rgba(45, 91, 255, 0.3);
 }
 
 .btn-secondary {
@@ -376,6 +378,94 @@ html.dark .navbar {
 .mobile-menu .nav-link {
   display: block;
   padding: var(--space-2) var(--space-4);
+}
+
+/* ── Download Coming Soon Button ── */
+.btn-coming-soon {
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+}
+
+.btn-coming-soon .btn-label-default,
+.btn-coming-soon .btn-label-hover {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  transition: opacity 280ms var(--ease),
+              transform 280ms var(--ease);
+}
+
+.btn-coming-soon .btn-label-hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.btn-coming-soon:hover .btn-label-default {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.btn-coming-soon:hover .btn-label-hover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.btn-primary.btn-coming-soon:hover {
+  background: linear-gradient(180deg, #2a2f3a, #1a1e26) !important;
+  color: white !important;
+  transform: none !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  transition: background 280ms var(--ease), box-shadow 280ms var(--ease);
+}
+
+.btn-secondary.btn-coming-soon:hover {
+  background: var(--color-surface-alt);
+  transform: none;
+}
+
+/* ── Waitlist Form ── */
+.waitlist-form {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-8);
+  max-width: 400px;
+  margin-inline: auto;
+}
+
+.waitlist-input {
+  flex: 1;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-base);
+  font-family: var(--font-body);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease),
+              box-shadow var(--duration-fast) var(--ease);
+  -webkit-appearance: none;
+}
+
+.waitlist-input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(0, 158, 255, 0.12);
+}
+
+.waitlist-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 480px) {
+  .waitlist-form {
+    flex-direction: column;
+  }
 }
 
 /* ── Divider ── */

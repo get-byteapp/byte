@@ -5,7 +5,7 @@
 export function initCarousel() {
   const carouselData = [
     { label: 'Featured', title: '16 Providers', desc: 'OpenAI, Claude, Gemini, Mistral, Groq, HuggingFace, Together AI, and more.' },
-    { label: 'Personalization', title: '9 Themes', desc: 'Dark, Light, Ocean, Sage, Rose, Sand, Slate, Midnight, Warm.' },
+    { label: 'Personalization', title: 'Super Customizable', desc: 'Themes, fonts, layouts, and more — make Byte yours.' },
     { label: 'Save Money', title: 'Direct API Pricing', desc: 'Pay directly with your API key. No middleman markup.' },
     { label: 'Real-time', title: 'Web Search', desc: 'Search the internet and get current information instantly.' },
     { label: 'Powerful', title: 'Vision & Files', desc: 'Upload images, PDFs, documents and get instant analysis.' },
