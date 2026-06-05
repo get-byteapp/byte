@@ -113,6 +113,94 @@
   color: var(--color-text-secondary);
 }
 
+/* ── Theme Toggle ── */
+.theme-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.theme-toggle:hover {
+  background: var(--color-surface-hover);
+}
+
+.theme-toggle:active {
+  transform: scale(0.95);
+}
+
+.theme-toggle-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  pointer-events: none;
+  transition: border-color var(--duration-fast) var(--ease);
+}
+
+.theme-toggle:hover .theme-toggle-bg {
+  border-color: var(--color-border-hover);
+}
+
+.theme-icon {
+  position: absolute;
+  color: var(--color-text);
+  transition: transform var(--duration-normal) var(--ease-out),
+              opacity var(--duration-normal) var(--ease-out);
+}
+
+.theme-icon-light {
+  transform: rotate(0deg) scale(1);
+  opacity: 1;
+}
+
+.theme-icon-dark {
+  transform: rotate(-180deg) scale(0.7);
+  opacity: 0;
+}
+
+html.dark .theme-icon-light {
+  transform: rotate(180deg) scale(0.7);
+  opacity: 0;
+}
+
+html.dark .theme-icon-dark {
+  transform: rotate(0deg) scale(1);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle,
+  .theme-toggle-bg,
+  .theme-icon {
+    transition: none;
+  }
+
+  .theme-icon-light {
+    transform: rotate(0deg) scale(1);
+  }
+
+  .theme-icon-dark {
+    transform: rotate(0deg) scale(1);
+  }
+
+  html.dark .theme-icon-light {
+    transform: rotate(0deg) scale(1);
+  }
+
+  html.dark .theme-icon-dark {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
 /* ── Navigation ── */
 .navbar {
   position: fixed;
@@ -132,8 +220,12 @@
               box-shadow var(--duration-normal) var(--ease);
 }
 
+html.dark .navbar {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
 @media (prefers-color-scheme: dark) {
-  .navbar {
+  .navbar:not(html.light .navbar) {
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
   }
 }

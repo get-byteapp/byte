@@ -103,7 +103,7 @@
 
 /* ── Dark Mode ── */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light) {
     --color-bg: #0C0C0E;
     --color-surface: rgba(22, 22, 26, 0.7);
     --color-surface-hover: rgba(30, 30, 36, 0.8);
@@ -125,6 +125,48 @@
     --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.3);
     --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.4);
   }
+}
+
+/* ── Dark Mode (Explicit Class) ── */
+html.dark {
+  --color-bg: #0C0C0E;
+  --color-surface: rgba(22, 22, 26, 0.7);
+  --color-surface-hover: rgba(30, 30, 36, 0.8);
+  --color-surface-alt: rgba(12, 12, 14, 0.5);
+
+  --color-text: #F5F4F2;
+  --color-text-secondary: #8B8986;
+  --color-text-muted: #6B6966;
+
+  --color-accent: #009EFF;
+  --color-accent-light: #33B8FF;
+  --color-accent-dark: #007ACC;
+
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-hover: rgba(255, 255, 255, 0.1);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.4);
+}
+
+html.light {
+  --color-bg: #FAF8F5;
+  --color-surface: rgba(255, 255, 255, 0.6);
+  --color-surface-hover: rgba(255, 255, 255, 0.8);
+  --color-surface-alt: rgba(250, 248, 245, 0.5);
+
+  --color-text: #1A1918;
+  --color-text-secondary: #6B6966;
+  --color-text-muted: #9B9894;
+
+  --color-accent: #009EFF;
+  --color-accent-light: #33B8FF;
+  --color-accent-dark: #007ACC;
+
+  --color-border: rgba(0, 0, 0, 0.06);
+  --color-border-hover: rgba(0, 0, 0, 0.1);
 }
 
 /* ── Reduced Motion ── */
