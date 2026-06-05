@@ -11,7 +11,7 @@ export function ByteLogo({ size = 20, className }: ByteLogoProps) {
       src={iconSvg}
       alt="Byte"
       className={className}
-      style={{ width: size, height: size, opacity: 'var(--logo)' }}
+      style={{ width: size, height: size }}
     />
   )
 }
