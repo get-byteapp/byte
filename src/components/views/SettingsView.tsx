@@ -2397,7 +2397,22 @@ function AboutPanel() {
               lineHeight: 1.6,
             }}
           >
-            Connect 16 AI providers with 30+ models total
+            Connect 15+ AI providers
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <Check
+            size={14}
+            style={{ flexShrink: 0, marginTop: 3, color: "var(--acc)" }}
+          />
+          <div
+            style={{
+              fontSize: "calc(var(--fs) - .5px)",
+              color: "var(--tx2)",
+              lineHeight: 1.6,
+            }}
+          >
+            Customize your appearance in the Appearance tab
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
