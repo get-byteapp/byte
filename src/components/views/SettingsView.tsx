@@ -2397,7 +2397,7 @@ function AboutPanel() {
               lineHeight: 1.6,
             }}
           >
-            Chat with GPT-4o, Claude, Gemini, and 200+ models via OpenRouter
+            Connect 16 AI providers with 30+ models total
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
