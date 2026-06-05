@@ -1,4 +1,4 @@
-import iconSvg from '../../icon.svg'
+import iconSvg from '../../../icon.svg'
 
 interface ByteLogoProps {
   size?: number
