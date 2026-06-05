@@ -2142,7 +2142,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
       const genId = () => crypto.randomUUID();
       const userMsg: Message = { id: genId(), role: "user", content: text.trim(), timestamp: Date.now(), status: "sent", attachments };
-      const assistantMsg: Message = { id: genId(), role: "assistant", content: "", timestamp: Date.now(), status: "streaming" };
+      const assistantMsg: Message = { id: genId(), role: "assistant", content: "", rawContent: "", timestamp: Date.now(), status: "streaming" };
 
       if (hasOCR) {
         assistantMsg.ocrPhase = "extracting";
@@ -2162,7 +2162,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       // Process describe/OCR attachments
       if (hasDescribe || hasOCR) {
         if (hasDescribe && !hasOCR) {
-          const describingMsg: Message = { id: genId(), role: "assistant", content: "Analyzing images...", timestamp: Date.now(), status: "streaming", describePhase: "describing" };
+          const describingMsg: Message = { id: genId(), role: "assistant", content: "Analyzing images...", rawContent: "", timestamp: Date.now(), status: "streaming", describePhase: "describing" };
           updateChat(activeChatId, { messages: [...(chat?.messages || []), describingMsg] });
         }
 
