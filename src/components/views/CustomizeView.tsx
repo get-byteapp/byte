@@ -1408,15 +1408,25 @@ export function CustomizeView() {
                           <div className="cp-item-expand">
                             <div className="mem-content">{mem.content}</div>
                             <div className="cp-item-footer">
-                              <button 
-                                className="cp-btn secondary" 
-                                onClick={() => handleEditMemory(mem)}
+                              <button
+                                type="button"
+                                className="cp-btn secondary"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleEditMemory(mem);
+                                }}
                               >
                                 <Edit2 size={14} /> Edit
                               </button>
-                              <button 
-                                className="cp-btn danger" 
-                                onClick={() => handleDeleteMemory(mem.id)}
+                              <button
+                                type="button"
+                                className="cp-btn danger"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDeleteMemory(mem.id);
+                                }}
                               >
                                 <Trash2 size={14} /> Delete
                               </button>

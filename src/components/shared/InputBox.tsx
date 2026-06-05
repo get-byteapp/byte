@@ -33,8 +33,6 @@ interface InputBoxProps {
   onWebSearchToggle?: (enabled: boolean) => void;
   codeExecutionEnabled?: boolean;
   onCodeExecutionToggle?: (enabled: boolean) => void;
-  operationMode?: boolean;
-  onOperationToggle?: (enabled: boolean) => void;
 }
 
 export function InputBox({
@@ -52,8 +50,6 @@ export function InputBox({
   onWebSearchToggle,
   codeExecutionEnabled: extCodeExecutionEnabled,
   onCodeExecutionToggle,
-  operationMode = false,
-  onOperationToggle,
 }: InputBoxProps) {
   const [internalValue, setInternalValue] = useState("");
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
@@ -931,8 +927,6 @@ export function InputBox({
                 activeChatId={activeChatId}
                 onAddChatToProject={handleAddChatToProject}
                 onRemoveChatFromProject={removeChatFromProject}
-                operationMode={operationMode}
-                onOperationToggle={onOperationToggle}
               />
               {activeProject && (
                 <button

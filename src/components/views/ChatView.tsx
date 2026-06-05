@@ -314,17 +314,6 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     [activeChatId, chat?.config, updateChat],
   );
 
-  const handleOperationToggle = useCallback(
-    (enabled: boolean) => {
-      if (activeChatId && chat?.config) {
-        updateChat(activeChatId, {
-          config: { ...chat.config, mode: enabled ? "OPERATION" as const : null },
-        });
-      }
-    },
-    [activeChatId, chat?.config, updateChat],
-  );
-
   const handleCodeExecutionToggle = useCallback(
     (enabled: boolean) => {
       if (activeChatId && chat?.config) {
@@ -2728,8 +2717,6 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             onWebSearchToggle={handleWebSearchToggle}
             codeExecutionEnabled={codeExecutionEnabled}
             onCodeExecutionToggle={handleCodeExecutionToggle}
-            operationMode={chat?.config?.mode === "OPERATION"}
-            onOperationToggle={handleOperationToggle}
           />
         </div>
       )}
