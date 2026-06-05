@@ -18,7 +18,9 @@ import {
 
 function initWaitlistForm() {
   const form = document.querySelector('.waitlist-form');
-  if (!form) return;
+  const modal = document.getElementById('waitlistModal');
+  const closeBtn = document.querySelector('.waitlist-modal-close');
+  if (!form || !modal) return;
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -34,10 +36,8 @@ function initWaitlistForm() {
       });
 
       if (res.ok) {
-        form.innerHTML = `
-          <p style="color: var(--color-text); font-size: var(--text-lg); font-weight: var(--font-weight-semibold);">You're on the list.</p>
-          <p style="color: var(--color-text-secondary); margin-top: var(--space-2); font-size: var(--text-sm);">We'll email you the moment Byte launches.</p>
-        `;
+        btn.textContent = '✓ Sent';
+        modal.classList.add('open');
       } else {
         btn.disabled = false;
         btn.textContent = 'Notify Me';
@@ -48,6 +48,16 @@ function initWaitlistForm() {
     } catch {
       btn.disabled = false;
       btn.textContent = 'Notify Me';
+    }
+  });
+
+  closeBtn.addEventListener('click', () => {
+    modal.classList.remove('open');
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.remove('open');
     }
   });
 }
