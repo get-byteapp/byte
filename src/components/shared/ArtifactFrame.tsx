@@ -177,14 +177,14 @@ export function ArtifactFrame({ html }: ArtifactFrameProps) {
         setHeight(Math.min(Math.max(e.data.h + 4, 80), 960))
         setLoaded(true)
       }
-      if (e.data?.type === 'byte-artifact-error') {
+      if (e.data?.type === 'byte-artifact-error' && !isStreaming) {
         setRenderError(e.data.message || 'Artifact failed to render')
         setLoaded(true)
       }
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
-  }, [])
+  }, [isStreaming])
 
   useEffect(() => {
     setLoaded(false)
