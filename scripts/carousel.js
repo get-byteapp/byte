@@ -4,12 +4,12 @@
 
 export function initCarousel() {
   const carouselData = [
-    { label: 'No Subscription', title: 'Forever Credits', desc: 'Your credits never expire. Buy once, use forever.' },
-    { label: 'Unified Interface', title: 'Use Any Model', desc: 'GPT-4, Claude 3.5, Gemini Pro, Mistral — one beautiful interface.' },
+    { label: 'Featured', title: '16 Providers', desc: 'OpenAI, Claude, Gemini, Mistral, Groq, HuggingFace, Together AI, and more.' },
+    { label: 'Personalization', title: '9 Themes', desc: 'Dark, Light, Ocean, Sage, Rose, Sand, Slate, Midnight, Warm.' },
     { label: 'Save Money', title: 'Direct API Pricing', desc: 'Pay directly with your API key. No middleman markup.' },
-    { label: 'Customize', title: '10+ Themes', desc: 'Dark, light, ocean, sage, warm, midnight and more.' },
-    { label: 'Smart', title: 'Memory Built-in', desc: 'Byte remembers context. No need to repeat yourself.' },
-    { label: 'Power User', title: 'Council Mode', desc: 'Chat with multiple AIs at once. Compare responses.' }
+    { label: 'Real-time', title: 'Web Search', desc: 'Search the internet and get current information instantly.' },
+    { label: 'Powerful', title: 'Vision & Files', desc: 'Upload images, PDFs, documents and get instant analysis.' },
+    { label: 'Flexible', title: 'Local Support', desc: 'Run Ollama and LM Studio models on your own machine.' }
   ];
 
   let currentSlide = 0;
