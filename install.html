@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Install Byte</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-display: 'EB Garamond', Georgia, 'Times New Roman', serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --color-bg: #FAF8F5;
+      --color-surface: rgba(255, 255, 255, 0.6);
+      --color-text: #1A1918;
+      --color-text-secondary: #6B6966;
+      --color-accent: #009EFF;
+      --color-accent-light: #33B8FF;
+      --color-accent-dark: #007ACC;
+      --color-border: rgba(0, 0, 0, 0.06);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-body);
+      background: var(--color-bg);
+      color: var(--color-text);
+      line-height: 1.6;
+      letter-spacing: -0.01em;
+    }
+    h1 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      line-height: 1.1;
+    }
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 4rem 1.5rem;
+    }
+    h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.1rem; color: var(--color-text-secondary); margin-bottom: 2rem; }
+    .step {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 1.25rem;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .step-title {
+      font-family: var(--font-display);
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.5rem;
+      height: 1.5rem;
+      background: var(--color-accent);
+      color: white;
+      border-radius: 50%;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .command-row { display: flex; align-items: center; gap: 0.5rem; }
+    .code-block {
+      flex: 1;
+      background: #F5F4F2;
+      color: var(--color-text);
+      padding: 0.625rem 0.875rem;
+      border-radius: 0.5rem;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 0.7rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.75rem;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      border-radius: 100px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.16s, box-shadow 0.16s;
+    }
+    .btn-primary {
+      background: linear-gradient(180deg, var(--color-accent-light), var(--color-accent-dark));
+      color: white;
+      box-shadow: 0 1px 2px rgba(45, 91, 255, 0.2), 0 0 0 1px rgba(45, 91, 255, 0.1) inset;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(45, 91, 255, 0.25), 0 0 0 1px rgba(45, 91, 255, 0.15) inset;
+    }
+    .btn-center { display: block; margin-top: 1.5rem; text-align: center; }
+    .copy-btn {
+      padding: 0.5rem 1.25rem;
+      background: linear-gradient(180deg, var(--color-accent-light), var(--color-accent-dark));
+      color: white;
+      border: none;
+      border-radius: 100px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 1px 2px rgba(45, 91, 255, 0.2), 0 0 0 1px rgba(45, 91, 255, 0.1) inset;
+    }
+    .copy-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(45, 91, 255, 0.25), 0 0 0 1px rgba(45, 91, 255, 0.15) inset;
+    }
+    .copy-btn:active { transform: scale(0.97); }
+    .hint { font-size: 0.8125rem; color: var(--color-text-secondary); margin-top: 0.5rem; }
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(20px) saturate(1.2);
+      color: var(--color-text);
+      padding: 0.75rem 1.5rem;
+      border-radius: 100px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      opacity: 0;
+      transition: transform 0.3s, opacity 0.3s;
+      z-index: 1000;
+      box-shadow: 0 4px 24px -8px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 158, 255, 0.15);
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .back-link:hover { color: var(--color-text); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="index.html" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back
+    </a>
+    
+    <h1>Install Byte</h1>
+    <p class="subtitle">Follow the instructions below:</p>
+    
+<!-- Mac Instructions -->
+    <div id="mac-instructions">
+      <div class="step">
+        <div class="step-title">
+          <span class="step-number">1</span>
+          Install Homebrew
+        </div>
+        <div class="command-row">
+          <code class="code-block" id="cmd1">/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</code>
+          <button class="copy-btn" id="btn1" onclick="copyToClipboard(1)">Copy</button>
+        </div>
+        <p class="hint">Press Cmd+Space, type "Terminal", press Enter, paste and run</p>
+      </div>
+      
+      <div class="step">
+        <div class="step-title">
+          <span class="step-number">2</span>
+          Install Byte
+        </div>
+        <div class="command-row">
+          <code class="code-block" id="cmd2">brew tap usebyte/byte && brew install --cask byte</code>
+          <button class="copy-btn" id="btn2" onclick="copyToClipboard(2)">Copy</button>
+        </div>
+        <p class="hint">Run this after Homebrew finishes</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Copied to clipboard!</div>
+
+  <script>
+    function copyToClipboard(num) {
+      var text = document.getElementById('cmd' + num).textContent;
+      var btn = event.target;
+      
+      navigator.clipboard.writeText(text).then(function() {
+        btn.textContent = 'Copied!';
+        
+        var toast = document.getElementById('toast');
+        toast.classList.add('show');
+        
+        setTimeout(function() {
+          btn.textContent = 'Copy';
+          toast.classList.remove('show');
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

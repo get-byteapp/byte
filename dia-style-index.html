@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="initial-scale=1.0, width=device-width">
+  <title>Byte | Release Notes</title>
+  <meta name="description" content="What's new in Byte. Read about the latest features, improvements, and updates.">
+  <meta property="og:title" content="Byte | Release Notes">
+  <meta property="og:description" content="What's new in Byte. Read about the latest features, improvements, and updates.">
+  <meta property="og:type" content="website">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://www.diabrowser.com/_next/static/css/3e874f4af592471e.css?dpl=dpl_5kthLpV5S7jj147Yuoh9eEWXK2Xp">
+
+  <style>
+    :root {
+      --current: currentColor; --transparent: transparent; --black: #000000; --black-50: #00000080; --black-10: #0000001A; --black-8: rgba(0,0,0,0.08); --header-background: #dddddd77; --white: #F8F8F8; --white-50: #F8F8F880; --white-10: #F8F8F81A; --red: #FA3D1D; --red-50: #FA3D1D80; --red-10: #FA3D1D1A; --blue: #0358F7; --blue-50: #0358F780; --blue-10: #0358F71A; --pink: #FD02F5; --pink-50: #FD02F580; --pink-10: #FD02F51A; --yellow: #FFB005; --yellow-50: #FFB00580; --yellow-10: #FFB0051A; --brown: #340B05; --brown-50: #340B0580; --brown-10: #340B051A; --grey: #D9D9D9; --primary: rgba(0,0,0,0.85); --secondary: rgba(0,0,0,0.60); --tertiary: rgba(0,0,0,0.45); --quaternary: rgba(0,0,0,0.20); --fill-primary: rgba(0,0,0,0.9); --fill-secondary: rgba(0,0,0,0.08); --fill-secondary-hover: rgba(0,0,0,0.12); --fill-tertiary: rgba(0,0,0,0.04); --stroke-light: rgba(0,0,0,0.06); --stroke-medium: rgba(0,0,0,0.12); --get-dia-button-hover: rgba(0,0,0,0.90); --primary-50: rgba(0,0,0,0.425); --primary-10: rgba(0,0,0,0.085); --background: #F8F8F8; --true-white: #FFFFFF; --creamsicle-gradient: linear-gradient(180deg,#FFF1AC 60%,#FF6F3C); --grapefruit-gradient: linear-gradient(180deg,#FFADA0 60%,#96D0FF); --cotton-candy-gradient: linear-gradient(180deg,#96D0FF 60%,#FFC1FD); --sunshine-gradient: linear-gradient(180deg,#5092C7 60%,#FFB005); --twilight-gradient: linear-gradient(180deg,#C679C4 60%,#FFADA0); --midnight-gradient: linear-gradient(180deg,#340B05 60%,#5092C7); --student-gradient: linear-gradient(180deg,#FD02F5 -10.07%,#FA3D1D 6.81%,#FFB005 35.18%,#E1E1FE 66.63%,#0358F7 95.78%,#340B05 149.46%); --student-marquee: linear-gradient(270deg,#FD02F5,#FA3D1D 15.94%,#FFB005 42.76%,#E1E1FE 72.48%,#0358F7 100.02%,#340B05 150.75%);
+    }
+    .font-serif { font-family: 'EB Garamond', 'Exposure VAR', Exposure, Georgia, serif; }
+    .font-sans { font-family: 'Inter', 'ABC Oracle', Helvetica, Arial, sans-serif; }
+    .font-quadrant, .font-mono { font-family: 'JetBrains Mono', 'ABC Favorit Mono', 'Quadrant Text Mono', monospace; }
+    body { font-family: 'Inter', 'ABC Oracle', Helvetica, Arial, sans-serif; }
+
+    .bg-gradient {
+      position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+    }
+    .bg-gradient-inner {
+      position: absolute; left: 50%; width: 280vw; height: 280vw; top: calc(34svh + 85vw);
+      transform: translateX(-50%); clip-path: inset(0 0 33.33% 0); filter: blur(40px);
+      background-image: radial-gradient(circle 130vw at center,
+        rgba(255,255,255,0) 54.810%, rgba(255,172,227,0.35) 60%,
+        rgba(255,241,172,0.2) 62.983%, rgba(121,201,255,0.2) 68.500%,
+        rgba(74,96,209,0.08) 80%, rgba(80,146,199,0.05) 90%, rgba(0,0,0,0) 100%);
+    }
+    @media (min-width: 600px) { .bg-gradient-inner { filter: blur(60px); } }
+
+    @keyframes marqueeL { 0% { transform: translateZ(0); } to { transform: translate3d(-100%,0,0); } }
+
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  </style>
+</head>
+<body class="antialiased bg-background text-primary">
+
+<div class="bg-gradient"><div class="bg-gradient-inner"></div></div>
+
+<div id="__next">
+  <main class="overflow-x-clip">
+
+    <!-- Mobile Banner -->
+    <div class="1100:hidden fixed left-7 right-7 max-w-400 mx-auto z-2" style="top:185px;">
+      <div class="backdrop-blur-[50px] bg-[rgba(235,235,235,0.32)] border border-[rgba(0,0,0,0.02)] rounded-12 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.25)] pt-16 pb-12 pl-24 pr-12 flex items-center gap-x-32">
+        <div class="text-16 leading-[1.25] -tracking-[0.32px] text-black/80">
+          <p>Reading our release notes in another browser?</p>
+        </div>
+        <a class="group min-h-44 rounded-8 flex items-center gap-8 py-6 pl-6 pr-8 bg-[#252525] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.16)] flex-shrink-0" href="#download">
+          <span class="flex gap-8 items-center">
+            <span class="flex items-center justify-center w-32 h-32 rounded-[6px] bg-white flex-shrink-0 overflow-hidden">
+              <img src="logo-removebg-preview.png" alt="" style="width:2.4rem;height:2.4rem;object-fit:contain;">
+            </span>
+            <span class="flex gap-8 items-center text-14 leading-[1.25] -tracking-[0.28px] whitespace-nowrap">
+              <span class="text-white">Try Byte</span>
+              <span class="inline-flex transition-transform duration-200 ease-out group-hover:translate-x-2">
+                <svg width="13" height="11" viewBox="0 0 13 11" fill="none"><path opacity="0.48" d="M7.21875 0.246094L12.0312 4.83984C12.168 4.97656 12.25 5.14062 12.25 5.33203C12.25 5.49609 12.168 5.66016 12.0312 5.79688L7.21875 10.3906C6.97266 10.6367 6.53516 10.6367 6.28906 10.3633C6.04297 10.1172 6.04297 9.67969 6.31641 9.43359L9.95312 5.98828H0.65625C0.273438 5.98828 0 5.6875 0 5.33203C0 4.94922 0.273438 4.67578 0.65625 4.67578H9.95312L6.31641 1.20312C6.04297 0.957031 6.04297 0.519531 6.28906 0.273438C6.53516 0 6.97266 0 7.21875 0.246094Z" fill="white"/></svg>
+              </span>
+            </span>
+          </span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Desktop Banner -->
+    <div class="hidden 1100:block fixed right-10 z-2 w-[386px]" style="top:100px;">
+      <div class="backdrop-blur-[50px] bg-[rgba(235,235,235,0.32)] border border-[rgba(0,0,0,0.02)] rounded-12 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.08)] pt-16 pb-12 pl-24 pr-12 flex items-center gap-x-32">
+        <div class="flex items-center gap-8">
+          <span class="flex items-center justify-center w-32 h-32 rounded-[6px] bg-white flex-shrink-0 overflow-hidden">
+            <img src="logo-removebg-preview.png" alt="" style="width:2.4rem;height:2.4rem;object-fit:contain;">
+          </span>
+          <div class="text-16 leading-[1.25] -tracking-[0.32px] text-black/80">
+            <p>Reading our release notes in another browser?</p>
+          </div>
+        </div>
+        <a class="group min-h-44 rounded-8 flex items-center gap-8 py-6 pl-6 pr-8 bg-[#252525] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.16)] flex-shrink-0" href="#download">
+          <span class="flex gap-8 items-center text-14 leading-[1.25] -tracking-[0.28px] whitespace-nowrap">
+            <span class="text-white">Try Byte</span>
+            <span class="inline-flex transition-transform duration-200 ease-out group-hover:translate-x-2">
+              <svg width="13" height="11" viewBox="0 0 13 11" fill="none"><path opacity="0.48" d="M7.21875 0.246094L12.0312 4.83984C12.168 4.97656 12.25 5.14062 12.25 5.33203C12.25 5.49609 12.168 5.66016 12.0312 5.79688L7.21875 10.3906C6.97266 10.6367 6.53516 10.6367 6.28906 10.3633C6.04297 10.1172 6.04297 9.67969 6.31641 9.43359L9.95312 5.98828H0.65625C0.273438 5.98828 0 5.6875 0 5.33203C0 4.94922 0.273438 4.67578 0.65625 4.67578H9.95312L6.31641 1.20312C6.04297 0.957031 6.04297 0.519531 6.28906 0.273438C6.53516 0 6.97266 0 7.21875 0.246094Z" fill="white"/></svg>
+            </span>
+          </span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Background bar -->
+    <div class="hidden 1100:block fixed top-0 left-0 right-0 h-100 bg-[#F7F7F7] origin-top z-3 pointer-events-none" aria-hidden="true"></div>
+
+    <!-- Header -->
+    <header>
+      <div class="1100:hidden">
+        <aside aria-label="Release metadata" class="h-50 border-b border-solid border-black/20 text-black/50 relative z-3 bg-[#F7F7F7] overflow-hidden">
+          <div class="flex flex-row" style="animation: marqueeL 30s linear infinite;">
+            <div class="shrink-0 flex">
+              <ul class="flex items-center gap-x-32 pr-32 h-50 text-13 font-sans">
+                <li class="flex items-center gap-6"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" stroke="currentColor"/><path d="M7 4V7L9 9" stroke="currentColor" stroke-linecap="round"/></svg>May 21, 2026 11:25 AM ET</li>
+                <li>Brooklyn, USA</li>
+                <li class="flex items-center gap-4"><span class="font-quadrant text-12 leading-16 text-black/30">Issue No.</span><span class="font-quadrant text-14 leading-16 tabular-nums">00123456789</span></li>
+                <li class="flex items-center gap-4"><span class="font-quadrant text-12 leading-16 text-black/30">App Version</span><span class="font-quadrant text-14 leading-16 tabular-nums">00123456789</span></li>
+              </ul>
+            </div>
+            <div class="shrink-0 flex" aria-hidden="true">
+              <ul class="flex items-center gap-x-32 pr-32 h-50 text-13 font-sans">
+                <li class="flex items-center gap-6"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" stroke="currentColor"/><path d="M7 4V7L9 9" stroke="currentColor" stroke-linecap="round"/></svg>May 21, 2026 11:25 AM ET</li>
+                <li>Brooklyn, USA</li>
+                <li class="flex items-center gap-4"><span class="font-quadrant text-12 leading-16 text-black/30">Issue No.</span><span class="font-quadrant text-14 leading-16 tabular-nums">00123456789</span></li>
+                <li class="flex items-center gap-4"><span class="font-quadrant text-12 leading-16 text-black/30">App Version</span><span class="font-quadrant text-14 leading-16 tabular-nums">00123456789</span></li>
+              </ul>
+            </div>
+          </div>
+        </aside>
+      </div>
+      <div class="hidden 1100:block">
+        <p class="fixed z-10 top-0 left-1/2 -translate-x-1/2 font-serif font-600 text-81 leading-113 -tracking-4 pointer-events-none">Byte Weekly</p>
+        <aside class="fixed top-0 left-10 right-10 z-10 pointer-events-none" style="margin-top:0.5rem;">
+          <div class="flex items-center justify-between text-14 text-tertiary">
+            <ul class="flex items-center gap-15 font-sans"><li>May 21, 2026</li><li>Brooklyn, USA</li></ul>
+            <ul class="flex items-center gap-15 font-sans">
+              <li class="flex items-center gap-4"><span class="font-quadrant text-12 text-black/30">Issue No.</span><span class="font-quadrant text-14 tabular-nums">00123456789</span></li>
+              <li class="flex items-center gap-4"><span class="font-quadrant text-12 text-black/30">App Version</span><span class="font-quadrant text-14 tabular-nums">00123456789</span></li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+    </header>
+
+    <!-- Mobile floating title -->
+    <div class="1100:hidden fixed top-10 left-0 right-0 z-10 pointer-events-none" style="margin-top:5rem;">
+      <p class="font-serif font-600 text-58 leading-95 -tracking-4 text-center">Byte Weekly</p>
+      <div class="flex justify-center items-center gap-15 mt-10">
+        <span class="font-serif font-500 italic text-16 leading-23 text-secondary">New features</span>
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><circle cx="4" cy="4" r="4" fill="#FFB005"/></svg>
+        <span class="font-serif font-500 italic text-16 leading-23 text-secondary">Every week</span>
+      </div>
+    </div>
+
+    <!-- Hero -->
+    <article>
+      <section class="mb-100 w-full max-w-1400 mx-auto pt-50 relative z-1 mt-220 1100:mt-180">
+        <div class="flex flex-col gap-y-50">
+          <h1 class="font-serif font-600 text-40 -tracking-4 800:text-50 leading-[1.2] text-center max-w-[30ch] mx-auto">AI on Your Terms</h1>
+        </div>
+      </section>
+    </article>
+
+    <!-- Past Issues -->
+    <div class="pt-60 pb-60 800:pt-80 800:pb-80 site-grid max-w-1440 mx-auto relative z-1">
+      <h2 class="col-span-12 text-center font-serif font-600 text-36 leading-36 -tracking-4">Latest Features</h2>
+      <div class="col-span-12 1100:col-span-10 1100:col-start-2 grid grid-cols-1 800:grid-cols-3 gap-20 mt-40">
+
+        <div>
+          <a class="flex flex-col px-15 pt-15 800:pt-40 aspect-[350/226] rounded-12 border border-solid border-black/10 bg-true-white shadow-release-note-card overflow-hidden transition-[opacity,transform] duration-200 ease-site-ease hover:opacity-80 active:scale-[0.98]">
+            <div class="flex shrink-0 justify-center items-center gap-x-12">
+              <span class="font-quadrant text-12 leading-17">Your Key</span>
+              <svg width="2" height="2" viewBox="0 0 2 2" fill="none"><rect opacity="0.2" width="2" height="2" fill="#111111"/></svg>
+              <span class="font-quadrant text-12 leading-17">BYOK</span>
+              <svg width="2" height="2" viewBox="0 0 2 2" fill="none"><rect opacity="0.2" width="2" height="2" fill="#111111"/></svg>
+              <span class="font-quadrant text-12 leading-17">Private</span>
+            </div>
+            <p class="mt-12 text-center font-serif text-25 leading-30 font-700">Bring Your Own Key</p>
+            <div class="image overflow-hidden mt-20">
+              <img class="w-full h-auto object-contain rounded-10" src="top-preview.png" alt="Byte preview">
+            </div>
+          </a>
+        </div>
+
+        <div>
+          <a class="flex flex-col px-15 pt-15 800:pt-40 aspect-[350/226] rounded-12 border border-solid border-black/10 bg-true-white shadow-release-note-card overflow-hidden transition-[opacity,transform] duration-200 ease-site-ease hover:opacity-80 active:scale-[0.98]">
+            <div class="flex shrink-0 justify-center items-center gap-x-12">
+              <span class="font-quadrant text-12 leading-17">Models</span>
+              <svg width="2" height="2" viewBox="0 0 2 2" fill="none"><rect opacity="0.2" width="2" height="2" fill="#111111"/></svg>
+              <span class="font-quadrant text-12 leading-17">30+</span>
+              <svg width="2" height="2" viewBox="0 0 2 2" fill="none"><rect opacity="0.2" width="2" height="2" fill="#111111"/></svg>
+              <span class="font-quadrant text-12 leading-17">Supported</span>
+            </div>
+            <p class="mt-12 text-center font-serif text-25 leading-30 font-700">All Models, One Place</p>
+            <div class="image overflow-hidden mt-20 flex flex-wrap gap-4 px-4">
+              <span class="font-quadrant text-11 px-4 border border-solid border-black/10 rounded-full text-tertiary">GPT-4</span>
+              <span class="font-quadrant text-11 px-4 border border-solid border-black/10 rounded-full text-tertiary">Claude</span>
+              <span class="font-quadrant text-11 px-4 border border-solid border-black/10 rounded-full text-tertiary">Gemini</span>
+              <span class="font-quadrant text-11 px-4 border border-solid border-black/10 rounded-full text-tertiary">Mistral</span>
+              <span class="font-quadrant text-11 px-4 border border-solid border-black/10 rounded-full text-tertiary">xAI</span>
+            </div>
+          </a>
+        </div>
+
+        <div>
+          <a class="flex flex-col px-15 pt-15 800:pt-40 aspect-[350/226] rounded-12 border border-solid border-black/10 bg-true-white shadow-release-note-card overflow-hidden transition-[opacity,transform] duration-200 ease-site-ease hover:opacity-80 active:scale-[0.98]">
+            <div class="flex shrink-0 justify-center items-center gap-x-12">
+              <span class="font-quadrant text-12 leading-17">Pricing</span>
+              <svg width="2" height="2" viewBox="0 0 2 2" fill="none"><rect opacity="0.2" width="2" height="2" fill="#111111"/></svg>
+              <span class="font-quadrant text-12 leading-17">$0</span>
+              <svg width="2" height="2" viewBox="0 0 2 2" fill="none"><rect opacity="0.2" width="2" height="2" fill="#111111"/></svg>
+              <span class="font-quadrant text-12 leading-17">Forever</span>
+            </div>
+            <p class="mt-12 text-center font-serif text-25 leading-30 font-700">Completely Free</p>
+            <div class="image overflow-hidden mt-20 pt-8">
+              <span class="font-serif font-600 text-48 -tracking-4">$0</span>
+              <p class="font-sans text-14 leading-[1.25] -tracking-[0.28px] text-black/60 mt-4">No subscription. Ever.</p>
+            </div>
+          </a>
+        </div>
+
+      </div>
+
+      <div class="col-span-12 flex justify-center mt-40">
+        <a class="h-40 rounded-40 px-24 font-sans text-14 leading-40 flex items-center justify-center bg-black/8 text-black hover:bg-black hover:text-white transition-colors duration-150 ease-site-ease no-underline" href="#features">View All Features +</a>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>
