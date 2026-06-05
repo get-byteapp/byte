@@ -1,35 +1,26 @@
 /**
- * Feature Carousel Module
+ * Carousel Module - handles both feature and models carousels
  */
 
-export function initCarousel() {
-  const carouselData = [
-    { label: 'Featured', title: '16 Providers', desc: 'OpenAI, Claude, Gemini, Mistral, Groq, HuggingFace, Together AI, and more.' },
-    { label: 'Personalization', title: 'Super Customizable', desc: 'Themes, fonts, layouts, and more — make Byte yours.' },
-    { label: 'Save Money', title: 'Direct API Pricing', desc: 'Pay directly with your API key. No middleman markup.' },
-    { label: 'Real-time', title: 'Web Search', desc: 'Search the internet and get current information instantly.' },
-    { label: 'Powerful', title: 'Vision & Files', desc: 'Upload images, PDFs, documents and get instant analysis.' },
-    { label: 'Flexible', title: 'Local Support', desc: 'Run Ollama and LM Studio models on your own machine.' }
-  ];
-
+function initGenericCarousel(containerSelector, slideSelector, dotSelector, hasContent = false, contentData = []) {
   let currentSlide = 0;
   let autoPlayInterval;
   const SLIDE_DURATION = 4000;
 
-  const carouselContainer = document.querySelector('.feature-carousel');
+  const carouselContainer = document.querySelector(containerSelector);
   if (!carouselContainer) return;
 
-  const slides = document.querySelectorAll('.feature-carousel-slide');
-  const dots = document.querySelectorAll('.carousel-dot');
-  const prevBtn = document.querySelector('.carousel-prev');
-  const nextBtn = document.querySelector('.carousel-next');
-  const content = document.querySelector('.feature-carousel-content');
+  const slides = carouselContainer.querySelectorAll(slideSelector);
+  const dots = carouselContainer.querySelectorAll(dotSelector);
+  const prevBtn = carouselContainer.querySelector('.carousel-prev');
+  const nextBtn = carouselContainer.querySelector('.carousel-next');
+  const content = hasContent ? carouselContainer.querySelector('[class$="-content"]') : null;
 
-  if (!slides.length || !content) return;
+  if (!slides.length) return;
 
-  const labelEl = content.querySelector('.feature-carousel-label');
-  const titleEl = content.querySelector('.feature-carousel-title');
-  const descEl = content.querySelector('.feature-carousel-desc');
+  const labelEl = content?.querySelector('[class$="-label"]');
+  const titleEl = content?.querySelector('[class$="-title"]');
+  const descEl = content?.querySelector('[class$="-desc"]');
 
   function goToSlide(index) {
     currentSlide = (index + slides.length) % slides.length;
@@ -42,14 +33,16 @@ export function initCarousel() {
       dot.classList.toggle('active', i === currentSlide);
     });
 
-    content.classList.remove('visible');
-    setTimeout(() => {
-      const data = carouselData[currentSlide];
-      labelEl.textContent = data.label;
-      titleEl.textContent = data.title;
-      descEl.textContent = data.desc;
-      content.classList.add('visible');
-    }, 150);
+    if (content && contentData.length) {
+      content.classList.remove('visible');
+      setTimeout(() => {
+        const data = contentData[currentSlide];
+        if (labelEl) labelEl.textContent = data.label;
+        if (titleEl) titleEl.textContent = data.title;
+        if (descEl) descEl.textContent = data.desc;
+        content.classList.add('visible');
+      }, 150);
+    }
   }
 
   function nextSlide() {
@@ -92,8 +85,27 @@ export function initCarousel() {
   carouselContainer.addEventListener('mouseleave', startAutoPlay);
 
   // Initialize
-  setTimeout(() => {
-    content.classList.add('visible');
-  }, 300);
+  if (content) {
+    setTimeout(() => {
+      content.classList.add('visible');
+    }, 300);
+  }
   startAutoPlay();
+}
+
+export function initCarousel() {
+  // Feature carousel with content data
+  const featureCarouselData = [
+    { label: 'Featured', title: '16 Providers', desc: 'OpenAI, Claude, Gemini, Mistral, Groq, HuggingFace, Together AI, and more.' },
+    { label: 'Personalization', title: 'Super Customizable', desc: 'Themes, fonts, layouts, and more — make Byte yours.' },
+    { label: 'Save Money', title: 'Direct API Pricing', desc: 'Pay directly with your API key. No middleman markup.' },
+    { label: 'Real-time', title: 'Web Search', desc: 'Search the internet and get current information instantly.' },
+    { label: 'Powerful', title: 'Vision & Files', desc: 'Upload images, PDFs, documents and get instant analysis.' },
+    { label: 'Flexible', title: 'Local Support', desc: 'Run Ollama and LM Studio models on your own machine.' }
+  ];
+
+  initGenericCarousel('.feature-carousel', '.feature-carousel-slide', '.feature-carousel .carousel-dot', true, featureCarouselData);
+
+  // Models carousel (no content data needed)
+  initGenericCarousel('.models-carousel', '.models-carousel-slide', '.models-carousel .carousel-dot', false);
 }
