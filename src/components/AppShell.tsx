@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, lazy, Suspense } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, lazy, Suspense } from "react";
 
 const Agentation = lazy(() =>
   import("agentation").then((m) => ({ default: m.Agentation }))
@@ -46,13 +46,13 @@ export function AppShell() {
     useState<SuggestMemoryPayload | null>(null);
   const chat = chats.find((c) => c.id === activeChatId);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.body.className = theme;
     if (layoutMode === "icons") document.body.classList.add("ly-icons");
     if (layoutMode === "none") document.body.classList.add("ly-none");
   }, [theme, layoutMode]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.body.style.setProperty("--font", fontFamily);
     document.body.style.setProperty("--font-d", headingFont);
   }, [fontFamily, headingFont]);

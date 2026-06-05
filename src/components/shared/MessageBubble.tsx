@@ -1,4 +1,4 @@
-import { useState, memo, useRef, useCallback } from "react";
+import { useState, memo, useRef } from "react";
 import {
   Copy,
   Check,
@@ -296,46 +296,12 @@ function getAskQuestionDisplayText(content: string): string {
   return "Asking Question...";
 }
 
-// Hook that returns [ref, visible]. Once visible, stays visible forever.
-function useLazyVisible(): [React.RefCallback<HTMLDivElement>, boolean] {
-  const [visible, setVisible] = useState(false);
-  const observedRef = useRef<HTMLDivElement | null>(null);
-
-  const ref = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return;
-    // Check if already in viewport
-    const rect = node.getBoundingClientRect();
-    if (rect.top < window.innerHeight + 600 && rect.bottom > -600) {
-      setVisible(true);
-      return;
-    }
-    // Observe until visible
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "600px 0px" },
-    );
-    observer.observe(node);
-    // Cleanup previous observation if ref changes
-    if (observedRef.current && observedRef.current !== node) {
-      observer.disconnect();
-    }
-    observedRef.current = node;
-  }, []);
-
-  return [ref, visible];
-}
 
 export const MessageBubble = memo(function MessageBubble({
   message,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [toolCallExpanded, setToolCallExpanded] = useState<Record<string, boolean>>({});
-  const [lazyRef, visible] = useLazyVisible();
 
   const handleCopy = async () => {
     const success = await copyToClipboard(message.content);
@@ -401,7 +367,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   if (message.role === "system") {
     return (
-      <div ref={lazyRef} className="msg" style={{ justifyContent: "center" }}>
+      <div className="msg" style={{ justifyContent: "center" }}>
         <div className="msg-body" style={{ textAlign: "center" }}>
           <div
             className="msg-txt"
@@ -418,9 +384,10 @@ export const MessageBubble = memo(function MessageBubble({
   const hasToolCalls = !!(message.toolCalls && message.toolCalls.length > 0);
   const allToolsDone = hasToolCalls && message.toolCalls!.every(tc => tc.status === "done");
 
-  // Capture commentary ONCE when tools first appear
+  // Capture commentary ONCE while tools are still running — NOT on reload where allToolsDone is
+  // already true, which would incorrectly capture the full answer as "commentary"
   const commentaryRef = useRef("");
-  if (hasToolCalls && !isUser && displayContent && !commentaryRef.current) {
+  if (hasToolCalls && !isUser && displayContent && !commentaryRef.current && !allToolsDone) {
     commentaryRef.current = displayContent;
   }
   if (!hasToolCalls || isUser) commentaryRef.current = "";
@@ -437,22 +404,8 @@ export const MessageBubble = memo(function MessageBubble({
     );
   } else if (isGenerating) {
     content = <LoadingDots />;
-  } else if (isStreaming || visible || (hasToolCalls && allToolsDone)) {
-    // Streaming, visible, or tools done (answer streaming in) — render markdown
-    content = <MarkdownRenderer content={displayContent} isStreaming={isStreaming} />;
   } else {
-    // Offscreen — show plain text as a lightweight placeholder
-    content = (
-      <div
-        style={{
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          color: "var(--tx2)",
-        }}
-      >
-        {displayContent}
-      </div>
-    );
+    content = <MarkdownRenderer content={displayContent} isStreaming={isStreaming} />;
   }
 
   // Prepend describe phase indicator
@@ -619,7 +572,7 @@ export const MessageBubble = memo(function MessageBubble({
     ) : null;
 
   return (
-    <div ref={lazyRef} className={`msg${isUser ? " u" : ""}`}>
+    <div className={`msg${isUser ? " u" : ""}`}>
       <div className="msg-body">
         <div className="msg-txt">
           {attachmentContent}

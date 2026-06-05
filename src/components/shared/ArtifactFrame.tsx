@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useContext } from 'react'
+import { useState, useEffect, useContext, useRef } from 'react'
 import { ChevronDown, Send } from 'lucide-react'
 import { StreamingContext } from '../../lib/markdown'
 
@@ -104,14 +104,13 @@ tr:hover td{background:var(--sf3)}
 hr{border:none;border-top:1px solid var(--bd);margin:12px 0}
 `
 
-const RESIZE_SCRIPT = `<script>(function(){
-  function report(){parent.postMessage({type:'byte-artifact-h',h:document.documentElement.scrollHeight},'*')}
-  if(document.readyState==='loading'){window.addEventListener('DOMContentLoaded',report)}else{report()}
-  window.addEventListener('load',report)
-  if(window.ResizeObserver){new ResizeObserver(report).observe(document.body)}
-})()</script>`
+function makeResizeScript(id: string): string {
+  return `<script>(function(){var _id=${JSON.stringify(id)};function report(){parent.postMessage({type:'byte-artifact-h',id:_id,h:document.documentElement.scrollHeight},'*')}if(document.readyState==='loading'){window.addEventListener('DOMContentLoaded',report)}else{report()}window.addEventListener('load',report);if(window.ResizeObserver){new ResizeObserver(report).observe(document.body)}})()</script>`
+}
 
-const ERROR_SCRIPT = `<script>(function(){function r(m){parent.postMessage({type:'byte-artifact-error',message:String(m)},'*')}window.onerror=function(msg,_2,line,_4,e){r(e&&e.message?e.message+(line?' (line '+line+')':''):String(msg))};window.addEventListener('unhandledrejection',function(e){r(e.reason&&e.reason.message||String(e.reason)||'Unhandled rejection')})})()</script>`
+function makeErrorScript(id: string): string {
+  return `<script>(function(){var _id=${JSON.stringify(id)};function r(m){parent.postMessage({type:'byte-artifact-error',id:_id,message:String(m)},'*')}window.onerror=function(msg,_2,line,_4,e){if(!e&&(msg==='Script error.'||msg==='Script error'))return;r(e&&e.message?e.message+(line?' (line '+line+')':''):String(msg))};window.addEventListener('unhandledrejection',function(e){r(e.reason&&e.reason.message||String(e.reason)||'Unhandled rejection')})})()</script>`
+}
 
 const REACT_CDN_SCRIPTS = [
   'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js',
@@ -119,7 +118,9 @@ const REACT_CDN_SCRIPTS = [
   'https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js',
 ].map(src => `<script crossorigin src="${src}"></script>`).join('')
 
-const REACT_PREAMBLE = `const{useState,useEffect,useRef,useMemo,useCallback,createContext,useContext,useReducer,Fragment}=React;class _EB extends React.Component{constructor(p){super(p);this.state={e:null}}static getDerivedStateFromError(e){return{e}}componentDidCatch(e,i){var m=e&&e.message?e.message:String(e);if(i&&i.componentStack)m+=i.componentStack;parent.postMessage({type:'byte-artifact-error',message:m},'*')}render(){return this.state.e?null:this.props.children}}`
+function makeReactPreamble(id: string): string {
+  return `const{useState,useEffect,useRef,useMemo,useCallback,createContext,useContext,useReducer,Fragment}=React;class _EB extends React.Component{constructor(p){super(p);this.state={e:null}}static getDerivedStateFromError(e){return{e}}componentDidCatch(e,i){var m=e&&e.message?e.message:String(e);if(i&&i.componentStack)m+=i.componentStack;parent.postMessage({type:'byte-artifact-error',id:${JSON.stringify(id)},message:m},'*')}render(){return this.state.e?null:this.props.children}}`
+}
 
 const REACT_POSTAMBLE = `\nif(typeof App!=='undefined'&&document.getElementById('root')&&!document.getElementById('root').firstChild){ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(_EB,null,React.createElement(App)))}`
 
@@ -128,20 +129,20 @@ function isHtmlContent(code: string): boolean {
   return t.startsWith('<!DOCTYPE') || t.startsWith('<html')
 }
 
-function buildSrcdoc(html: string): string {
+function buildSrcdoc(html: string, instanceId: string): string {
   const cssVars = collectCssVars()
   const byteScript = buildByteScript()
-  const injection = `<style>${cssVars}${BASE_STYLES}</style>${byteScript}${ERROR_SCRIPT}`
+  const errorScript = makeErrorScript(instanceId)
+  const resizeScript = makeResizeScript(instanceId)
+  const injection = `<style>${cssVars}${BASE_STYLES}</style>${byteScript}${errorScript}`
 
   if (!isHtmlContent(html)) {
-    // React/JSX mode — use Babel.transform() in a try/catch so SyntaxErrors are captured
-    // before they propagate as masked cross-origin "Script error" from babel.min.js
-    const src = JSON.stringify(`${REACT_PREAMBLE}\n${html}\n${REACT_POSTAMBLE}`)
-    const babelRunScript = `<script>window.addEventListener('load',function(){try{var out=Babel.transform(${src},{presets:['react']}).code;eval(out)}catch(e){parent.postMessage({type:'byte-artifact-error',message:e.message||String(e)},'*')}})<\/script>`
-    return `<!DOCTYPE html><html><head><meta charset="utf-8">${injection}${REACT_CDN_SCRIPTS}</head><body><div id="root"></div>${babelRunScript}${RESIZE_SCRIPT}</body></html>`
+    const reactPreamble = makeReactPreamble(instanceId)
+    const src = JSON.stringify(`${reactPreamble}\n${html}\n${REACT_POSTAMBLE}`)
+    const babelRunScript = `<script>window.addEventListener('load',function(){try{var out=Babel.transform(${src},{presets:['react']}).code;eval(out)}catch(e){parent.postMessage({type:'byte-artifact-error',id:${JSON.stringify(instanceId)},message:e.message||String(e)},'*')}})<\/script>`
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">${injection}${REACT_CDN_SCRIPTS}</head><body><div id="root"></div>${babelRunScript}${resizeScript}</body></html>`
   }
 
-  // HTML mode — existing behavior, unchanged
   const trimmed = html.trimStart()
   if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
     let out = html
@@ -152,21 +153,26 @@ function buildSrcdoc(html: string): string {
     } else {
       out = injection + out
     }
-    out = out.replace(/<\/body>/i, `${RESIZE_SCRIPT}</body>`)
+    out = out.replace(/<\/body>/i, `${resizeScript}</body>`)
     return out
   }
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">${injection}</head><body>${html}${RESIZE_SCRIPT}</body></html>`
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">${injection}</head><body>${html}${resizeScript}</body></html>`
 }
 
 export function ArtifactFrame({ html }: ArtifactFrameProps) {
   const isStreaming = useContext(StreamingContext)
+  const instanceId = useRef(Math.random().toString(36).slice(2))
   const [height, setHeight] = useState(0)
   const [loaded, setLoaded] = useState(false)
   const [renderErrors, setRenderErrors] = useState<string[]>([])
   const [errorExpanded, setErrorExpanded] = useState(false)
 
-  const srcdoc = useMemo(() => isStreaming ? '' : buildSrcdoc(html), [html, isStreaming])
+  const [srcdoc, setSrcdoc] = useState('')
+
+  useEffect(() => {
+    setSrcdoc(isStreaming ? '' : buildSrcdoc(html, instanceId.current))
+  }, [html, isStreaming])
 
   useEffect(() => {
     if (document.getElementById('byte-skeleton-style')) return
@@ -177,13 +183,20 @@ export function ArtifactFrame({ html }: ArtifactFrameProps) {
   }, [])
 
   useEffect(() => {
+    const id = instanceId.current
     const handler = (e: MessageEvent) => {
+      if (e.data?.id !== id) return
       if (e.data?.type === 'byte-artifact-h' && typeof e.data.h === 'number') {
         setHeight(Math.min(Math.max(e.data.h + 4, 80), 960))
         setLoaded(true)
       }
       if (e.data?.type === 'byte-artifact-error' && !isStreaming) {
-        setRenderErrors(prev => [...prev, e.data.message || 'Script error'])
+        const msg = e.data.message || 'Script error'
+        setRenderErrors(prev => {
+          if ((msg === 'Script error' || msg === 'Script error.') && prev.length > 0) return prev
+          if (prev.includes(msg)) return prev
+          return [...prev, msg]
+        })
         setLoaded(true)
       }
     }
