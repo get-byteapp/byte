@@ -164,6 +164,15 @@ export function InputBox({
   }, [handleTextChange]);
 
   useEffect(() => {
+    const handler = (e: any) => {
+      const { message } = e.detail;
+      if (message) onSend(message);
+    };
+    window.addEventListener('byte-auto-send', handler);
+    return () => window.removeEventListener('byte-auto-send', handler);
+  }, [onSend]);
+
+  useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = "auto";

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useContext } from 'react'
+import { ChevronDown, Send } from 'lucide-react'
 import { StreamingContext } from '../../lib/markdown'
 
 const SKELETON_STYLE = `@keyframes byte-skeleton{0%,100%{opacity:.35}50%{opacity:.7}}`
@@ -110,7 +111,7 @@ const RESIZE_SCRIPT = `<script>(function(){
   if(window.ResizeObserver){new ResizeObserver(report).observe(document.body)}
 })()</script>`
 
-const ERROR_SCRIPT = `<script>(function(){function r(m){parent.postMessage({type:'byte-artifact-error',message:String(m)},'*')}window.onerror=function(_,_2,_3,_4,e){r(e&&e.message||'Script error')};window.addEventListener('unhandledrejection',function(e){r(e.reason&&e.reason.message||'Unhandled rejection')})})()</script>`
+const ERROR_SCRIPT = `<script>(function(){function r(m){parent.postMessage({type:'byte-artifact-error',message:String(m)},'*')}window.onerror=function(msg,_2,line,_4,e){r(e&&e.message?e.message+(line?' (line '+line+')':''):String(msg))};window.addEventListener('unhandledrejection',function(e){r(e.reason&&e.reason.message||String(e.reason)||'Unhandled rejection')})})()</script>`
 
 const REACT_CDN_SCRIPTS = [
   'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js',
@@ -118,9 +119,9 @@ const REACT_CDN_SCRIPTS = [
   'https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js',
 ].map(src => `<script crossorigin src="${src}"></script>`).join('')
 
-const REACT_PREAMBLE = `const{useState,useEffect,useRef,useMemo,useCallback,createContext,useContext,useReducer,Fragment}=React;`
+const REACT_PREAMBLE = `const{useState,useEffect,useRef,useMemo,useCallback,createContext,useContext,useReducer,Fragment}=React;class _EB extends React.Component{constructor(p){super(p);this.state={e:null}}static getDerivedStateFromError(e){return{e}}componentDidCatch(e,i){var m=e&&e.message?e.message:String(e);if(i&&i.componentStack)m+=i.componentStack;parent.postMessage({type:'byte-artifact-error',message:m},'*')}render(){return this.state.e?null:this.props.children}}`
 
-const REACT_POSTAMBLE = `\nif(typeof App!=='undefined'&&document.getElementById('root')&&!document.getElementById('root').firstChild){ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App))}`
+const REACT_POSTAMBLE = `\nif(typeof App!=='undefined'&&document.getElementById('root')&&!document.getElementById('root').firstChild){ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(_EB,null,React.createElement(App)))}`
 
 function isHtmlContent(code: string): boolean {
   const t = code.trimStart()
@@ -133,8 +134,11 @@ function buildSrcdoc(html: string): string {
   const injection = `<style>${cssVars}${BASE_STYLES}</style>${byteScript}${ERROR_SCRIPT}`
 
   if (!isHtmlContent(html)) {
-    // React/JSX mode — model writes JSX, we wrap it in a full React shell
-    return `<!DOCTYPE html><html><head><meta charset="utf-8">${injection}${REACT_CDN_SCRIPTS}</head><body><div id="root"></div><script type="text/babel" data-presets="react">${REACT_PREAMBLE}\n${html}\n${REACT_POSTAMBLE}<\/script>${RESIZE_SCRIPT}</body></html>`
+    // React/JSX mode — use Babel.transform() in a try/catch so SyntaxErrors are captured
+    // before they propagate as masked cross-origin "Script error" from babel.min.js
+    const src = JSON.stringify(`${REACT_PREAMBLE}\n${html}\n${REACT_POSTAMBLE}`)
+    const babelRunScript = `<script>window.addEventListener('load',function(){try{var out=Babel.transform(${src},{presets:['react']}).code;eval(out)}catch(e){parent.postMessage({type:'byte-artifact-error',message:e.message||String(e)},'*')}})<\/script>`
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">${injection}${REACT_CDN_SCRIPTS}</head><body><div id="root"></div>${babelRunScript}${RESIZE_SCRIPT}</body></html>`
   }
 
   // HTML mode — existing behavior, unchanged
@@ -159,7 +163,8 @@ export function ArtifactFrame({ html }: ArtifactFrameProps) {
   const isStreaming = useContext(StreamingContext)
   const [height, setHeight] = useState(0)
   const [loaded, setLoaded] = useState(false)
-  const [renderError, setRenderError] = useState<string | null>(null)
+  const [renderErrors, setRenderErrors] = useState<string[]>([])
+  const [errorExpanded, setErrorExpanded] = useState(false)
 
   const srcdoc = useMemo(() => isStreaming ? '' : buildSrcdoc(html), [html, isStreaming])
 
@@ -178,7 +183,7 @@ export function ArtifactFrame({ html }: ArtifactFrameProps) {
         setLoaded(true)
       }
       if (e.data?.type === 'byte-artifact-error' && !isStreaming) {
-        setRenderError(e.data.message || 'Artifact failed to render')
+        setRenderErrors(prev => [...prev, e.data.message || 'Script error'])
         setLoaded(true)
       }
     }
@@ -189,21 +194,70 @@ export function ArtifactFrame({ html }: ArtifactFrameProps) {
   useEffect(() => {
     setLoaded(false)
     setHeight(0)
-    setRenderError(null)
-  }, [html, isStreaming])
+    setRenderErrors([])
+    setErrorExpanded(false)
+  }, [srcdoc])
 
   return (
     <div style={{ margin: '16px 0', borderRadius: 'var(--r)', overflow: 'hidden' }}>
-      {renderError ? (
+      {renderErrors.length > 0 ? (
         <div style={{
-          padding: '10px 14px',
           background: 'var(--danger-bg)',
-          color: 'var(--danger)',
           border: '1px solid var(--danger-border)',
           borderRadius: 'var(--r)',
           fontSize: 'calc(var(--fs) - 1px)',
+          overflow: 'hidden',
         }}>
-          Artifact failed to render
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px' }}>
+            <div
+              onClick={() => setErrorExpanded(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', flex: 1, userSelect: 'none' }}
+            >
+              <ChevronDown
+                size={11}
+                style={{
+                  color: 'var(--danger)',
+                  flexShrink: 0,
+                  transform: errorExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease',
+                }}
+              />
+              <span style={{ color: 'var(--danger)' }}>Artifact failed to render</span>
+            </div>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('byte-auto-send', {
+                detail: { message: `Artifact unable to render.\nErrors:\n${renderErrors.join('\n')}` }
+              }))}
+              title="Send error to chat"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'var(--danger)', padding: '2px', borderRadius: 4, flexShrink: 0,
+                opacity: 0.8,
+              }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '0.8')}
+            >
+              <Send size={12} />
+            </button>
+          </div>
+          <div style={{
+            maxHeight: errorExpanded ? '300px' : '0',
+            opacity: errorExpanded ? 1 : 0,
+            overflow: 'hidden',
+            transition: 'max-height 0.25s ease, opacity 0.15s ease',
+          }}>
+            <pre style={{
+              margin: 0,
+              padding: '6px 10px 10px 10px',
+              fontSize: 'calc(var(--fs) - 2px)',
+              color: 'var(--danger)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+              fontFamily: 'var(--font-mono, monospace)',
+              opacity: 0.85,
+            }}>{renderErrors.join('\n')}</pre>
+          </div>
         </div>
       ) : (
         <>

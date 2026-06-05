@@ -10,6 +10,7 @@ Output interactive, visual content inline using a `render` fenced code block. Th
 
 Do NOT use for plain text or anything that reads fine as markdown.
 
+For controls **do not** use arrow keys.
 ---
 
 ## Format
@@ -182,6 +183,67 @@ Utility
 ```
 
 Inputs, selects, textareas, tables, th, td are all auto-styled — no extra CSS needed.
+
+---
+
+## Design
+
+Use the render block as a canvas. Commit to a direction — generic is the failure mode.
+
+### Aesthetic direction
+
+Before building, pick a tone: **brutally minimal**, **editorial**, **playful**, **data-dense**, **retro-futuristic**, **luxury**, etc. Every visual choice should serve that direction. Ask: what's the one thing someone will remember?
+
+### Typography
+
+- Use `var(--font-d)` for display headings and `var(--font)` for body — the contrast between them is free character
+- Weight hierarchy: heading `700`, subheading `600`, body `400`. Flat scales look unprofessional
+- Scale contrast between heading and body should be at least 1.25×
+
+### Color
+
+- Commit: let the accent dominate one focal element rather than distributing it evenly everywhere
+- Use `color-mix(in srgb, var(--acc) 12%, var(--sf2))` for tinted accent surfaces without a hardcoded color
+- Status tokens (`var(--success)`, `var(--danger)`, `var(--warning)`) are semantic — use for state, not decoration
+
+### Motion
+
+- **One well-orchestrated entry beats scattered micro-interactions.** Stagger list items with `animation-delay` in 40–60ms steps.
+- Entering elements: `ease-out` with `cubic-bezier(0.23, 1, 0.32, 1)`. **Never `ease-in`** — it starts slow and feels broken.
+- Never animate from `scale(0)`. Start at `scale(0.95)` + `opacity: 0`.
+- Buttons: `transform: scale(0.97)` on `:active` gives instant press feedback.
+- Duration: small elements 125–150ms, cards/panels 200–250ms. Nothing above 300ms for UI.
+
+```css
+/* Standard stagger pattern */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.item                { animation: fadeUp 260ms cubic-bezier(0.23,1,0.32,1) both; }
+.item:nth-child(2)   { animation-delay: 50ms; }
+.item:nth-child(3)   { animation-delay: 100ms; }
+.item:nth-child(4)   { animation-delay: 150ms; }
+
+/* Button press feedback */
+.btn { transition: transform 140ms ease-out; }
+.btn:active { transform: scale(0.97); }
+```
+
+### Layout
+
+- Vary spacing for rhythm — don't pad every element identically
+- Try asymmetric columns (`2fr 1fr`) or offset elements instead of uniform grids
+- Generous negative space **or** tight controlled density — pick one direction, not the middle
+
+### Avoid
+
+- `transition: all` — always specify the property
+- Gradient text (`background-clip: text`) — never meaningful
+- `border-radius` > 16px on cards — reads as amateurish
+- `border: 1px solid X` + wide `box-shadow` on the same element — pick one
+- Identical card grids repeating the same icon + heading + text pattern
+- `ease-in` on any UI element
 
 ---
 
@@ -377,6 +439,105 @@ function App() {
 ```
 
 **Canvas sizing rule:** Always set `canvas.width = canvas.offsetWidth` in a `resize()` called after layout. Never set `canvas.width = "100%"`.
+
+---
+
+### 4 — Quiz
+
+```render
+function App() {
+  const questions = [
+    { q: 'Which planet has the most moons?', opts: ['Jupiter', 'Saturn', 'Uranus', 'Neptune'], answer: 1 },
+    { q: 'What is the approximate speed of light?', opts: ['300,000 km/s', '150,000 km/s', '450,000 km/s', '186,000 km/s'], answer: 0 },
+    { q: 'Which element has the symbol Au?', opts: ['Silver', 'Aluminum', 'Gold', 'Argon'], answer: 2 },
+  ]
+
+  const [current, setCurrent] = useState(0)
+  const [selected, setSelected] = useState(null)
+  const [answers, setAnswers] = useState([])
+  const [done, setDone] = useState(false)
+
+  const q = questions[current]
+  const isLast = current === questions.length - 1
+
+  const handleNext = () => {
+    const next = [...answers, selected]
+    if (isLast) { setAnswers(next); setDone(true) }
+    else { setAnswers(next); setCurrent(c => c + 1); setSelected(null) }
+  }
+
+  const reset = () => { setCurrent(0); setSelected(null); setAnswers([]); setDone(false) }
+
+  if (done) {
+    const score = answers.filter((a, i) => a === questions[i].answer).length
+    return (
+      <div style={{ animation: 'fadeUp 300ms cubic-bezier(0.23,1,0.32,1) both' }}>
+        <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}.opt-btn{transition:transform 140ms ease-out}.opt-btn:active{transform:scale(0.97)}`}</style>
+        <div style={{ textAlign: 'center', padding: 'var(--pad-lg) 0 var(--pad-md)' }}>
+          <div style={{ fontSize: 'calc(var(--fs) - 1px)', color: 'var(--tx3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>Score</div>
+          <div style={{ fontSize: 'calc(var(--fs) + 28px)', fontWeight: 700, color: 'var(--acc)', lineHeight: 1 }}>{score}/{questions.length}</div>
+          <div style={{ color: 'var(--tx3)', marginTop: 8 }}>
+            {score === questions.length ? 'Perfect!' : score >= 2 ? 'Nice work!' : 'Keep studying!'}
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 'var(--pad-md)' }}>
+          {questions.map((q, qi) => {
+            const correct = answers[qi] === q.answer
+            return (
+              <div key={qi} className="card" style={{ borderColor: correct ? 'color-mix(in srgb,var(--success) 40%,var(--bd))' : 'color-mix(in srgb,var(--danger) 40%,var(--bd))', animation: `fadeUp 280ms cubic-bezier(0.23,1,0.32,1) ${qi * 60}ms both` }}>
+                <div style={{ fontSize: 'calc(var(--fs) - 1px)', color: 'var(--tx3)', marginBottom: 4 }}>{q.q}</div>
+                <div style={{ fontWeight: 500, color: correct ? 'var(--success)' : 'var(--danger)' }}>
+                  {correct ? '✓ ' : '✗ '}{q.opts[answers[qi]]}
+                  {!correct && <span style={{ color: 'var(--tx3)', fontWeight: 400 }}> · Correct: {q.opts[q.answer]}</span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <button className="btn btn-accent opt-btn" onClick={reset}>Retake quiz</button>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}.opt-btn{transition:border-color 0.15s,background 0.15s,transform 140ms ease-out}.opt-btn:not([disabled]):active{transform:scale(0.97)}`}</style>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--pad-md)' }}>
+        <span style={{ color: 'var(--tx3)', fontSize: 'calc(var(--fs) - 1px)' }}>Question {current + 1} of {questions.length}</span>
+        <div style={{ display: 'flex', gap: 5 }}>
+          {questions.map((_, i) => (
+            <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i <= current ? 'var(--acc)' : 'var(--bd2)', transition: 'background 0.2s' }} />
+          ))}
+        </div>
+      </div>
+      <h2 style={{ marginBottom: 'var(--pad-md)', lineHeight: 1.4, animation: 'fadeUp 260ms cubic-bezier(0.23,1,0.32,1) both' }}>{q.q}</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 'var(--pad-md)' }}>
+        {q.opts.map((opt, i) => {
+          const isSelected = selected === i
+          const revealCorrect = selected !== null && i === q.answer
+          const revealWrong = selected !== null && isSelected && i !== q.answer
+          return (
+            <button key={i} className="opt-btn" onClick={() => selected === null && setSelected(i)}
+              style={{
+                textAlign: 'left', padding: '10px 14px', borderRadius: 'var(--r)',
+                border: `1px solid ${revealCorrect ? 'color-mix(in srgb,var(--success) 60%,var(--bd))' : revealWrong ? 'var(--danger-border)' : isSelected ? 'var(--acc-border)' : 'var(--bd)'}`,
+                background: revealCorrect ? 'color-mix(in srgb,var(--success) 10%,var(--sf2))' : revealWrong ? 'var(--danger-bg)' : isSelected ? 'var(--acc-soft)' : 'var(--sf2)',
+                color: revealCorrect ? 'var(--success)' : revealWrong ? 'var(--danger)' : isSelected ? 'var(--acc)' : 'var(--tx)',
+                cursor: selected !== null ? 'default' : 'pointer',
+                fontFamily: 'var(--font)', fontSize: 'var(--fs)',
+                animation: `fadeUp 260ms cubic-bezier(0.23,1,0.32,1) ${i * 50}ms both`,
+              }}>{opt}</button>
+          )
+        })}
+      </div>
+      <button className="btn btn-accent opt-btn" disabled={selected === null} onClick={handleNext}
+        style={{ opacity: selected === null ? 0.4 : 1, cursor: selected === null ? 'not-allowed' : 'pointer' }}>
+        {isLast ? 'See results' : 'Next question'}
+      </button>
+    </>
+  )
+}
+```
 
 ---
 
