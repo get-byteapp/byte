@@ -26,7 +26,13 @@ function initGenericCarousel(containerSelector, slideSelector, dotSelector, hasC
     currentSlide = (index + slides.length) % slides.length;
 
     slides.forEach((slide, i) => {
-      slide.classList.toggle('active', i === currentSlide);
+      if (i === currentSlide) {
+        slide.classList.remove('active');
+        void slide.offsetWidth;
+        slide.classList.add('active');
+      } else {
+        slide.classList.remove('active');
+      }
     });
 
     dots.forEach((dot, i) => {
@@ -96,12 +102,10 @@ function initGenericCarousel(containerSelector, slideSelector, dotSelector, hasC
 export function initCarousel() {
   // Feature carousel with content data
   const featureCarouselData = [
-    { label: 'Featured', title: '16 Providers', desc: 'OpenAI, Claude, Gemini, Mistral, Groq, HuggingFace, Together AI, and more.' },
+    { label: 'Providers', title: '16 Providers', desc: 'OpenAI, Claude, Gemini, Mistral, Groq, HuggingFace, Together AI, and more.' },
     { label: 'Personalization', title: 'Super Customizable', desc: 'Themes, fonts, layouts, and more — make Byte yours.' },
-    { label: 'Save Money', title: 'Direct API Pricing', desc: 'Pay directly with your API key. No middleman markup.' },
     { label: 'Real-time', title: 'Web Search', desc: 'Search the internet and get current information instantly.' },
     { label: 'Powerful', title: 'Vision & Files', desc: 'Upload images, PDFs, documents and get instant analysis.' },
-    { label: 'Flexible', title: 'Local Support', desc: 'Run Ollama and LM Studio models on your own machine.' }
   ];
 
   initGenericCarousel('.feature-carousel', '.feature-carousel-slide', '.feature-carousel .carousel-dot', true, featureCarouselData);
