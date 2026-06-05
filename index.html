@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="styles/base.css">
   <link rel="stylesheet" href="styles/components.css">
   <link rel="stylesheet" href="styles/layout.css">
-  <script src="https://unpkg.com/lucide@latest"></script>
+
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to content</a>
@@ -227,41 +227,45 @@
           </p>
         </div>
 
-        <div class="features-grid" data-reveal style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-top: 3rem;">
-          <div style="padding: 2rem; border-radius: var(--radius-lg); background: var(--color-surface); border: 1px solid var(--color-border);">
-            <i data-lucide="plug" style="width: 28px; height: 28px; margin-bottom: 1rem; color: var(--color-accent);"></i>
-            <h3 style="margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 700;">Any AI Provider</h3>
-            <p style="color: var(--color-text-secondary); margin: 0; font-size: 0.95rem;">Connect to 16+ providers: OpenAI, Claude, Gemini, Mistral, Groq, HuggingFace, Together AI, and more. Bring your own API key.</p>
+        <div class="feature-carousel" data-reveal>
+          <div class="feature-carousel-container">
+            <div class="feature-carousel-slide active">
+              <img src="assets/gifs/provider.gif" alt="16 Providers" style="object-fit: cover; width: 100%; height: 100%;">
+            </div>
+            <div class="feature-carousel-slide">
+              <img src="assets/gifs/customize.gif" alt="Super Customizable" style="object-fit: cover; width: 100%; height: 100%;">
+            </div>
+            <div class="feature-carousel-slide">
+              <img src="assets/gifs/websearch.gif" alt="Web Search" style="object-fit: cover; width: 100%; height: 100%;">
+            </div>
+            <div class="feature-carousel-slide">
+              <img src="assets/gifs/vision.gif" alt="Vision & Files" style="object-fit: cover; width: 100%; height: 100%;">
+            </div>
           </div>
 
-          <div style="padding: 2rem; border-radius: var(--radius-lg); background: var(--color-surface); border: 1px solid var(--color-border);">
-            <i data-lucide="file-text" style="width: 28px; height: 28px; margin-bottom: 1rem; color: var(--color-accent);"></i>
-            <h3 style="margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 700;">Vision & Files</h3>
-            <p style="color: var(--color-text-secondary); margin: 0; font-size: 0.95rem;">Upload images, PDFs, and documents. Process files across all supported models with full vision capabilities.</p>
+          <div class="feature-carousel-nav">
+            <button class="carousel-arrow carousel-prev" aria-label="Previous slide">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 18l-6-6 6-6"/>
+              </svg>
+            </button>
+            <div class="carousel-dots">
+              <button class="carousel-dot active" aria-label="Slide 1"></button>
+              <button class="carousel-dot" aria-label="Slide 2"></button>
+              <button class="carousel-dot" aria-label="Slide 3"></button>
+              <button class="carousel-dot" aria-label="Slide 4"></button>
+            </div>
+            <button class="carousel-arrow carousel-next" aria-label="Next slide">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
           </div>
 
-          <div style="padding: 2rem; border-radius: var(--radius-lg); background: var(--color-surface); border: 1px solid var(--color-border);">
-            <i data-lucide="globe" style="width: 28px; height: 28px; margin-bottom: 1rem; color: var(--color-accent);"></i>
-            <h3 style="margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 700;">Web Search</h3>
-            <p style="color: var(--color-text-secondary); margin: 0; font-size: 0.95rem;">Built-in real-time web search. Get current information and live data without leaving the app.</p>
-          </div>
-
-          <div style="padding: 2rem; border-radius: var(--radius-lg); background: var(--color-surface); border: 1px solid var(--color-border);">
-            <i data-lucide="palette" style="width: 28px; height: 28px; margin-bottom: 1rem; color: var(--color-accent);"></i>
-            <h3 style="margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 700;">Fully Customizable</h3>
-            <p style="color: var(--color-text-secondary); margin: 0; font-size: 0.95rem;">Theme, fonts, layout—make it yours. Your preferences sync across all devices.</p>
-          </div>
-
-          <div style="padding: 2rem; border-radius: var(--radius-lg); background: var(--color-surface); border: 1px solid var(--color-border);">
-            <i data-lucide="database" style="width: 28px; height: 28px; margin-bottom: 1rem; color: var(--color-accent);"></i>
-            <h3 style="margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 700;">Built-in Memory</h3>
-            <p style="color: var(--color-text-secondary); margin: 0; font-size: 0.95rem;">Store and recall context from previous conversations. Never lose important information.</p>
-          </div>
-
-          <div style="padding: 2rem; border-radius: var(--radius-lg); background: var(--color-surface); border: 1px solid var(--color-border);">
-            <i data-lucide="lock" style="width: 28px; height: 28px; margin-bottom: 1rem; color: var(--color-accent);"></i>
-            <h3 style="margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 700;">100% Private</h3>
-            <p style="color: var(--color-text-secondary); margin: 0; font-size: 0.95rem;">Open source. Runs entirely on your device. Your API keys and conversations never leave your computer.</p>
+          <div class="feature-carousel-content">
+            <span class="feature-carousel-label">Featured</span>
+            <h3 class="feature-carousel-title">16 Providers</h3>
+            <p class="feature-carousel-desc">OpenAI, Claude, Gemini, Mistral, Groq, HuggingFace, Together AI, and more.</p>
           </div>
         </div>
       </div>
@@ -424,9 +428,6 @@
   </div>
 
   <script type="module" src="scripts/main.js"></script>
-  <script>
-    lucide.createIcons();
-  </script>
   <script>
     const html = document.documentElement;
     const themeToggle = document.getElementById('themeToggle');
