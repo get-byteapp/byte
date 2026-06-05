@@ -125,87 +125,49 @@
           <h2>Connect Any AI Provider</h2>
         </div>
 
-        <!-- Models Carousel -->
-        <div class="models-carousel" data-reveal>
-          <div class="models-carousel-container">
-            <div class="models-carousel-slide active">
-              <div class="models-grid-2">
-                <div class="model-item">
-                  <div class="model-icon">
-                    <img src="assets/images/chatgpt.svg.png" alt="OpenAI" loading="lazy">
-                  </div>
-                  <span class="model-label">OpenAI</span>
-                </div>
-                <div class="model-item">
-                  <div class="model-icon">
-                    <img src="assets/images/claude.png" alt="Anthropic" loading="lazy">
-                  </div>
-                  <span class="model-label">Claude</span>
-                </div>
-              </div>
+        <div class="models-grid" id="modelsGrid">
+          <div class="model-item" data-reveal>
+            <div class="model-icon">
+              <img src="assets/images/chatgpt.svg.png" alt="OpenAI" loading="lazy">
             </div>
-            <div class="models-carousel-slide">
-              <div class="models-grid-2">
-                <div class="model-item">
-                  <div class="model-icon">
-                    <img src="assets/images/gemini.jpeg" alt="Google" loading="lazy">
-                  </div>
-                  <span class="model-label">Gemini</span>
-                </div>
-                <div class="model-item">
-                  <div class="model-icon">
-                    <svg viewBox="0 0 129 91" xmlns="http://www.w3.org/2000/svg" style="width: 80%; height: 80%;">
-                      <rect x="18.3" y="0" width="18.3" height="18.1" fill="#ffd800"/>
-                      <rect x="91.5" y="0" width="18.3" height="18.1" fill="#ffd800"/>
-                      <rect x="18.3" y="18.1" width="36.6" height="18.1" fill="#ffaf00"/>
-                      <rect x="73.2" y="18.1" width="36.6" height="18.1" fill="#ffaf00"/>
-                      <rect x="18.3" y="36.2" width="91.5" height="18.1" fill="#ff8205"/>
-                      <rect x="18.3" y="54.4" width="18.3" height="18.1" fill="#fa500f"/>
-                      <rect x="54.9" y="54.4" width="18.3" height="18.1" fill="#fa500f"/>
-                      <rect x="91.5" y="54.4" width="18.3" height="18.1" fill="#fa500f"/>
-                      <rect x="0" y="72.5" width="54.9" height="18.1" fill="#e10500"/>
-                      <rect x="73.2" y="72.5" width="54.9" height="18.1" fill="#e10500"/>
-                    </svg>
-                  </div>
-                  <span class="model-label">Mistral</span>
-                </div>
-              </div>
-            </div>
-            <div class="models-carousel-slide">
-              <div class="models-grid-2">
-                <div class="model-item">
-                  <div class="model-icon">
-                    <img src="assets/images/xAI.svg.png" alt="xAI" loading="lazy">
-                  </div>
-                  <span class="model-label">xAI</span>
-                </div>
-                <div class="model-item" style="opacity: 0; pointer-events: none;">
-                  <div class="model-icon"></div>
-                  <span class="model-label"></span>
-                </div>
-              </div>
-            </div>
+            <span class="model-label">OpenAI</span>
           </div>
-
-          <div class="models-carousel-nav">
-            <button class="carousel-arrow carousel-prev" aria-label="Previous slide">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M15 18l-6-6 6-6"/>
-              </svg>
-            </button>
-            <div class="carousel-dots">
-              <button class="carousel-dot active" aria-label="Slide 1"></button>
-              <button class="carousel-dot" aria-label="Slide 2"></button>
-              <button class="carousel-dot" aria-label="Slide 3"></button>
+          <div class="model-item" data-reveal>
+            <div class="model-icon">
+              <img src="assets/images/claude.png" alt="Anthropic" loading="lazy">
             </div>
-            <button class="carousel-arrow carousel-next" aria-label="Next slide">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 18l6-6-6-6"/>
+            <span class="model-label">Claude</span>
+          </div>
+          <div class="model-item" data-reveal>
+            <div class="model-icon">
+              <img src="assets/images/gemini.jpeg" alt="Google" loading="lazy">
+            </div>
+            <span class="model-label">Gemini</span>
+          </div>
+          <div class="model-item" data-reveal>
+            <div class="model-icon">
+              <svg viewBox="0 0 129 91" xmlns="http://www.w3.org/2000/svg" style="width: 80%; height: 80%;">
+                <rect x="18.3" y="0" width="18.3" height="18.1" fill="#ffd800"/>
+                <rect x="91.5" y="0" width="18.3" height="18.1" fill="#ffd800"/>
+                <rect x="18.3" y="18.1" width="36.6" height="18.1" fill="#ffaf00"/>
+                <rect x="73.2" y="18.1" width="36.6" height="18.1" fill="#ffaf00"/>
+                <rect x="18.3" y="36.2" width="91.5" height="18.1" fill="#ff8205"/>
+                <rect x="18.3" y="54.4" width="18.3" height="18.1" fill="#fa500f"/>
+                <rect x="54.9" y="54.4" width="18.3" height="18.1" fill="#fa500f"/>
+                <rect x="91.5" y="54.4" width="18.3" height="18.1" fill="#fa500f"/>
+                <rect x="0" y="72.5" width="54.9" height="18.1" fill="#e10500"/>
+                <rect x="73.2" y="72.5" width="54.9" height="18.1" fill="#e10500"/>
               </svg>
-            </button>
+            </div>
+            <span class="model-label">Mistral</span>
+          </div>
+          <div class="model-item" data-reveal>
+            <div class="model-icon">
+              <img src="assets/images/xAI.svg.png" alt="xAI" loading="lazy">
+            </div>
+            <span class="model-label">xAI</span>
           </div>
         </div>
-
         <p style="text-align: center; margin-top: 2rem; font-size: var(--text-sm); color: var(--color-text-secondary);">
           Plus: Groq, Perplexity, OpenRouter, HuggingFace, Together AI, Replicate, Aleph Alpha, and more.
         </p>

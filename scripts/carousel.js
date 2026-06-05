@@ -29,7 +29,12 @@ function initGenericCarousel(containerSelector, slideSelector, dotSelector, hasC
       slide.classList.toggle('active', i === currentSlide);
       if (i === currentSlide) {
         const img = slide.querySelector('img[src$=".gif"]');
-        if (img) { const s = img.src; img.src = ''; img.src = s; }
+        if (img) {
+          const src = img.getAttribute('src');
+          img.removeAttribute('src');
+          void img.offsetWidth;
+          img.setAttribute('src', src);
+        }
       }
     });
 
