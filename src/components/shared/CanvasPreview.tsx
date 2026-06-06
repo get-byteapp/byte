@@ -1,7 +1,3 @@
-// src/components/shared/CanvasPreview.tsx
-import { useState } from 'react'
-import { CodeBlock } from './CodeBlock'
-
 interface CanvasPreviewProps {
   title: string
   lang: string
@@ -9,75 +5,127 @@ interface CanvasPreviewProps {
   onOpen: () => void
 }
 
-export function CanvasPreview({ title, lang, content }: CanvasPreviewProps) {
-  const [expanded, setExpanded] = useState(false)
+function DocIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5 2.5A1.5 1.5 0 0 1 6.5 1h5.379a1.5 1.5 0 0 1 1.06.44l2.622 2.621A1.5 1.5 0 0 1 16 5.12V17.5A1.5 1.5 0 0 1 14.5 19h-8A1.5 1.5 0 0 1 5 17.5v-15Z" fill="var(--sf3)" stroke="var(--bd2)" strokeWidth="1"/>
+      <path d="M11.5 1v3.5a.5.5 0 0 0 .5.5H15.5" stroke="var(--bd2)" strokeWidth="1" strokeLinecap="round"/>
+      <line x1="7.5" y1="9" x2="12.5" y2="9" stroke="var(--tx3)" strokeWidth="1" strokeLinecap="round"/>
+      <line x1="7.5" y1="12" x2="12.5" y2="12" stroke="var(--tx3)" strokeWidth="1" strokeLinecap="round"/>
+      <line x1="7.5" y1="15" x2="10.5" y2="15" stroke="var(--tx3)" strokeWidth="1" strokeLinecap="round"/>
+    </svg>
+  )
+}
 
+function CodeIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5 2.5A1.5 1.5 0 0 1 6.5 1h5.379a1.5 1.5 0 0 1 1.06.44l2.622 2.621A1.5 1.5 0 0 1 16 5.12V17.5A1.5 1.5 0 0 1 14.5 19h-8A1.5 1.5 0 0 1 5 17.5v-15Z" fill="var(--sf3)" stroke="var(--bd2)" strokeWidth="1"/>
+      <path d="M11.5 1v3.5a.5.5 0 0 0 .5.5H15.5" stroke="var(--bd2)" strokeWidth="1" strokeLinecap="round"/>
+      <path d="M7.5 10.5 L9 12 L7.5 13.5" stroke="var(--acc)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      <line x1="10.5" y1="14" x2="12.5" y2="9" stroke="var(--tx3)" strokeWidth="1" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+export function CanvasPreview({ title, lang, onOpen }: CanvasPreviewProps) {
   const isMarkdown = lang === 'markdown' || lang === 'md'
+  const typeLabel = isMarkdown ? 'Document' : 'Code'
+  const langLabel = isMarkdown ? 'MD' : lang.toUpperCase()
 
   return (
     <div
       style={{
         border: '1px solid var(--bd)',
-        borderRadius: 'var(--r)',
+        borderRadius: 'var(--r-lg)',
         overflow: 'hidden',
-        margin: '6px 0',
+        margin: '8px 0',
         background: 'var(--sf)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '12px 14px',
+        cursor: 'pointer',
+        transition: 'border-color 150ms ease, background 150ms ease',
+      }}
+      onClick={onOpen}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--bd2)'
+        ;(e.currentTarget as HTMLDivElement).style.background = 'var(--sf2)'
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--bd)'
+        ;(e.currentTarget as HTMLDivElement).style.background = 'var(--sf)'
       }}
     >
-      {/* Header row */}
-      <button
-        onClick={() => setExpanded(e => !e)}
+      <div
         style={{
+          width: 36,
+          height: 36,
+          borderRadius: 'var(--r-sm)',
+          background: 'var(--sf2)',
+          border: '1px solid var(--bd)',
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          width: '100%',
-          padding: '8px 12px',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: 'var(--tx)',
-          fontFamily: 'var(--font)',
-          fontSize: 'var(--fs)',
-          textAlign: 'left',
-          transition: 'background 140ms ease-out',
+          justifyContent: 'center',
+          flexShrink: 0,
         }}
-        onMouseEnter={e => (e.currentTarget.style.background = 'var(--sf2)')}
-        onMouseLeave={e => (e.currentTarget.style.background = 'none')}
       >
-        <span style={{ fontSize: 13 }}>{isMarkdown ? '📄' : '📝'}</span>
-        <span style={{ fontWeight: 500, flex: 1 }}>{title}</span>
-        {lang !== 'markdown' && (
-          <span
-            style={{
-              fontSize: 11,
-              padding: '2px 6px',
-              borderRadius: 'var(--r-sm)',
-              background: 'var(--acc-soft)',
-              color: 'var(--acc)',
-              fontFamily: 'monospace',
-            }}
-          >
-            {lang}
-          </span>
-        )}
-        <span style={{ color: 'var(--tx3)', fontSize: 12 }}>
-          {expanded ? '▲' : '▼'}
-        </span>
-      </button>
+        {isMarkdown ? <DocIcon /> : <CodeIcon />}
+      </div>
 
-      {/* Preview body — max 5 lines, scrollable */}
-      {expanded && (
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            maxHeight: '7.5em', // ~5 lines at 1.5em line-height
-            overflowY: 'auto',
-            borderTop: '1px solid var(--bd)',
+            fontWeight: 500,
+            color: 'var(--tx)',
+            fontSize: 'var(--fs)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
-          <CodeBlock language={isMarkdown ? 'markdown' : lang} code={content} noRun />
+          {title}
         </div>
-      )}
+        <div
+          style={{
+            fontSize: 11,
+            color: 'var(--tx3)',
+            marginTop: 2,
+          }}
+        >
+          {typeLabel} · {langLabel}
+        </div>
+      </div>
+
+      <button
+        onClick={e => { e.stopPropagation(); onOpen() }}
+        style={{
+          padding: '5px 12px',
+          borderRadius: 'var(--r-sm)',
+          border: '1px solid var(--bd2)',
+          background: 'var(--sf3)',
+          color: 'var(--tx2)',
+          fontSize: 12,
+          fontFamily: 'var(--font)',
+          cursor: 'pointer',
+          flexShrink: 0,
+          transition: 'all 140ms ease',
+          whiteSpace: 'nowrap',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = 'var(--acc-soft)'
+          e.currentTarget.style.borderColor = 'var(--acc-border)'
+          e.currentTarget.style.color = 'var(--acc)'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = 'var(--sf3)'
+          e.currentTarget.style.borderColor = 'var(--bd2)'
+          e.currentTarget.style.color = 'var(--tx2)'
+        }}
+      >
+        Open
+      </button>
     </div>
   )
 }
