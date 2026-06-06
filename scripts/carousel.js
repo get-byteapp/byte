@@ -27,6 +27,14 @@ function initGenericCarousel(containerSelector, slideSelector, dotSelector, hasC
 
     slides.forEach((slide, i) => {
       slide.classList.toggle('active', i === currentSlide);
+      const video = slide.querySelector('video');
+      if (video) {
+        if (i === currentSlide) {
+          video.play();
+        } else {
+          video.pause();
+        }
+      }
     });
 
     dots.forEach((dot, i) => {
