@@ -170,17 +170,14 @@ section {
 .feature-carousel-slide {
   position: absolute;
   inset: 0;
-  display: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 300ms ease;
 }
 
 .feature-carousel-slide.active {
-  display: block;
-  animation: gifFadeIn 350ms ease forwards;
-}
-
-@keyframes gifFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  visibility: visible;
+  opacity: 1;
 }
 
 .feature-carousel-slide img,

@@ -26,13 +26,7 @@ function initGenericCarousel(containerSelector, slideSelector, dotSelector, hasC
     currentSlide = (index + slides.length) % slides.length;
 
     slides.forEach((slide, i) => {
-      if (i === currentSlide) {
-        slide.classList.remove('active');
-        void slide.offsetWidth;
-        slide.classList.add('active');
-      } else {
-        slide.classList.remove('active');
-      }
+      slide.classList.toggle('active', i === currentSlide);
     });
 
     dots.forEach((dot, i) => {
