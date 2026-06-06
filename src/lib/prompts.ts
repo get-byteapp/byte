@@ -22,6 +22,7 @@ import TOOL_ASK_QUESTION from '../../prompts/tools/ASK_QUESTION.md?raw';
 import TOOL_CONFIRM_ACTION from '../../prompts/tools/CONFIRM_ACTION.md?raw';
 import TOOL_CODE_EXECUTION from '../../prompts/tools/CODE_EXECUTION.md?raw';
 import TOOL_RENDER from '../../prompts/tools/RENDER.md?raw';
+import TOOL_CANVAS from '../../prompts/tools/CANVAS.md?raw';
 
 // Modes
 import MODE_CANVAS from '../../prompts/modes/CANVAS.md?raw';
@@ -95,6 +96,12 @@ export function assemblePrompt(config: ChatConfig, memories?: { name: string; co
   if (TOOL_RENDER.trim()) {
     parts.push(TOOL_RENDER);
     includedFiles.push('tools/RENDER.md');
+  }
+
+  // 1c. Canvas blocks (always available — injected after RENDER)
+  if (TOOL_CANVAS.trim()) {
+    parts.push(TOOL_CANVAS);
+    includedFiles.push('tools/CANVAS.md');
   }
 
   // 2. Response Style (inject if not 'normal')
