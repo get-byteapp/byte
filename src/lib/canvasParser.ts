@@ -13,7 +13,7 @@ function parseAttrs(attrStr: string): { title: string; lang: string } {
   const titleMatch = /title="([^"]+)"/.exec(attrStr)
   const langMatch = /lang="([^"]+)"/.exec(attrStr)
   const title = titleMatch ? titleMatch[1] : 'Untitled'
-  const lang = langMatch ? langMatch[1] : 'markdown'
+  const lang = langMatch ? langMatch[1] : ''
   return { title, lang }
 }
 
