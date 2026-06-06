@@ -30,6 +30,10 @@ import {
 import { extractTextOCR } from "../../lib/ocr";
 import { getSlashCommandPrompt } from "../../lib/slashCommands";
 import { indexProjectFiles, queryProjectChunks, clearProjectIndex } from "../../lib/retrieval";
+import { parseCanvasBlocks } from '../../lib/canvasParser'
+import { CanvasContext } from '../../lib/markdown'
+import { CanvasPanel } from '../shared/CanvasPanel'
+import type { CanvasDocument } from '../../types'
 
 
 interface ChatViewProps {
@@ -71,6 +75,22 @@ export function ChatView({
   const pendingOpsRef = useRef<Op[]>([]);
   const titleGeneratedRef = useRef<Set<string>>(new Set());
   const chat = chats.find((c) => c.id === activeChatId);
+
+  const canvasDocuments: CanvasDocument[] = chat?.canvasDocuments ?? []
+  const activeCanvasId: string | null = chat?.activeCanvasId ?? null
+
+  const handleCanvasOpen = (id: string) => {
+    if (!activeChatId) return
+    updateChat(activeChatId, { activeCanvasId: id })
+  }
+  const handleCanvasClose = () => {
+    if (!activeChatId) return
+    updateChat(activeChatId, { activeCanvasId: null })
+  }
+  const handleCanvasTabSwitch = (id: string) => {
+    if (!activeChatId) return
+    updateChat(activeChatId, { activeCanvasId: id })
+  }
 
   const formatErrorContent = (err: unknown): string => {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1385,12 +1405,20 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           // Only update message if no tool was detected (tools do their own updates)
           const hasAnyTool = askQuestion || confirmAction || fileRead || suggestMemory || codeExec || webSearches.length > 0;
           if (!hasAnyTool) {
+            const { content: cleanedContent, documents: newDocs } = parseCanvasBlocks(displayContent)
+            const currentCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? []
+            const mergedDocs = [...currentCanvas]
+            for (const doc of newDocs) {
+              const idx = mergedDocs.findIndex(d => d.title === doc.title)
+              if (idx >= 0) { mergedDocs[idx] = doc } else { mergedDocs.push(doc) }
+            }
             updateChat(activeChatId, {
               messages: chat.messages.map((m) =>
                 m.id === assistantMsg.id
-                  ? { ...m, content: displayContent, status: "done" as const }
+                  ? { ...m, content: cleanedContent, status: "done" as const }
                   : m,
               ),
+              canvasDocuments: mergedDocs,
             });
           } else {
             // Update with display content first
@@ -1554,11 +1582,19 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           });
           handleFileReadTool(activeChatId, fileRead.path, fileRead.header);
         } else {
+          const { content: cleanedContent, documents: newDocs } = parseCanvasBlocks(response)
+          const currentCanvas = chats.find(c => c.id === activeChatId)?.canvasDocuments ?? []
+          const mergedDocs = [...currentCanvas]
+          for (const doc of newDocs) {
+            const idx = mergedDocs.findIndex(d => d.title === doc.title)
+            if (idx >= 0) { mergedDocs[idx] = doc } else { mergedDocs.push(doc) }
+          }
           updateChat(activeChatId, {
             messages: [
               ...currentChat.messages,
-              { ...assistantMsg, content: response, status: "done" as const },
+              { ...assistantMsg, content: cleanedContent, status: "done" as const },
             ],
+            canvasDocuments: mergedDocs,
           });
           if (askQuestion) {
             onAskQuestionDetected?.(askQuestion);
@@ -2683,12 +2719,15 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
   }
 
   return (
-    <div className="view on" style={{ flexDirection: "column" }}>
+    <div className="view on" style={{ flexDirection: 'row', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
       <div className="chat-msgs" ref={chatMsgsRef} onScroll={handleScroll}>
         <div className="chat-msgs-inner">
-          {chat.messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
-          ))}
+          <CanvasContext.Provider value={{ documents: canvasDocuments, onOpen: handleCanvasOpen }}>
+            {chat.messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+          </CanvasContext.Provider>
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -2719,6 +2758,15 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             onCodeExecutionToggle={handleCodeExecutionToggle}
           />
         </div>
+      )}
+      </div>
+      {activeCanvasId && canvasDocuments.length > 0 && (
+        <CanvasPanel
+          documents={canvasDocuments}
+          activeId={activeCanvasId}
+          onSetActive={handleCanvasTabSwitch}
+          onClose={handleCanvasClose}
+        />
       )}
     </div>
   );
