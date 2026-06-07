@@ -252,7 +252,7 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
         </>
       ) : (
         <>
-          {/* Single Build Header */}
+          {/* Single Build Header - Row 1 */}
           <div
             style={{
               display: 'flex',
@@ -295,68 +295,6 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
               <ChevronLeftIcon />
             </button>
 
-            {/* Toggle Preview/Raw */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '2px 4px', background: 'var(--sf2)', borderRadius: 'var(--r-sm)' }}>
-              <button
-                onClick={() => setDisplayMode('preview')}
-                title="Preview"
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 'var(--r-sm)',
-                  border: displayMode === 'preview' ? '1px solid var(--bd)' : '1px solid transparent',
-                  background: displayMode === 'preview' ? 'var(--sf)' : 'none',
-                  color: displayMode === 'preview' ? 'var(--tx)' : 'var(--tx3)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 140ms ease',
-                }}
-                onMouseEnter={e => {
-                  if (displayMode !== 'preview') {
-                    e.currentTarget.style.color = 'var(--tx2)'
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (displayMode !== 'preview') {
-                    e.currentTarget.style.color = 'var(--tx3)'
-                  }
-                }}
-              >
-                <EyeIcon />
-              </button>
-              <button
-                onClick={() => setDisplayMode('raw')}
-                title="Raw"
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 'var(--r-sm)',
-                  border: displayMode === 'raw' ? '1px solid var(--bd)' : '1px solid transparent',
-                  background: displayMode === 'raw' ? 'var(--sf)' : 'none',
-                  color: displayMode === 'raw' ? 'var(--tx)' : 'var(--tx3)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 140ms ease',
-                }}
-                onMouseEnter={e => {
-                  if (displayMode !== 'raw') {
-                    e.currentTarget.style.color = 'var(--tx2)'
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (displayMode !== 'raw') {
-                    e.currentTarget.style.color = 'var(--tx3)'
-                  }
-                }}
-              >
-                <CodeIcon />
-              </button>
-            </div>
-
             {/* Title */}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -396,6 +334,121 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
                 <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </button>
+          </div>
+
+          {/* Single Build Header - Row 2: Controls */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 12px',
+              borderBottom: '1px solid var(--bd)',
+              background: 'var(--sf)',
+              flexShrink: 0,
+            }}
+          >
+            {/* Toggle Preview/Raw */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '2px 4px', background: 'var(--sf2)', borderRadius: 'var(--r-sm)' }}>
+              <button
+                onClick={() => setDisplayMode('preview')}
+                title="Preview"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 'var(--r-sm)',
+                  border: displayMode === 'preview' ? '1px solid var(--bd)' : '1px solid transparent',
+                  background: displayMode === 'preview' ? 'var(--sf)' : 'none',
+                  color: displayMode === 'preview' ? 'var(--tx)' : 'var(--tx3)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 200ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                }}
+                onMouseEnter={e => {
+                  if (displayMode !== 'preview') {
+                    e.currentTarget.style.color = 'var(--tx2)'
+                    e.currentTarget.style.transform = 'scale(1.1)'
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (displayMode !== 'preview') {
+                    e.currentTarget.style.color = 'var(--tx3)'
+                    e.currentTarget.style.transform = 'scale(1)'
+                  }
+                }}
+              >
+                <EyeIcon />
+              </button>
+              <button
+                onClick={() => setDisplayMode('raw')}
+                title="Raw"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 'var(--r-sm)',
+                  border: displayMode === 'raw' ? '1px solid var(--bd)' : '1px solid transparent',
+                  background: displayMode === 'raw' ? 'var(--sf)' : 'none',
+                  color: displayMode === 'raw' ? 'var(--tx)' : 'var(--tx3)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 200ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                }}
+                onMouseEnter={e => {
+                  if (displayMode !== 'raw') {
+                    e.currentTarget.style.color = 'var(--tx2)'
+                    e.currentTarget.style.transform = 'scale(1.1)'
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (displayMode !== 'raw') {
+                    e.currentTarget.style.color = 'var(--tx3)'
+                    e.currentTarget.style.transform = 'scale(1)'
+                  }
+                }}
+              >
+                <CodeIcon />
+              </button>
+            </div>
+
+            {/* Copy button - only show in raw mode */}
+            {displayMode === 'raw' && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(active?.content || '')
+                }}
+                title="Copy to clipboard"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 'var(--r-sm)',
+                  border: '1px solid var(--bd2)',
+                  background: 'var(--sf3)',
+                  color: 'var(--tx2)',
+                  fontSize: 12,
+                  fontFamily: 'var(--font)',
+                  cursor: 'pointer',
+                  transition: 'all 140ms ease',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'var(--acc-soft)'
+                  e.currentTarget.style.borderColor = 'var(--acc-border)'
+                  e.currentTarget.style.color = 'var(--acc)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'var(--sf3)'
+                  e.currentTarget.style.borderColor = 'var(--bd2)'
+                  e.currentTarget.style.color = 'var(--tx2)'
+                }}
+              >
+                Copy
+              </button>
+            )}
+
+            <div style={{ flex: 1 }} />
           </div>
 
           {/* Content */}
