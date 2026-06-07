@@ -116,6 +116,24 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
           margin-left: 2px;
           animation: builds-cursor-blink 900ms step-end infinite;
         }
+        @keyframes toggleGlow {
+          0%, 100% {
+            box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+          }
+          50% {
+            box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+          }
+        }
+        @keyframes iconBounce {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.15); }
+        }
+        .toggle-button-active {
+          animation: toggleGlow 2s ease-in-out infinite;
+        }
+        .toggle-button-active:hover {
+          animation: none;
+        }
         .builds-panel-content .msg-txt p { margin: 0 0 1em; }
         .builds-panel-content .msg-txt p:last-child { margin-bottom: 0; }
         .builds-panel-content .msg-txt ol,
@@ -365,6 +383,7 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 200ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  boxShadow: displayMode === 'preview' ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : 'none',
                 }}
                 onMouseEnter={e => {
                   if (displayMode !== 'preview') {
@@ -396,6 +415,7 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 200ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  boxShadow: displayMode === 'raw' ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : 'none',
                 }}
                 onMouseEnter={e => {
                   if (displayMode !== 'raw') {
