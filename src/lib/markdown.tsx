@@ -6,16 +6,16 @@ import rehypeHighlight from 'rehype-highlight'
 import { useMemo, memo, createContext, useContext } from 'react'
 import { CodeBlock } from '../components/shared/CodeBlock'
 import { ArtifactFrame } from '../components/shared/ArtifactFrame'
-import { CanvasPreview } from '../components/shared/CanvasPreview'
-import type { CanvasDocument } from '../types'
+import { BuildsPreview } from '../components/shared/BuildsPreview'
+import type { BuildsDocument } from '../types'
 
 export const StreamingContext = createContext(false)
 
-export interface CanvasContextValue {
-  documents: CanvasDocument[]
+export interface BuildsContextValue {
+  documents: BuildsDocument[]
   onOpen: (id: string) => void
 }
-export const CanvasContext = createContext<CanvasContextValue>({ documents: [], onOpen: () => {} })
+export const BuildsContext = createContext<BuildsContextValue>({ documents: [], onOpen: () => {} })
 
 function preprocessMath(content: string): string {
   return content
@@ -165,7 +165,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   content: string
   isStreaming?: boolean
 }) {
-  const canvasCtx = useContext(CanvasContext)
+  const buildsCtx = useContext(BuildsContext)
 
   const { processedContent, detailElements } = useMemo(() => {
     const { content: mainContent, details } = extractDetails(preprocessMath(content))
@@ -204,14 +204,14 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
 
           if (part.startsWith('CANVAS_PREVIEW_')) {
             const id = part.replace('CANVAS_PREVIEW_', '')
-            const doc = canvasCtx.documents.find(d => d.id === id)
+            const doc = buildsCtx.documents.find(d => d.id === id)
             if (!doc) return null
             return (
               <div key={index} style={{ overflowX: 'auto', maxWidth: '100%' }}>
-                <CanvasPreview
+                <BuildsPreview
                   title={doc.title}
                   lang={doc.lang}
-                  onOpen={() => canvasCtx.onOpen(id)}
+                  onOpen={() => buildsCtx.onOpen(id)}
                   isStreaming={doc.isStreaming}
                 />
               </div>
@@ -220,14 +220,14 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
 
           if (part.startsWith('CANVAS_LINK_')) {
             const encoded = part.replace('CANVAS_LINK_', '')
-            const doc = canvasCtx.documents.find(
+            const doc = buildsCtx.documents.find(
               d => d.title.replace(/[^a-zA-Z0-9_-]/g, '_') === encoded,
             )
             if (!doc) return null
             return (
               <div key={index} style={{ margin: '6px 0' }}>
                 <button
-                  onClick={() => canvasCtx.onOpen(doc.id)}
+                  onClick={() => buildsCtx.onOpen(doc.id)}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',

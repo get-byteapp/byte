@@ -1,4 +1,4 @@
-interface CanvasPreviewProps {
+interface BuildsPreviewProps {
   title: string
   lang: string
   onOpen: () => void
@@ -28,7 +28,7 @@ function CodeIcon() {
   )
 }
 
-export function CanvasPreview({ title, lang, onOpen, isStreaming }: CanvasPreviewProps) {
+export function BuildsPreview({ title, lang, onOpen, isStreaming }: BuildsPreviewProps) {
   const isMarkdown = lang === 'markdown' || lang === 'md'
   const typeLabel = isMarkdown ? 'Document' : 'Code'
   const langLabel = isMarkdown ? 'MD' : lang.toUpperCase()
@@ -36,16 +36,16 @@ export function CanvasPreview({ title, lang, onOpen, isStreaming }: CanvasPrevie
   return (
     <>
       <style>{`
-        @keyframes canvas-writing-pulse {
+        @keyframes builds-writing-pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }
-        .canvas-writing-dot {
-          animation: canvas-writing-pulse 1.2s ease-in-out infinite;
+        .builds-writing-dot {
+          animation: builds-writing-pulse 1.2s ease-in-out infinite;
           display: inline-block;
         }
-        .canvas-writing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .canvas-writing-dot:nth-child(3) { animation-delay: 0.4s; }
+        .builds-writing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .builds-writing-dot:nth-child(3) { animation-delay: 0.4s; }
       `}</style>
       <div
         style={{
@@ -95,9 +95,9 @@ export function CanvasPreview({ title, lang, onOpen, isStreaming }: CanvasPrevie
             {isStreaming ? (
               <span>
                 Writing
-                <span className="canvas-writing-dot">.</span>
-                <span className="canvas-writing-dot">.</span>
-                <span className="canvas-writing-dot">.</span>
+                <span className="builds-writing-dot">.</span>
+                <span className="builds-writing-dot">.</span>
+                <span className="builds-writing-dot">.</span>
               </span>
             ) : (
               `${typeLabel} · ${langLabel}`

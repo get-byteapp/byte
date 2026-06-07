@@ -1,0 +1,412 @@
+import { useState } from 'react'
+import { MarkdownRenderer } from '../../lib/markdown'
+import { CodeBlock } from './CodeBlock'
+import type { BuildsDocument } from '../../types'
+
+interface BuildsPanelProps {
+  documents: BuildsDocument[]
+  activeId: string | null
+  onSetActive: (id: string) => void
+  onClose: () => void
+  onSidebarStateChange?: (state: 'full' | 'icons' | 'none') => void
+  currentSidebarState?: 'full' | 'icons' | 'none'
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M10 13L4 8l6-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
+      <path d="M8 13C4 13 1.5 10 1 8c.5-2 2.5-5 7-5s6.5 3 7 5c-.5 2-3 5-7 5Z" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+    </svg>
+  )
+}
+
+function CodeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M5 12l-3-4 3-4M11 12l3-4-3-4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+type ViewMode = 'gallery' | 'single'
+type DisplayMode = 'preview' | 'raw'
+
+export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSidebarStateChange, currentSidebarState }: BuildsPanelProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>('single')
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('preview')
+  const active = documents.find(d => d.id === activeId) ?? (documents.length > 0 ? documents[0] : null)
+  const isStreaming = active?.isStreaming ?? false
+  const isMarkdown = active?.lang === 'markdown' || active?.lang === 'md'
+
+  const handleBack = () => {
+    setViewMode('gallery')
+    if (onSidebarStateChange && currentSidebarState === 'full') {
+      onSidebarStateChange('icons')
+    }
+  }
+
+  const handleGalleryClose = () => {
+    setViewMode('single')
+    onClose()
+  }
+
+  if (documents.length === 0) return null
+
+  return (
+    <div
+      style={{
+        width: '46%',
+        minWidth: 340,
+        maxWidth: 700,
+        display: 'flex',
+        flexDirection: 'column',
+        borderLeft: '1px solid var(--bd)',
+        background: 'var(--sf)',
+        animation: 'buildsSlideIn 220ms cubic-bezier(0.23, 1, 0.32, 1) both',
+        overflow: 'hidden',
+        flexShrink: 0,
+      }}
+    >
+      <style>{`
+        @keyframes buildsSlideIn {
+          from { transform: translateX(40px); opacity: 0; }
+          to   { transform: translateX(0); opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          @keyframes buildsSlideIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+          }
+        }
+        @keyframes builds-cursor-blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+        .builds-cursor {
+          display: inline-block;
+          width: 2px;
+          height: 1.1em;
+          background: var(--tx2);
+          vertical-align: text-bottom;
+          margin-left: 2px;
+          animation: builds-cursor-blink 900ms step-end infinite;
+        }
+        .builds-panel-content .msg-txt p { margin: 0 0 1em; }
+        .builds-panel-content .msg-txt p:last-child { margin-bottom: 0; }
+        .builds-panel-content .msg-txt ol,
+        .builds-panel-content .msg-txt ul { margin: 0 0 1em; padding-left: 1.5em; }
+        .builds-panel-content .msg-txt li { margin: 0.25em 0; }
+        .builds-panel-content .msg-txt h1,
+        .builds-panel-content .msg-txt h2,
+        .builds-panel-content .msg-txt h3,
+        .builds-panel-content .msg-txt h4 { margin: 1.25em 0 0.5em; font-weight: 600; line-height: 1.3; }
+        .builds-panel-content .msg-txt h1 { font-size: 1.5em; }
+        .builds-panel-content .msg-txt h2 { font-size: 1.3em; border-bottom: 1px solid var(--bd); padding-bottom: 0.35em; }
+        .builds-panel-content .msg-txt h3 { font-size: 1.15em; }
+        .builds-panel-content .msg-txt blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid var(--bd2); color: var(--tx2); }
+        .builds-panel-content .msg-txt hr { margin: 1.5em 0; border: none; border-top: 1px solid var(--bd); }
+        .builds-panel-content .msg-txt table { border-collapse: collapse; margin: 1em 0; width: 100%; }
+        .builds-panel-content .msg-txt th,
+        .builds-panel-content .msg-txt td { border: 1px solid var(--bd); padding: 8px 12px; text-align: left; }
+        .builds-panel-content .msg-txt th { background: var(--sf2); font-weight: 600; }
+        .builds-panel-content .msg-txt a { color: var(--acc); text-decoration: underline; }
+        .builds-panel-content .msg-txt code:not(pre code) { background: var(--code-bg); padding: 2px 5px; border-radius: 4px; font-size: 0.9em; }
+        .builds-panel-content .msg-txt strong { font-weight: 600; }
+        .builds-panel-content .msg-txt em { font-style: italic; }
+      `}</style>
+
+      {/* Gallery View */}
+      {viewMode === 'gallery' ? (
+        <>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '0 16px',
+              height: 46,
+              borderBottom: '1px solid var(--bd)',
+              background: 'var(--sf)',
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ color: 'var(--tx)', fontSize: 14, fontWeight: 500 }}>Builds</span>
+            <div style={{ flex: 1 }} />
+            <button
+              onClick={handleGalleryClose}
+              title="Close"
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 'var(--r-sm)',
+                border: '1px solid transparent',
+                background: 'none',
+                color: 'var(--tx3)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 140ms ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--sf2)'
+                e.currentTarget.style.borderColor = 'var(--bd)'
+                e.currentTarget.style.color = 'var(--tx)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'none'
+                e.currentTarget.style.borderColor = 'transparent'
+                e.currentTarget.style.color = 'var(--tx3)'
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Gallery Grid */}
+          <div
+            style={{
+              flex: 1,
+              overflow: 'auto',
+              padding: 16,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+              gap: 12,
+            }}
+          >
+            {documents.map(doc => {
+              const docIsMarkdown = doc.lang === 'markdown' || doc.lang === 'md'
+              return (
+                <button
+                  key={doc.id}
+                  onClick={() => {
+                    onSetActive(doc.id)
+                    setViewMode('single')
+                  }}
+                  style={{
+                    padding: 12,
+                    borderRadius: 'var(--r-sm)',
+                    border: '1px solid var(--bd)',
+                    background: 'var(--sf2)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    alignItems: 'flex-start',
+                    textAlign: 'left',
+                    transition: 'all 140ms ease',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'var(--sf3)'
+                    e.currentTarget.style.borderColor = 'var(--bd2)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'var(--sf2)'
+                    e.currentTarget.style.borderColor = 'var(--bd)'
+                  }}
+                >
+                  <div style={{ width: '100%' }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx)', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3 }}>
+                      {doc.title}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 4 }}>
+                      {docIsMarkdown ? 'Document' : 'Code'} · {docIsMarkdown ? 'MD' : doc.lang.toUpperCase()}
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Single Build Header */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '0 12px',
+              height: 46,
+              borderBottom: '1px solid var(--bd)',
+              background: 'var(--sf)',
+              flexShrink: 0,
+            }}
+          >
+            <button
+              onClick={handleBack}
+              title="Back to builds"
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 'var(--r-sm)',
+                border: '1px solid transparent',
+                background: 'none',
+                color: 'var(--tx3)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 140ms ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--sf2)'
+                e.currentTarget.style.borderColor = 'var(--bd)'
+                e.currentTarget.style.color = 'var(--tx)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'none'
+                e.currentTarget.style.borderColor = 'transparent'
+                e.currentTarget.style.color = 'var(--tx3)'
+              }}
+            >
+              <ChevronLeftIcon />
+            </button>
+
+            {/* Toggle Preview/Raw */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '2px 4px', background: 'var(--sf2)', borderRadius: 'var(--r-sm)' }}>
+              <button
+                onClick={() => setDisplayMode('preview')}
+                title="Preview"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 'var(--r-sm)',
+                  border: displayMode === 'preview' ? '1px solid var(--bd)' : '1px solid transparent',
+                  background: displayMode === 'preview' ? 'var(--sf)' : 'none',
+                  color: displayMode === 'preview' ? 'var(--tx)' : 'var(--tx3)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 140ms ease',
+                }}
+                onMouseEnter={e => {
+                  if (displayMode !== 'preview') {
+                    e.currentTarget.style.color = 'var(--tx2)'
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (displayMode !== 'preview') {
+                    e.currentTarget.style.color = 'var(--tx3)'
+                  }
+                }}
+              >
+                <EyeIcon />
+              </button>
+              <button
+                onClick={() => setDisplayMode('raw')}
+                title="Raw"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 'var(--r-sm)',
+                  border: displayMode === 'raw' ? '1px solid var(--bd)' : '1px solid transparent',
+                  background: displayMode === 'raw' ? 'var(--sf)' : 'none',
+                  color: displayMode === 'raw' ? 'var(--tx)' : 'var(--tx3)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 140ms ease',
+                }}
+                onMouseEnter={e => {
+                  if (displayMode !== 'raw') {
+                    e.currentTarget.style.color = 'var(--tx2)'
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (displayMode !== 'raw') {
+                    e.currentTarget.style.color = 'var(--tx3)'
+                  }
+                }}
+              >
+                <CodeIcon />
+              </button>
+            </div>
+
+            {/* Title */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {active?.title}
+              </div>
+            </div>
+
+            {/* Close */}
+            <button
+              onClick={onClose}
+              title="Close"
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 'var(--r-sm)',
+                border: '1px solid transparent',
+                background: 'none',
+                color: 'var(--tx3)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 140ms ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--sf2)'
+                e.currentTarget.style.borderColor = 'var(--bd)'
+                e.currentTarget.style.color = 'var(--tx)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'none'
+                e.currentTarget.style.borderColor = 'transparent'
+                e.currentTarget.style.color = 'var(--tx3)'
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Content */}
+          <div
+            className="builds-panel-content"
+            style={{ flex: 1, overflow: 'auto', padding: '24px 28px' }}
+          >
+            {!active ? null : isStreaming ? (
+              <pre style={{ margin: 0, fontFamily: 'var(--font-mono, monospace)', fontSize: 13, color: 'var(--tx)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>
+                {active.content}<span className="builds-cursor" />
+              </pre>
+            ) : displayMode === 'raw' || !isMarkdown ? (
+              <pre style={{ margin: 0, fontFamily: 'var(--font-mono, monospace)', fontSize: 13, color: 'var(--tx)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6, background: 'var(--sf2)', padding: 12, borderRadius: 'var(--r-sm)' }}>
+                {active.content}
+              </pre>
+            ) : isMarkdown && displayMode === 'preview' ? (
+              <div
+                className="msg-txt"
+                style={{
+                  fontSize: 'calc(var(--fs) + 0.5px)',
+                  color: 'var(--tx)',
+                  lineHeight: 1.75,
+                }}
+              >
+                <MarkdownRenderer content={active.content} />
+              </div>
+            ) : (
+              <CodeBlock language={active.lang} code={active.content} noRun />
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

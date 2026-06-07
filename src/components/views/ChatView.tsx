@@ -31,9 +31,9 @@ import { extractTextOCR } from "../../lib/ocr";
 import { getSlashCommandPrompt } from "../../lib/slashCommands";
 import { indexProjectFiles, queryProjectChunks, clearProjectIndex } from "../../lib/retrieval";
 import { parseCanvasBlocks, StreamingCanvasParser } from '../../lib/canvasParser'
-import { CanvasContext } from '../../lib/markdown'
-import { CanvasPanel } from '../shared/CanvasPanel'
-import type { CanvasDocument } from '../../types'
+import { BuildsContext } from '../../lib/markdown'
+import { BuildsPanel } from '../shared/BuildsPanel'
+import type { BuildsDocument } from '../../types'
 
 
 interface ChatViewProps {
@@ -78,20 +78,22 @@ export function ChatView({
   const titleGeneratedRef = useRef<Set<string>>(new Set());
   const chat = chats.find((c) => c.id === activeChatId);
 
-  const canvasDocuments: CanvasDocument[] = chat?.canvasDocuments ?? []
-  const activeCanvasId: string | null = chat?.activeCanvasId ?? null
+  const buildsDocuments: BuildsDocument[] = chat?.buildsDocuments ?? []
+  const activeBuildsId: string | null = chat?.activeBuildsId ?? null
+  const [sidebarState, setSidebarState] = useState<'full' | 'icons' | 'none'>('full')
+  const previousSidebarStateRef = useRef<'full' | 'icons' | 'none'>('full')
 
-  const handleCanvasOpen = (id: string) => {
+  const handleBuildsOpen = (id: string) => {
     if (!activeChatId) return
-    updateChat(activeChatId, { activeCanvasId: id })
+    updateChat(activeChatId, { activeBuildsId: id })
   }
-  const handleCanvasClose = () => {
+  const handleBuildsClose = () => {
     if (!activeChatId) return
-    updateChat(activeChatId, { activeCanvasId: null })
+    updateChat(activeChatId, { activeBuildsId: null })
   }
-  const handleCanvasTabSwitch = (id: string) => {
-    if (!activeChatId) return
-    updateChat(activeChatId, { activeCanvasId: id })
+  const handleSidebarStateChange = (state: 'full' | 'icons' | 'none') => {
+    previousSidebarStateRef.current = sidebarState
+    setSidebarState(state)
   }
 
   const formatErrorContent = (err: unknown): string => {
@@ -1347,16 +1349,16 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               if (ev.type === 'chatChunk') {
                 canvasChatBufferRef.current += ev.text;
               } else if (ev.type === 'canvasStart') {
-                const newDoc: CanvasDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
-                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                updateChat(activeChatId, { canvasDocuments: [...curCanvas, newDoc] });
-                updateChat(activeChatId, { activeCanvasId: ev.id });
+                const newDoc: BuildsDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                updateChat(activeChatId, { buildsDocuments: [...curCanvas, newDoc] });
+                updateChat(activeChatId, { activeBuildsId: ev.id });
               } else if (ev.type === 'canvasChunk') {
-                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                updateChat(activeChatId, { buildsDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
               } else if (ev.type === 'canvasEnd') {
-                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                updateChat(activeChatId, { buildsDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
               }
             }
           }
@@ -1421,16 +1423,16 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               if (ev.type === 'chatChunk') {
                 canvasChatBufferRef.current += ev.text;
               } else if (ev.type === 'canvasStart') {
-                const newDoc: CanvasDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
-                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                updateChat(activeChatId, { canvasDocuments: [...curCanvas, newDoc] });
-                updateChat(activeChatId, { activeCanvasId: ev.id });
+                const newDoc: BuildsDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                updateChat(activeChatId, { buildsDocuments: [...curCanvas, newDoc] });
+                updateChat(activeChatId, { activeBuildsId: ev.id });
               } else if (ev.type === 'canvasChunk') {
-                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                updateChat(activeChatId, { buildsDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
               } else if (ev.type === 'canvasEnd') {
-                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                updateChat(activeChatId, { buildsDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
               }
             }
             canvasParserRef.current = null;
@@ -1610,7 +1612,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         } else if (codeExec) {
           const rawCommentary = extractToolCommentary(response, ["code_execution"]) || ""
           const { content: cleanedCommentary, documents: newDocs } = parseCanvasBlocks(rawCommentary)
-          const currentCanvas = chats.find(c => c.id === activeChatId)?.canvasDocuments ?? []
+          const currentCanvas = chats.find(c => c.id === activeChatId)?.buildsDocuments ?? []
           const mergedDocs = [...currentCanvas]
           for (const doc of newDocs) {
             const idx = mergedDocs.findIndex(d => d.title === doc.title)
@@ -1621,13 +1623,13 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               ...currentChat.messages,
               { ...assistantMsg, content: cleanedCommentary, status: "done" as const },
             ],
-            canvasDocuments: mergedDocs,
+            buildsDocuments: mergedDocs,
           });
           handleCodeExecutionTool(activeChatId, codeExec);
         } else if (fileRead) {
           const rawCommentary = extractToolCommentary(response, ["file_read"]) || ""
           const { content: cleanedCommentary, documents: newDocs } = parseCanvasBlocks(rawCommentary)
-          const currentCanvas = chats.find(c => c.id === activeChatId)?.canvasDocuments ?? []
+          const currentCanvas = chats.find(c => c.id === activeChatId)?.buildsDocuments ?? []
           const mergedDocs = [...currentCanvas]
           for (const doc of newDocs) {
             const idx = mergedDocs.findIndex(d => d.title === doc.title)
@@ -1638,12 +1640,12 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               ...currentChat.messages,
               { ...assistantMsg, content: cleanedCommentary, status: "done" as const },
             ],
-            canvasDocuments: mergedDocs,
+            buildsDocuments: mergedDocs,
           });
           handleFileReadTool(activeChatId, fileRead.path, fileRead.header);
         } else {
           const { content: cleanedContent, documents: newDocs } = parseCanvasBlocks(response)
-          const currentCanvas = chats.find(c => c.id === activeChatId)?.canvasDocuments ?? []
+          const currentCanvas = chats.find(c => c.id === activeChatId)?.buildsDocuments ?? []
           const mergedDocs = [...currentCanvas]
           for (const doc of newDocs) {
             const idx = mergedDocs.findIndex(d => d.title === doc.title)
@@ -1654,7 +1656,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               ...currentChat.messages,
               { ...assistantMsg, content: cleanedContent, status: "done" as const },
             ],
-            canvasDocuments: mergedDocs,
+            buildsDocuments: mergedDocs,
           });
           if (askQuestion) {
             onAskQuestionDetected?.(askQuestion);
@@ -2395,15 +2397,15 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                 if (ev.type === 'chatChunk') {
                   canvasChatBufferRef.current += ev.text;
                 } else if (ev.type === 'canvasStart') {
-                  const newDoc: CanvasDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
-                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                  updateChat(activeChatId, { canvasDocuments: [...curCanvas, newDoc], activeCanvasId: ev.id });
+                  const newDoc: BuildsDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                  updateChat(activeChatId, { buildsDocuments: [...curCanvas, newDoc], activeBuildsId: ev.id });
                 } else if (ev.type === 'canvasChunk') {
-                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                  updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                  updateChat(activeChatId, { buildsDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
                 } else if (ev.type === 'canvasEnd') {
-                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                  updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                  updateChat(activeChatId, { buildsDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
                 }
               }
             }
@@ -2468,15 +2470,15 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                 if (ev.type === 'chatChunk') {
                   canvasChatBufferRef.current += ev.text;
                 } else if (ev.type === 'canvasStart') {
-                  const newDoc: CanvasDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
-                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                  updateChat(activeChatId, { canvasDocuments: [...curCanvas, newDoc], activeCanvasId: ev.id });
+                  const newDoc: BuildsDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                  updateChat(activeChatId, { buildsDocuments: [...curCanvas, newDoc], activeBuildsId: ev.id });
                 } else if (ev.type === 'canvasChunk') {
-                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                  updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                  updateChat(activeChatId, { buildsDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
                 } else if (ev.type === 'canvasEnd') {
-                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
-                  updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.buildsDocuments ?? [];
+                  updateChat(activeChatId, { buildsDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
                 }
               }
               canvasParserRef.current = null;
@@ -2831,11 +2833,11 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
       <div className="chat-msgs" ref={chatMsgsRef} onScroll={handleScroll}>
         <div className="chat-msgs-inner">
-          <CanvasContext.Provider value={{ documents: canvasDocuments, onOpen: handleCanvasOpen }}>
+          <BuildsContext.Provider value={{ documents: buildsDocuments, onOpen: handleBuildsOpen }}>
             {chat.messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
-          </CanvasContext.Provider>
+          </BuildsContext.Provider>
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -2868,12 +2870,14 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         </div>
       )}
       </div>
-      {activeCanvasId && canvasDocuments.length > 0 && (
-        <CanvasPanel
-          documents={canvasDocuments}
-          activeId={activeCanvasId}
-          onSetActive={handleCanvasTabSwitch}
-          onClose={handleCanvasClose}
+      {activeBuildsId && buildsDocuments.length > 0 && (
+        <BuildsPanel
+          documents={buildsDocuments}
+          activeId={activeBuildsId}
+          onSetActive={handleBuildsOpen}
+          onClose={handleBuildsClose}
+          onSidebarStateChange={handleSidebarStateChange}
+          currentSidebarState={sidebarState}
         />
       )}
     </div>

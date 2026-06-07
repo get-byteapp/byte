@@ -93,7 +93,7 @@ export interface ChatConfig {
   includeDateContext?: boolean; // Whether to include current date in system prompt
 }
 
-export interface CanvasDocument {
+export interface BuildsDocument {
   id: string;
   title: string;
   lang: string;
@@ -111,8 +111,8 @@ export interface Chat {
   updatedAt: number;
   saved: boolean;
   config: ChatConfig;
-  canvasDocuments?: CanvasDocument[];
-  activeCanvasId?: string | null;
+  buildsDocuments?: BuildsDocument[];
+  activeBuildsId?: string | null;
 }
 
 export interface Provider {

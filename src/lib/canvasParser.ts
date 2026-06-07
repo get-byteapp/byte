@@ -1,4 +1,4 @@
-import type { CanvasDocument } from '../types'
+import type { BuildsDocument } from '../types'
 
 export type ParserEvent =
   | { type: 'chatChunk'; text: string }
@@ -102,12 +102,12 @@ export class StreamingCanvasParser {
 }
 
 // One-shot wrapper for rehydrating stored messages
-export function parseCanvasBlocks(raw: string): { content: string; documents: CanvasDocument[] } {
+export function parseCanvasBlocks(raw: string): { content: string; documents: BuildsDocument[] } {
   const parser = new StreamingCanvasParser()
   const events = [...parser.feed(raw), ...parser.finalize()]
 
   let content = ''
-  const documents: CanvasDocument[] = []
+  const documents: BuildsDocument[] = []
 
   for (const e of events) {
     if (e.type === 'chatChunk') {
