@@ -99,6 +99,7 @@ export interface CanvasDocument {
   lang: string;
   content: string;
   updatedAt: number;
+  isStreaming?: boolean;
 }
 
 export interface Chat {
