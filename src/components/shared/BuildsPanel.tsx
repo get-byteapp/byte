@@ -37,23 +37,6 @@ function CodeIcon() {
   )
 }
 
-function DocumentIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M4 2h8v12H4z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M6 5h4M6 8h4M6 11h2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-}
-
-function getIconForBuildType(lang?: string) {
-  if (!lang) return <CodeIcon />
-  if (lang === 'markdown' || lang === 'md') {
-    return <DocumentIcon />
-  }
-  return <CodeIcon />
-}
-
 type ViewMode = 'gallery' | 'single'
 type DisplayMode = 'preview' | 'raw'
 
@@ -213,11 +196,12 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
             style={{
               flex: 1,
               overflow: 'auto',
-              padding: 16,
-              display: 'flex',
-              flexDirection: 'column',
+              padding: '16px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
               gap: 12,
-              maxWidth: '50%',
+              maxWidth: '100%',
+              margin: '0 auto',
             }}
           >
             {documents.map(doc => {
@@ -230,18 +214,17 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
                     setViewMode('single')
                   }}
                   style={{
-                    padding: '12px 16px',
+                    padding: '12px',
                     borderRadius: 'var(--r-sm)',
                     border: '1px solid var(--bd)',
                     background: 'var(--sf2)',
                     cursor: 'pointer',
                     display: 'flex',
-                    flexDirection: 'row',
-                    gap: 12,
-                    alignItems: 'center',
+                    flexDirection: 'column',
+                    gap: 8,
+                    alignItems: 'flex-start',
                     textAlign: 'left',
                     transition: 'all 140ms ease',
-                    minHeight: 56,
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.background = 'var(--sf3)'
@@ -252,14 +235,11 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
                     e.currentTarget.style.borderColor = 'var(--bd)'
                   }}
                 >
-                  <div style={{ color: 'var(--tx2)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {getIconForBuildType(doc.lang)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ width: '100%' }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx)', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3 }}>
                       {doc.title}
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>
+                    <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 4 }}>
                       {docIsMarkdown ? 'Document' : 'Code'} · {docIsMarkdown ? 'MD' : doc.lang.toUpperCase()}
                     </div>
                   </div>
