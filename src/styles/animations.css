@@ -236,17 +236,17 @@
 .loading-dots span:nth-child(3) { animation-delay: 300ms; }
 
 /* ── STOP BUTTON PULSE ── */
-@keyframes pulse-acc {
+@keyframes pulse-red {
   0%, 100% { 
-    box-shadow: 0 0 0 0 rgba(var(--acc-r),var(--acc-g),var(--acc-b),.4);
+    box-shadow: 0 0 0 0 rgba(224, 85, 85, 0.4);
   }
   50% { 
-    box-shadow: 0 0 0 8px rgba(var(--acc-r),var(--acc-g),var(--acc-b),0);
+    box-shadow: 0 0 0 8px rgba(224, 85, 85, 0);
   }
 }
 
 .send-stopping {
-  animation: pulse-acc 1.5s ease-in-out infinite;
+  animation: pulse-red 1.5s ease-in-out infinite;
 }
 
 /* ── SUGGESTION PILL HOVER ── */
@@ -261,12 +261,7 @@
 }
 
 /* ── SEARCH COMMENTARY ANIMATION ── */
-  @keyframes sourceFadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  @keyframes searchCommentaryIn {
+@keyframes searchCommentaryIn {
   from {
     opacity: 0;
     transform: translateY(4px);

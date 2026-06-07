@@ -254,8 +254,8 @@
 .small-ta{flex:1;background:transparent;border:none;outline:none;font-family:var(--font);font-size:var(--fs);color:var(--tx);line-height:1.65;resize:none;min-height:28px;max-height:140px;overflow-y:auto}
 .in-row-bottom{display:flex;align-items:center;justify-content:space-between}
 .in-tools{display:flex;gap:6px}
-.t-btn{width:27px;height:27px;border-radius:var(--r-sm);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--tx3);transition:all var(--ease)}
-.t-btn:hover{background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.09);color:var(--tx2);border-color:var(--bd2)}
+.t-btn{width:27px;height:27px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:var(--tx3);transition:all var(--ease)}
+.t-btn:hover{background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.09);color:var(--tx2)}
 .in-right{display:flex;align-items:center;gap:6px}
 .model-chip{display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:20px;border:1px solid var(--bd);color:var(--tx2);font-size:calc(var(--fs) - 2px);transition:all var(--ease);letter-spacing:.03em}
 .model-chip:hover{border-color:var(--bd2);color:var(--tx)}
@@ -1821,7 +1821,10 @@
   border:1px solid var(--bd);
   border-radius:var(--r);
   padding:16px;
-  margin:0 16px 16px;
+  margin-bottom:20px;
+  position:sticky;
+  top:0;
+  z-index:10;
 }
 .preview-cards{
   display:grid;
@@ -1970,24 +1973,6 @@
   margin-top:16px;
   margin-bottom:24px;
   animation:up .2s ease;
-}
-.designer-sticky{
-  position:sticky;
-  top:-1px;
-  z-index:10;
-  background:var(--sf);
-  margin:-20px -20px 20px;
-  border-radius:var(--r) var(--r) 0 0;
-}
-.designer-header{
-  display:flex;
-  align-items:center;
-  padding:10px 16px;
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:.08em;
-  color:var(--tx3);
-  font-weight:600;
 }
 .designer-group{
   margin-bottom:20px;
@@ -2158,7 +2143,7 @@
 .theme-preview-picker{
   display:flex;
   gap:8px;
-  align-items:flex-start;
+  align-items:center;
 }
 .color-picker-square{
   width:40px;

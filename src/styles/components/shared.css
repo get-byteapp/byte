@@ -156,7 +156,8 @@
 /* ─────────────────────────────────────
    APP SHELL (Claude-inspired layout)
    ───────────────────────────────────── */
-#s-app{flex-direction:row;width:100%;height:100vh;overflow:hidden}
+#s-app{flex-direction:column;width:100%;height:100vh;overflow:hidden}
+.app-body{flex:1;display:flex;flex-direction:row;overflow:hidden;width:100%}
 
 /* ── SIDEBAR ── */
 .sb{
@@ -177,7 +178,7 @@ body.ly-icons .sb-recents{display:none}
 body.ly-icons .sb-label{display:none}
 body.ly-icons .sb-customize-label{display:none}
 /* center icons */
-body.ly-icons .sb-head{justify-content:center;padding:0 10px;flex-wrap:wrap;gap:4px}
+body.ly-icons .sb-head{justify-content:center;padding:14px 0 10px;flex-wrap:wrap;gap:4px}
 body.ly-icons .sb-brand{justify-content:center;padding:4px 0;flex:none;width:100%;pointer-events:auto}
 body.ly-icons #sidebar-header{justify-content:center;padding:10px 6px}
 body.ly-icons #nav-newchat{width:32px;height:32px}
@@ -197,8 +198,8 @@ body.ly-none  .sb{width:0;border-color:transparent}
 
 /* sb header — logo + new chat button like Claude */
 .sb-head{
-  height:var(--topbar-h);display:flex;align-items:center;justify-content:space-between;
-  padding:0 10px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 10px 8px;flex-shrink:0;
   border-bottom:1px solid var(--bd)
 }
 .sb-close-mobile{display:none;}
@@ -209,8 +210,8 @@ body.ly-none  .sb{width:0;border-color:transparent}
 .sb-brand:hover{background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.07)}
 .sb-brand svg{flex-shrink:0;color:var(--logo)}
 .sb-brand-name{font-size:14px;font-weight:500;letter-spacing:-.02em;color:var(--tx);white-space:nowrap}
-.sb-newchat{width:28px;height:28px;border-radius:var(--r-sm);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--tx3);transition:all var(--ease);flex-shrink:0}
-.sb-newchat:hover{background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.1);color:var(--tx);border-color:var(--bd2)}
+.sb-newchat{width:28px;height:28px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:var(--tx3);transition:all var(--ease);flex-shrink:0}
+.sb-newchat:hover{background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.1);color:var(--tx)}
 #nav-newchat.active{background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.12);color:var(--tx);border-color:var(--bd2)}
 
 /* sb nav — Claude style: icon + label rows */
@@ -224,10 +225,7 @@ body.ly-none  .sb{width:0;border-color:transparent}
 .sb-item:hover{background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.07);color:var(--tx)}
 .sb-item.on{background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.1);color:var(--tx)}
 .sb-item svg{flex-shrink:0;opacity:.65}
-.sb-item img{flex-shrink:0;opacity:.65}
-.sb-item.on svg,.sb-item.on img{opacity:1}
-.sb-item:hover img{opacity:.9}
-body.ly-icons .sb-icon img{opacity:1}
+.sb-item.on svg{opacity:1}
 
 /* sb recents section — just like Claude */
 .sb-sect{padding:14px 13px 5px;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--tx4);flex-shrink:0;white-space:nowrap}
@@ -384,9 +382,9 @@ body.compact .topbar{height:36px}
 .in-box{
   background:var(--sf);border:none;
   border-radius:var(--r-lg);padding:16px 16px 12px;
-  transition:border-color var(--ease),box-shadow var(--ease),border-radius var(--ease);
-  box-shadow:0 0 14px var(--input-glow,transparent)
+  transition:border-color var(--ease),box-shadow var(--ease),border-radius var(--ease)
 }
+.in-box:focus-within{box-shadow:none}
 .in-row-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
 .agent-pip{width:20px;height:20px;border-radius:50%;background:var(--acc);flex-shrink:0;margin-top:2px;cursor:pointer;transition:transform var(--ease)}
 .agent-pip:hover{transform:scale(1.1)}
@@ -395,8 +393,8 @@ body.compact .topbar{height:36px}
 .small-ta{flex:1;background:transparent;border:none;outline:none;font-family:var(--font);font-size:var(--fs);color:var(--tx);line-height:1.65;resize:none;min-height:28px;max-height:140px;overflow-y:auto;width:100%;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word}
 .in-row-bottom{display:flex;align-items:center;justify-content:space-between}
 .in-tools{display:flex;gap:6px}
-.t-btn{width:27px;height:27px;border-radius:var(--r-sm);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--tx3);transition:all var(--ease)}
-.t-btn:hover{background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.09);color:var(--tx2);border-color:var(--bd2)}
+.t-btn{width:27px;height:27px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:var(--tx3);transition:all var(--ease)}
+.t-btn:hover{background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.09);color:var(--tx2)}
 .in-right{display:flex;align-items:center;gap:6px}
 .model-chip{display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:20px;border:1px solid var(--bd);color:var(--tx2);font-size:calc(var(--fs) - 2px);transition:all var(--ease);letter-spacing:.03em}
 .model-chip:hover{border-color:var(--bd2);color:var(--tx)}
@@ -891,133 +889,39 @@ input[type=range]{width:100%;accent-color:var(--acc);cursor:pointer}
 .pm-divider { height: 1px; background: var(--bd); margin: 3px 5px; }
 
 /* ─────────────────────────────────────
-   UPDATE CARD (sidebar)
+   UPDATE BANNER
    ───────────────────────────────────── */
-.upd-card {
-  padding: 10px 10px 8px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, rgba(var(--acc-r),var(--acc-g),var(--acc-b),.08), rgba(var(--acc-r),var(--acc-g),var(--acc-b),.03));
-  border: 1px solid rgba(var(--acc-r),var(--acc-g),var(--acc-b),.15);
-  font-size: calc(var(--fs) - 1px);
-  animation: slideDown .25s ease;
-}
-.upd-card-header {
+.upd-banner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 14px;
+  background: rgba(var(--acc-r),var(--acc-g),var(--acc-b),.1);
+  border-bottom: 1px solid rgba(var(--acc-r),var(--acc-g),var(--acc-b),.2);
+  font-size: calc(var(--fs) - .5px);
+  color: var(--tx2);
+  flex-shrink: 0;
+  animation: slideDown .2s ease;
 }
-.upd-card-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  color: var(--tx);
-  font-size: calc(var(--fs) + .5px);
-}
-.upd-card-badge {
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .6px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--acc);
-  color: #fff;
-  line-height: 1.5;
-}
-.upd-card-dismiss {
-  background: none;
-  border: none;
-  color: var(--tx4);
-  cursor: pointer;
-  font-size: 15px;
-  padding: 0 2px;
-  line-height: 1;
-  border-radius: 4px;
-}
-.upd-card-dismiss:hover {
-  color: var(--tx);
-}
-.upd-card-progress {
-  font-size: calc(var(--fs) - 1.5px);
+.upd-link {
   color: var(--acc);
-  margin-top: 6px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  background: rgba(var(--acc-r),var(--acc-g),var(--acc-b),.06);
+  text-decoration: none;
+  font-weight: 500;
+  margin-left: auto;
 }
-.upd-card-progress.installed {
-  color: #22c55e;
+.upd-link:hover {
+  text-decoration: underline;
 }
-.upd-card-notes-toggle {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.upd-dismiss {
   background: none;
   border: none;
   color: var(--tx3);
   cursor: pointer;
-  font-size: calc(var(--fs) - 1.5px);
-  padding: 4px 0 0;
-  margin-top: 4px;
-  width: 100%;
-  text-align: left;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
-.upd-card-notes-toggle:hover {
-  color: var(--tx2);
-}
-.upd-card-chevron {
-  font-size: 10px;
-  transition: transform .15s ease;
-}
-.upd-card-chevron.open {
-  transform: rotate(180deg);
-}
-.upd-card-notes {
-  margin-top: 6px;
-  padding: 8px;
-  border-radius: 6px;
-  background: rgba(0,0,0,.04);
-  font-size: calc(var(--fs) - 2px);
-  color: var(--tx2);
-  line-height: 1.5;
-  max-height: 200px;
-  overflow-y: auto;
-}
-.upd-card-notes p {
-  margin: 0 0 4px;
-}
-.upd-card-notes ul {
-  margin: 2px 0;
-  padding-left: 14px;
-}
-.upd-card-notes li {
-  margin-bottom: 2px;
-}
-.upd-card-notes code {
-  font-size: calc(var(--fs) - 3px);
-  background: rgba(0,0,0,.06);
-  padding: 0 3px;
-  border-radius: 3px;
-}
-.upd-card-action {
-  display: block;
-  width: 100%;
-  margin-top: 6px;
-  padding: 5px 0;
-  border: none;
-  border-radius: 6px;
-  background: var(--acc);
-  color: #fff;
-  font-size: calc(var(--fs) - .5px);
-  font-weight: 500;
-  cursor: pointer;
-  text-align: center;
-}
-.upd-card-action:hover {
-  opacity: .9;
-}
-.upd-card-action:disabled {
-  opacity: .5;
-  cursor: default;
+.upd-dismiss:hover {
+  color: var(--tx);
+  background: rgba(var(--acc-r),var(--acc-g),var(--acc-b),.1);
 }
