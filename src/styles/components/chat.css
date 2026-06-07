@@ -1,5 +1,5 @@
 /* ── CHAT VIEW ── */
-.chat-msgs{flex:1;overflow-y:auto;padding:0;margin:0;display:flex;flex-direction:column;background:transparent}
+.chat-msgs{flex:1;overflow-y:auto;padding:0;margin:0;display:flex;flex-direction:column;background:transparent;position:relative}
 .chat-msgs::-webkit-scrollbar{width:3px}
 .chat-msgs::-webkit-scrollbar-thumb{background:var(--tx4);border-radius:2px}
 
@@ -50,25 +50,39 @@
 .msg:not(.u) .msg-txt a{color:var(--acc);text-decoration:underline}
 .msg:not(.u) .msg-txt code:not(pre code){background:var(--code-bg);padding:2px 5px;border-radius:4px;font-size:0.9em}
 
-/* Message actions - row of icons at bottom */
+/* Message actions - row of icons + timestamp at bottom */
 .msg-acts{display:flex;align-items:center;gap:4px;margin-top:8px}
 .msg-act{width:28px;height:28px;border-radius:6px;color:var(--tx4);display:flex;align-items:center;justify-content:center;transition:all var(--ease);background:transparent;border:none;cursor:pointer}
 .msg-act:hover{background:var(--sf2);color:var(--tx2)}
 
-/* User message actions - appear to the left on hover */
+.msg-time{font-size:calc(var(--fs) - 3px);color:var(--tx4);margin-right:auto;user-select:none}
+
+/* Tooltip on action buttons */
+.tooltip-btn{position:relative}
+.tooltip-btn[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--tx);color:var(--bg);font-size:calc(var(--fs) - 3px);padding:3px 7px;border-radius:5px;white-space:nowrap;pointer-events:none;z-index:20;font-family:var(--font);font-weight:500;line-height:1.3}
+.tooltip-btn[data-tip]:hover::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:var(--tx);pointer-events:none;z-index:20}
+
+/* Active feedback states */
+.active-like{color:var(--success) !important;background:var(--sf3) !important}
+.active-dislike{color:var(--danger) !important;background:var(--sf3) !important}
+.ai-acts{justify-content:flex-start}
+.ai-acts .msg-act:first-of-type{margin-left:0}
+
+/* User message actions - below the bubble on the right */
 .msg.u{position:relative}
-.msg.u .msg-acts{position:absolute;right:100%;top:50%;transform:translateY(-50%);margin-right:8px;opacity:0;transition:opacity 150ms ease}
-.msg.u:hover .msg-acts{opacity:1}
+.msg.u .u-acts{justify-content:flex-end;gap:2px;opacity:0;transition:opacity 150ms ease}
+.msg.u:hover .u-acts{opacity:1}
+.msg.u .u-acts .msg-time{margin-right:auto;opacity:.7}
 
 /* Chat input - matches mockup */
-.chat-in{padding:10px 20px 16px;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;background:transparent}
+.chat-in{padding:10px 20px 16px;flex-shrink:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;background:transparent;position:relative}
 .chat-in .in-wrap{max-width:720px;width:100%}
 .chat-in .in-box{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r-lg);padding:16px 16px 12px}
 
 /* Scroll to bottom button */
-.scroll-to-bottom-btn{width:40px;height:40px;border-radius:50%;background:var(--sf2);border:1px solid var(--bd);color:var(--tx2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--ease);font-size:18px}
+.scroll-to-bottom-btn{position:absolute;top:-56px;left:50%;transform:translateX(-50%);width:40px;height:40px;border-radius:50%;background:var(--sf2);border:1px solid var(--bd);color:var(--tx2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--ease);font-size:18px;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
 .scroll-to-bottom-btn:hover{background:var(--sf3);color:var(--tx);border-color:var(--bd2)}
-.scroll-to-bottom-btn:active{transform:scale(0.95)}
+.scroll-to-bottom-btn:active{transform:translateX(-50%) scale(0.95)}
 .code-blk{background:var(--sf2);border:1px solid var(--bd);border-radius:var(--r-sm);margin:12px 0;overflow:hidden}
 .code-hd{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid var(--bd);background:var(--sf3)}
 .code-lang{font-size:calc(var(--fs) - 1px);color:var(--tx3);letter-spacing:.06em;text-transform:uppercase;padding:6px 12px}
@@ -93,4 +107,4 @@
 .code-output{padding:9px 12px;font-size:11.5px;color:var(--tx2);border-top:1px solid var(--bd);font-family:'Geist Mono',monospace;background:var(--code-bg);line-height:1.7}
 
 /* Streaming stop state */
-.send-stopping{background:var(--danger-fill) !important}
+.send-stopping{background:var(--acc) !important;border-color:var(--acc) !important;color:var(--white) !important;box-shadow:0 2px 10px rgba(var(--acc-r),var(--acc-g),var(--acc-b),.3) !important}

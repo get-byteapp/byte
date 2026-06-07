@@ -236,17 +236,17 @@
 .loading-dots span:nth-child(3) { animation-delay: 300ms; }
 
 /* ── STOP BUTTON PULSE ── */
-@keyframes pulse-red {
+@keyframes pulse-acc {
   0%, 100% { 
-    box-shadow: 0 0 0 0 rgba(224, 85, 85, 0.4);
+    box-shadow: 0 0 0 0 rgba(var(--acc-r),var(--acc-g),var(--acc-b),.4);
   }
   50% { 
-    box-shadow: 0 0 0 8px rgba(224, 85, 85, 0);
+    box-shadow: 0 0 0 8px rgba(var(--acc-r),var(--acc-g),var(--acc-b),0);
   }
 }
 
 .send-stopping {
-  animation: pulse-red 1.5s ease-in-out infinite;
+  animation: pulse-acc 1.5s ease-in-out infinite;
 }
 
 /* ── SUGGESTION PILL HOVER ── */
@@ -261,7 +261,12 @@
 }
 
 /* ── SEARCH COMMENTARY ANIMATION ── */
-@keyframes searchCommentaryIn {
+  @keyframes sourceFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes searchCommentaryIn {
   from {
     opacity: 0;
     transform: translateY(4px);
@@ -274,6 +279,107 @@
 
 .search-commentary {
   animation: searchCommentaryIn 0.3s var(--ease-out-strong) both;
+}
+
+/* ── EMPTY STATE ICON PULSE ──
+   Subtle pulse on empty state icons to draw attention */
+@keyframes emptyPulse {
+  0%, 100% { 
+    opacity: 0.3; 
+    transform: scale(1); 
+  }
+  50% { 
+    opacity: 0.6; 
+    transform: scale(1.05); 
+  }
+}
+
+.vi:empty + * .empty-icon, 
+.chats-section + .chat-list-item:only-child,
+.chats-section-label:only-child {
+  /* Targeted at empty state containers */
+}
+
+/* Apply to any icon in an empty state container */
+.view:has(> div > p:contains("No")) svg:only-of-type,
+[class*="empty"] svg,
+.vi-sub + div svg:only-of-type {
+  animation: emptyPulse 2.5s ease-in-out infinite;
+}
+
+/* ── MODAL OVERLAY BACKDROP BLUR ──
+   Adds subtle blur to modal backdrops for depth */
+.modal-overlay {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ── SCROLL TO BOTTOM FLOAT ── */
+.scroll-to-bottom-btn {
+  transition: transform 200ms var(--ease-out-strong),
+              opacity 200ms var(--ease-quick),
+              background-color 150ms var(--ease-quick),
+              border-color 150ms var(--ease-quick);
+  opacity: 0.85;
+}
+
+.scroll-to-bottom-btn:hover {
+  transform: translateX(-50%) scale(1.05);
+  opacity: 1;
+}
+
+/* ── ARTIFACT SKELETON ──
+   Smooth shimmer for artifact loading */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.artifact-skeleton {
+  background: linear-gradient(90deg, var(--sf3) 0%, var(--sf2) 50%, var(--sf3) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ── TOOLTIP SKIP DELAY ON SUBSEQUENT HOVERS ──
+   After first tooltip appears, subsequent ones show instantly */
+.tooltip-btn[data-tip]:hover::after,
+.tooltip-btn[data-tip]:hover::before {
+  transition: opacity 125ms ease-out;
+}
+
+/* ── DROP ZONE ANIMATION ── */
+.in-box.dragging {
+  transition: border 0.2s ease-out, background 0.2s ease-out;
+}
+
+/* ── CUSTOMIZE PANEL BLUR ── */
+#cp {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ── ENHANCED FOCUS RING ──
+   Only for keyboard-navigable controls, not text inputs */
+.btn:focus-visible,
+.btn-icon:focus-visible,
+button:focus-visible,
+[tabindex]:not(input):not(textarea):not(select):focus-visible {
+  outline: 2px solid rgba(var(--acc-r), var(--acc-g), var(--acc-b), 0.5);
+  outline-offset: 2px;
+}
+
+/* ── SEND BUTTON HAS-TEXT ANIMATION ── 
+   Smooth morph from mic to send */
+.home-action-btn {
+  transition: background 180ms var(--ease-quick),
+              border-color 180ms var(--ease-quick),
+              box-shadow 180ms var(--ease-quick),
+              transform 160ms var(--ease-out-strong);
+}
+
+.home-action-btn:active {
+  transform: scale(0.92);
 }
 
 /* ── REDUCED MOTION ── */
