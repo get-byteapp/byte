@@ -2365,6 +2365,8 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
       console.log("[BYTE] Send:", text.trim().slice(0, 80));
 
       if (streamingEnabled) {
+        canvasParserRef.current = new StreamingCanvasParser();
+        canvasChatBufferRef.current = '';
         // Use streaming - update message content as chunks arrive
         const handle = streamChat(
           provider,
@@ -2386,12 +2388,33 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               existingMsg?.rawContent || existingMsg?.content || "";
             const accumulatedContent = currentRaw + chunk;
 
+            // Feed chunk to canvas parser, handle emitted events
+            if (canvasParserRef.current) {
+              const events = canvasParserRef.current.feed(chunk);
+              for (const ev of events) {
+                if (ev.type === 'chatChunk') {
+                  canvasChatBufferRef.current += ev.text;
+                } else if (ev.type === 'canvasStart') {
+                  const newDoc: CanvasDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                  updateChat(activeChatId, { canvasDocuments: [...curCanvas, newDoc], activeCanvasId: ev.id });
+                } else if (ev.type === 'canvasChunk') {
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                  updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
+                } else if (ev.type === 'canvasEnd') {
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                  updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
+                }
+              }
+            }
+
+            const chatBuffer = canvasChatBufferRef.current;
             // Detect tool fence to strip display content — keeps full rawContent for tool parsing
             const hasAnyFence = /```tool_calls?\b/.test(accumulatedContent);
             const isSubtool = hasAnyFence && /"subtool"\s*:/.test(accumulatedContent);
             const displayContent = hasAnyFence
-              ? (isSubtool ? "" : commentaryBeforeFence(accumulatedContent))
-              : accumulatedContent;
+              ? (isSubtool ? "" : commentaryBeforeFence(chatBuffer))
+              : chatBuffer;
 
             updateChat(activeChatId, {
               messages: currentChat.messages.map((m) =>
@@ -2437,9 +2460,34 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                 : [];
 
             const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
+
+            // Finalize canvas parser
+            if (canvasParserRef.current) {
+              const finalEvents = canvasParserRef.current.finalize();
+              for (const ev of finalEvents) {
+                if (ev.type === 'chatChunk') {
+                  canvasChatBufferRef.current += ev.text;
+                } else if (ev.type === 'canvasStart') {
+                  const newDoc: CanvasDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                  updateChat(activeChatId, { canvasDocuments: [...curCanvas, newDoc], activeCanvasId: ev.id });
+                } else if (ev.type === 'canvasChunk') {
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                  updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
+                } else if (ev.type === 'canvasEnd') {
+                  const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                  updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
+                }
+              }
+              canvasParserRef.current = null;
+            }
+
+            const chatBuffer = canvasChatBufferRef.current;
+            canvasChatBufferRef.current = '';
+
             console.log("[CODE_EXEC] rawResponse:", rawResponse.slice(0, 200));
             console.log("[CODE_EXEC] codeExec2:", codeExec2);
-            let displayContent = rawResponse;
+            let displayContent = chatBuffer || rawResponse;
             if (askQuestion) {
               displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "";
             } else if (confirmAction) {
