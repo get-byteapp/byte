@@ -89,6 +89,7 @@ export function ChatView({
   }
   const handleBuildsClose = () => {
     if (!activeChatId) return
+    setSidebarState(previousSidebarStateRef.current)
     updateChat(activeChatId, { activeBuildsId: null })
   }
   const handleSidebarStateChange = (state: 'full' | 'icons' | 'none') => {

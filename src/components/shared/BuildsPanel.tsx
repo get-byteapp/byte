@@ -55,7 +55,6 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
   }
 
   const handleGalleryClose = () => {
-    setViewMode('single')
     onClose()
   }
 
