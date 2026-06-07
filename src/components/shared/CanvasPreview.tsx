@@ -1,8 +1,8 @@
 interface CanvasPreviewProps {
   title: string
   lang: string
-  content: string
   onOpen: () => void
+  isStreaming?: boolean
 }
 
 function DocIcon() {
@@ -28,104 +28,114 @@ function CodeIcon() {
   )
 }
 
-export function CanvasPreview({ title, lang, onOpen }: CanvasPreviewProps) {
+export function CanvasPreview({ title, lang, onOpen, isStreaming }: CanvasPreviewProps) {
   const isMarkdown = lang === 'markdown' || lang === 'md'
   const typeLabel = isMarkdown ? 'Document' : 'Code'
   const langLabel = isMarkdown ? 'MD' : lang.toUpperCase()
 
   return (
-    <div
-      style={{
-        border: '1px solid var(--bd)',
-        borderRadius: 'var(--r-lg)',
-        overflow: 'hidden',
-        margin: '8px 0',
-        background: 'var(--sf)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '12px 14px',
-        cursor: 'pointer',
-        transition: 'border-color 150ms ease, background 150ms ease',
-      }}
-      onClick={onOpen}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--bd2)'
-        ;(e.currentTarget as HTMLDivElement).style.background = 'var(--sf2)'
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--bd)'
-        ;(e.currentTarget as HTMLDivElement).style.background = 'var(--sf)'
-      }}
-    >
+    <>
+      <style>{`
+        @keyframes canvas-writing-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        .canvas-writing-dot {
+          animation: canvas-writing-pulse 1.2s ease-in-out infinite;
+          display: inline-block;
+        }
+        .canvas-writing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .canvas-writing-dot:nth-child(3) { animation-delay: 0.4s; }
+      `}</style>
       <div
         style={{
-          width: 36,
-          height: 36,
-          borderRadius: 'var(--r-sm)',
-          background: 'var(--sf2)',
           border: '1px solid var(--bd)',
+          borderRadius: 'var(--r-lg)',
+          overflow: 'hidden',
+          margin: '8px 0',
+          background: 'var(--sf)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
+          gap: 12,
+          padding: '12px 14px',
+          cursor: isStreaming ? 'default' : 'pointer',
+          transition: 'border-color 150ms ease, background 150ms ease',
+        }}
+        onClick={isStreaming ? undefined : onOpen}
+        onMouseEnter={isStreaming ? undefined : e => {
+          ;(e.currentTarget as HTMLDivElement).style.borderColor = 'var(--bd2)'
+          ;(e.currentTarget as HTMLDivElement).style.background = 'var(--sf2)'
+        }}
+        onMouseLeave={isStreaming ? undefined : e => {
+          ;(e.currentTarget as HTMLDivElement).style.borderColor = 'var(--bd)'
+          ;(e.currentTarget as HTMLDivElement).style.background = 'var(--sf)'
         }}
       >
-        {isMarkdown ? <DocIcon /> : <CodeIcon />}
-      </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontWeight: 500,
-            color: 'var(--tx)',
-            fontSize: 'var(--fs)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            width: 36,
+            height: 36,
+            borderRadius: 'var(--r-sm)',
+            background: 'var(--sf2)',
+            border: '1px solid var(--bd)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
           }}
         >
-          {title}
+          {isMarkdown ? <DocIcon /> : <CodeIcon />}
         </div>
-        <div
-          style={{
-            fontSize: 11,
-            color: 'var(--tx3)',
-            marginTop: 2,
-          }}
-        >
-          {typeLabel} · {langLabel}
-        </div>
-      </div>
 
-      <button
-        onClick={e => { e.stopPropagation(); onOpen() }}
-        style={{
-          padding: '5px 12px',
-          borderRadius: 'var(--r-sm)',
-          border: '1px solid var(--bd2)',
-          background: 'var(--sf3)',
-          color: 'var(--tx2)',
-          fontSize: 12,
-          fontFamily: 'var(--font)',
-          cursor: 'pointer',
-          flexShrink: 0,
-          transition: 'all 140ms ease',
-          whiteSpace: 'nowrap',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.background = 'var(--acc-soft)'
-          e.currentTarget.style.borderColor = 'var(--acc-border)'
-          e.currentTarget.style.color = 'var(--acc)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.background = 'var(--sf3)'
-          e.currentTarget.style.borderColor = 'var(--bd2)'
-          e.currentTarget.style.color = 'var(--tx2)'
-        }}
-      >
-        Open
-      </button>
-    </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 500, color: 'var(--tx)', fontSize: 'var(--fs)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {title}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+            {isStreaming ? (
+              <span>
+                Writing
+                <span className="canvas-writing-dot">.</span>
+                <span className="canvas-writing-dot">.</span>
+                <span className="canvas-writing-dot">.</span>
+              </span>
+            ) : (
+              `${typeLabel} · ${langLabel}`
+            )}
+          </div>
+        </div>
+
+        {!isStreaming && (
+          <button
+            onClick={e => { e.stopPropagation(); onOpen() }}
+            style={{
+              padding: '5px 12px',
+              borderRadius: 'var(--r-sm)',
+              border: '1px solid var(--bd2)',
+              background: 'var(--sf3)',
+              color: 'var(--tx2)',
+              fontSize: 12,
+              fontFamily: 'var(--font)',
+              cursor: 'pointer',
+              flexShrink: 0,
+              transition: 'all 140ms ease',
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'var(--acc-soft)'
+              e.currentTarget.style.borderColor = 'var(--acc-border)'
+              e.currentTarget.style.color = 'var(--acc)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'var(--sf3)'
+              e.currentTarget.style.borderColor = 'var(--bd2)'
+              e.currentTarget.style.color = 'var(--tx2)'
+            }}
+          >
+            Open
+          </button>
+        )}
+      </div>
+    </>
   )
 }

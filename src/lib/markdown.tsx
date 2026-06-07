@@ -211,8 +211,8 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
                 <CanvasPreview
                   title={doc.title}
                   lang={doc.lang}
-                  content={doc.content}
                   onOpen={() => canvasCtx.onOpen(id)}
+                  isStreaming={doc.isStreaming}
                 />
               </div>
             )
