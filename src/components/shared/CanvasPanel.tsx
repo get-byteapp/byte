@@ -32,6 +32,7 @@ export function CanvasPanel({ documents, activeId, onSetActive, onClose }: Canva
   const active = documents.find(d => d.id === activeId) ?? documents[0]
   if (!active) return null
 
+  const isStreaming = active.isStreaming ?? false
   const isMarkdown = active.lang === 'markdown' || active.lang === 'md'
 
   function handleCopy() {
@@ -66,6 +67,19 @@ export function CanvasPanel({ documents, activeId, onSetActive, onClose }: Canva
             from { opacity: 0; }
             to   { opacity: 1; }
           }
+        }
+        @keyframes canvas-cursor-blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+        .canvas-cursor {
+          display: inline-block;
+          width: 2px;
+          height: 1.1em;
+          background: var(--tx2);
+          vertical-align: text-bottom;
+          margin-left: 2px;
+          animation: canvas-cursor-blink 900ms step-end infinite;
         }
         .canvas-panel-content .msg-txt p { margin: 0 0 1em; }
         .canvas-panel-content .msg-txt p:last-child { margin-bottom: 0; }
@@ -155,8 +169,9 @@ export function CanvasPanel({ documents, activeId, onSetActive, onClose }: Canva
         {/* Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <button
-            onClick={handleCopy}
-            title="Copy content"
+            onClick={isStreaming ? undefined : handleCopy}
+            title={isStreaming ? 'Writing…' : 'Copy content'}
+            disabled={isStreaming}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -165,28 +180,29 @@ export function CanvasPanel({ documents, activeId, onSetActive, onClose }: Canva
               borderRadius: 'var(--r-sm)',
               border: '1px solid var(--bd)',
               background: copied ? 'var(--acc-soft)' : 'var(--sf2)',
-              color: copied ? 'var(--acc)' : 'var(--tx2)',
-              cursor: 'pointer',
+              color: copied ? 'var(--acc)' : isStreaming ? 'var(--tx3)' : 'var(--tx2)',
+              cursor: isStreaming ? 'default' : 'pointer',
               fontSize: 11,
               fontFamily: 'var(--font)',
               transition: 'all 140ms ease',
               whiteSpace: 'nowrap',
+              opacity: isStreaming ? 0.5 : 1,
             }}
             onMouseEnter={e => {
-              if (!copied) {
+              if (!copied && !isStreaming) {
                 e.currentTarget.style.background = 'var(--sf3)'
                 e.currentTarget.style.borderColor = 'var(--bd2)'
               }
             }}
             onMouseLeave={e => {
-              if (!copied) {
+              if (!copied && !isStreaming) {
                 e.currentTarget.style.background = 'var(--sf2)'
                 e.currentTarget.style.borderColor = 'var(--bd)'
               }
             }}
           >
             <CopyIcon />
-            {copied ? 'Copied' : 'Copy'}
+            {isStreaming ? 'Writing…' : copied ? 'Copied' : 'Copy'}
           </button>
 
           <button
@@ -226,7 +242,11 @@ export function CanvasPanel({ documents, activeId, onSetActive, onClose }: Canva
         className="canvas-panel-content"
         style={{ flex: 1, overflow: 'auto', padding: '24px 28px' }}
       >
-        {isMarkdown ? (
+        {isStreaming ? (
+          <pre style={{ margin: 0, fontFamily: 'var(--font-mono, monospace)', fontSize: 13, color: 'var(--tx)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>
+            {active.content}<span className="canvas-cursor" />
+          </pre>
+        ) : isMarkdown ? (
           <div
             className="msg-txt"
             style={{
