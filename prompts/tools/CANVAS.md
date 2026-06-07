@@ -31,17 +31,9 @@ export function MyComponent() {
 
 Supported `lang` values: any language identifier (tsx, ts, py, md, json, sql, sh, etc.)
 
-## After producing canvas content
-
-After every message that creates or updates a canvas document, append one line per document:
-
-<canvas-link title="Document Title" />
-
-Place these at the very end of your message, after all prose.
-
 ## Multiple documents
 
-You may produce multiple canvas documents in one message. Each gets its own fence block and its own `<canvas-link />` line.
+You may produce multiple canvas documents in one message. Each gets its own fence block.
 
 ## Updates
 

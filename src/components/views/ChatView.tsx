@@ -30,7 +30,7 @@ import {
 import { extractTextOCR } from "../../lib/ocr";
 import { getSlashCommandPrompt } from "../../lib/slashCommands";
 import { indexProjectFiles, queryProjectChunks, clearProjectIndex } from "../../lib/retrieval";
-import { parseCanvasBlocks } from '../../lib/canvasParser'
+import { parseCanvasBlocks, StreamingCanvasParser } from '../../lib/canvasParser'
 import { CanvasContext } from '../../lib/markdown'
 import { CanvasPanel } from '../shared/CanvasPanel'
 import type { CanvasDocument } from '../../types'
@@ -67,6 +67,8 @@ export function ChatView({
   const [isLoading, setIsLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamAbortRef = useRef<(() => void) | null>(null);
+  const canvasParserRef = useRef<StreamingCanvasParser | null>(null);
+  const canvasChatBufferRef = useRef<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isSearchingRef = useRef(false);
   const failedFetchUrlsRef = useRef<string[]>([]);
@@ -1319,6 +1321,8 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     setIsLoading(true);
 
     if (streamingEnabled) {
+      canvasParserRef.current = new StreamingCanvasParser();
+      canvasChatBufferRef.current = '';
       const handle = streamChat(
         provider,
         model,
@@ -1336,13 +1340,35 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             existingMsg?.rawContent || existingMsg?.content || "";
           const accumulatedContent = currentRaw + chunk;
 
+          // Feed chunk to canvas parser, handle emitted events
+          if (canvasParserRef.current) {
+            const events = canvasParserRef.current.feed(chunk);
+            for (const ev of events) {
+              if (ev.type === 'chatChunk') {
+                canvasChatBufferRef.current += ev.text;
+              } else if (ev.type === 'canvasStart') {
+                const newDoc: CanvasDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                updateChat(activeChatId, { canvasDocuments: [...curCanvas, newDoc] });
+                updateChat(activeChatId, { activeCanvasId: ev.id });
+              } else if (ev.type === 'canvasChunk') {
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
+              } else if (ev.type === 'canvasEnd') {
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
+              }
+            }
+          }
+
+          const chatBuffer = canvasChatBufferRef.current;
           const hasAnyFence =
             /```tool_calls?\b/.test(accumulatedContent);
           const isSubtool = hasAnyFence && /"subtool"\s*:/.test(accumulatedContent);
 
           const displayContent = hasAnyFence
-            ? (isSubtool ? "" : commentaryBeforeFence(accumulatedContent))
-            : accumulatedContent;
+            ? (isSubtool ? "" : commentaryBeforeFence(chatBuffer))
+            : chatBuffer;
 
           updateChat(activeChatId, {
             messages: chat.messages.map((m) =>
@@ -1387,7 +1413,33 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           if (webSearches.length > 0) console.log("[BYTE] Tool detected:", webSearches.map(w => ({ q: w.query.slice(0, 40), h: w.header })));
 
           const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
-          let displayContent = rawResponse;
+
+          // Finalize canvas parser — handles any unclosed canvas block
+          if (canvasParserRef.current) {
+            const finalEvents = canvasParserRef.current.finalize();
+            for (const ev of finalEvents) {
+              if (ev.type === 'chatChunk') {
+                canvasChatBufferRef.current += ev.text;
+              } else if (ev.type === 'canvasStart') {
+                const newDoc: CanvasDocument = { id: ev.id, title: ev.title, lang: ev.lang, content: '', updatedAt: Date.now(), isStreaming: true };
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                updateChat(activeChatId, { canvasDocuments: [...curCanvas, newDoc] });
+                updateChat(activeChatId, { activeCanvasId: ev.id });
+              } else if (ev.type === 'canvasChunk') {
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, content: d.content + ev.text, updatedAt: Date.now() } : d) });
+              } else if (ev.type === 'canvasEnd') {
+                const curCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? [];
+                updateChat(activeChatId, { canvasDocuments: curCanvas.map(d => d.id === ev.id ? { ...d, isStreaming: false, updatedAt: Date.now() } : d) });
+              }
+            }
+            canvasParserRef.current = null;
+          }
+
+          const chatBuffer = canvasChatBufferRef.current;
+          canvasChatBufferRef.current = '';
+
+          let displayContent = chatBuffer || rawResponse;
           if (askQuestion) {
             displayContent = extractToolCommentary(rawResponse, ["ask_question"]) || "";
           } else if (confirmAction) {
@@ -1402,26 +1454,16 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             displayContent = extractToolCommentary(rawResponse, ["web_search", "news_search", "search"]) || "";
           }
 
-          // Only update message if no tool was detected (tools do their own updates)
           const hasAnyTool = askQuestion || confirmAction || fileRead || suggestMemory || codeExec || webSearches.length > 0;
           if (!hasAnyTool) {
-            const { content: cleanedContent, documents: newDocs } = parseCanvasBlocks(displayContent)
-            const currentCanvas = useStore.getState().chats.find(c => c.id === activeChatId)?.canvasDocuments ?? []
-            const mergedDocs = [...currentCanvas]
-            for (const doc of newDocs) {
-              const idx = mergedDocs.findIndex(d => d.title === doc.title)
-              if (idx >= 0) { mergedDocs[idx] = doc } else { mergedDocs.push(doc) }
-            }
             updateChat(activeChatId, {
               messages: chat.messages.map((m) =>
                 m.id === assistantMsg.id
-                  ? { ...m, content: cleanedContent, status: "done" as const }
+                  ? { ...m, content: displayContent, status: "done" as const }
                   : m,
               ),
-              canvasDocuments: mergedDocs,
             });
           } else {
-            // Update with display content first
             updateChat(activeChatId, {
               messages: chat.messages.map((m) =>
                 m.id === assistantMsg.id
@@ -1566,19 +1608,37 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           };
           runSearches().catch((err) => console.error("[BYTE] Web search error:", err));
         } else if (codeExec) {
+          const rawCommentary = extractToolCommentary(response, ["code_execution"]) || ""
+          const { content: cleanedCommentary, documents: newDocs } = parseCanvasBlocks(rawCommentary)
+          const currentCanvas = chats.find(c => c.id === activeChatId)?.canvasDocuments ?? []
+          const mergedDocs = [...currentCanvas]
+          for (const doc of newDocs) {
+            const idx = mergedDocs.findIndex(d => d.title === doc.title)
+            if (idx >= 0) { mergedDocs[idx] = doc } else { mergedDocs.push(doc) }
+          }
           updateChat(activeChatId, {
             messages: [
               ...currentChat.messages,
-              { ...assistantMsg, content: extractToolCommentary(response, ["code_execution"]) || "", status: "done" as const },
+              { ...assistantMsg, content: cleanedCommentary, status: "done" as const },
             ],
+            canvasDocuments: mergedDocs,
           });
           handleCodeExecutionTool(activeChatId, codeExec);
         } else if (fileRead) {
+          const rawCommentary = extractToolCommentary(response, ["file_read"]) || ""
+          const { content: cleanedCommentary, documents: newDocs } = parseCanvasBlocks(rawCommentary)
+          const currentCanvas = chats.find(c => c.id === activeChatId)?.canvasDocuments ?? []
+          const mergedDocs = [...currentCanvas]
+          for (const doc of newDocs) {
+            const idx = mergedDocs.findIndex(d => d.title === doc.title)
+            if (idx >= 0) { mergedDocs[idx] = doc } else { mergedDocs.push(doc) }
+          }
           updateChat(activeChatId, {
             messages: [
               ...currentChat.messages,
-              { ...assistantMsg, content: extractToolCommentary(response, ["file_read"]) || "", status: "done" as const },
+              { ...assistantMsg, content: cleanedCommentary, status: "done" as const },
             ],
+            canvasDocuments: mergedDocs,
           });
           handleFileReadTool(activeChatId, fileRead.path, fileRead.header);
         } else {
