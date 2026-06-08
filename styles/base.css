@@ -21,11 +21,6 @@ html {
 body {
   font-family: var(--font-body);
   background: var(--color-bg);
-  background-image: linear-gradient(0deg, #009EFF 0%, rgba(0, 158, 255, 0.6) 33%, rgba(51, 184, 255, 0.4) 66%, rgba(0, 158, 255, 0.00) 100%);
-  background-attachment: fixed;
-  background-size: 100% 50vh;
-  background-position: bottom center;
-  background-repeat: no-repeat;
   color: var(--color-text);
   line-height: var(--line-height-normal);
   letter-spacing: var(--letter-spacing-normal);
@@ -135,6 +130,18 @@ code {
   background-repeat: repeat;
   background-size: 256px 256px;
   opacity: 0.015;
+}
+
+/* ── Background Gradient Overlay ── */
+.bg-gradient-overlay {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50vh;
+  pointer-events: none;
+  z-index: -1;
+  background-image: linear-gradient(0deg, #009EFF 0%, rgba(0, 158, 255, 0.6) 33%, rgba(51, 184, 255, 0.4) 66%, rgba(0, 158, 255, 0.00) 100%);
 }
 
 /* ── Skip Link ── */
