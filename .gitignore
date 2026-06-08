@@ -21,3 +21,4 @@ SKILL.md
 .superpowers/
 .vite/
 src-tauri/sidecar/build/
+src-tauri/binaries/
