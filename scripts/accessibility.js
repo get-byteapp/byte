@@ -67,39 +67,6 @@ export function initVideoAutoplay() {
 }
 
 export function initScrollReveal() {
-  const revealElements = document.querySelectorAll('[data-reveal]');
-  const featureElements = document.querySelectorAll('.feature-video, .feature-content');
-  const allRevealElements = [...revealElements, ...featureElements];
-
-  // Velocity tracking
-  let lastScrollY = 0;
-  let scrollVelocity = 0;
-  const velocitySamples = [];
-  const VELOCITY_SAMPLES = 5;
-
-  window.addEventListener('scroll', () => {
-    const now = performance.now();
-    const deltaY = window.scrollY - lastScrollY;
-    const deltaTime = now - (window.lastScrollTime || now);
-
-    if (deltaTime > 0) {
-      scrollVelocity = Math.abs(deltaY) / deltaTime;
-      velocitySamples.push(scrollVelocity);
-      if (velocitySamples.length > VELOCITY_SAMPLES) velocitySamples.shift();
-    }
-
-    lastScrollY = window.scrollY;
-    window.lastScrollTime = now;
-  }, { passive: true });
-
-  function getAverageVelocity() {
-    if (velocitySamples.length === 0) return 0;
-    return velocitySamples.reduce((a, b) => a + b, 0) / velocitySamples.length;
-  }
-
-  allRevealElements.forEach((el) => {
-    el.classList.add('visible');
-  });
 }
 
 export function initFAQ() {

@@ -110,8 +110,8 @@
     --color-surface-alt: rgba(12, 12, 14, 0.5);
 
     --color-text: #F5F4F2;
-    --color-text-secondary: #8B8986;
-    --color-text-muted: #6B6966;
+    --color-text-secondary: #F5F4F2;
+    --color-text-muted: #F5F4F2;
 
     --color-accent: #009EFF;
     --color-accent-light: #33B8FF;
@@ -135,8 +135,8 @@ html.dark {
   --color-surface-alt: rgba(12, 12, 14, 0.5);
 
   --color-text: #F5F4F2;
-  --color-text-secondary: #8B8986;
-  --color-text-muted: #6B6966;
+  --color-text-secondary: #F5F4F2;
+  --color-text-muted: #F5F4F2;
 
   --color-accent: #009EFF;
   --color-accent-light: #33B8FF;
