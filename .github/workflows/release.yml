@@ -60,6 +60,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build markitdown sidecar
+        shell: bash
+        run: |
+          cd src-tauri/sidecar
+          pip install -r requirements.txt pyinstaller
+          pyinstaller markitdown-sidecar.spec
+          # Copy the built binary to binaries/ with the correct Tauri triple suffix
+          mkdir -p ../binaries
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cp dist/markitdown-sidecar.exe "../binaries/markitdown-sidecar-${{ matrix.target }}.exe"
+          else
+            cp dist/markitdown-sidecar "../binaries/markitdown-sidecar-${{ matrix.target }}"
+          fi
+
       - name: Build
         run: npm run tauri build -- --target ${{ matrix.target }} --no-sign
 
