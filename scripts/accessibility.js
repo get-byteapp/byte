@@ -97,34 +97,8 @@ export function initScrollReveal() {
     return velocitySamples.reduce((a, b) => a + b, 0) / velocitySamples.length;
   }
 
-  const revealObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const el = entry.target;
-        const velocity = getAverageVelocity();
-        const normalizedVelocity = Math.min(velocity / 2.5, 1);
-        const baseDelay = 120;
-        const slowDelay = baseDelay;
-        const fastDelay = baseDelay * 0.08;
-        const interpolatedDelay = slowDelay - (slowDelay - fastDelay) * normalizedVelocity;
-
-        const baseDuration = 700;
-        const slowDuration = baseDuration;
-        const fastDuration = baseDuration * 0.3;
-        const interpolatedDuration = slowDuration - (slowDuration - fastDuration) * normalizedVelocity;
-
-        el.style.transitionDelay = `${interpolatedDelay}ms`;
-        el.style.transitionDuration = `${interpolatedDuration}ms`;
-        el.classList.add('visible');
-        revealObserver.unobserve(el);
-      }
-    });
-  }, { threshold: 0.1, rootMargin: '-50px' });
-
   allRevealElements.forEach((el) => {
-    el.style.transitionDelay = '120ms';
-    el.style.transitionDuration = '500ms';
-    revealObserver.observe(el);
+    el.classList.add('visible');
   });
 }
 

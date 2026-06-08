@@ -71,28 +71,8 @@ section {
   margin: 0;
 }
 
-.hero-content > * {
-  opacity: 0;
-  transform: translateY(24px);
-  transition: opacity var(--duration-hero) var(--ease), transform var(--duration-hero) var(--ease);
-}
 
-.hero-content.loaded > *:nth-child(1) {
-  transition-delay: 100ms;
-}
 
-.hero-content.loaded > *:nth-child(2) {
-  transition-delay: 280ms;
-}
-
-.hero-content.loaded > *:nth-child(3) {
-  transition-delay: 460ms;
-}
-
-.hero-content.loaded > * {
-  opacity: 1;
-  transform: translateY(0);
-}
 
 .hero-cta {
   display: flex;
@@ -128,15 +108,9 @@ section {
   padding: 0;
   box-shadow: var(--shadow-xl);
   overflow: hidden;
-  opacity: 0;
-  transform: translateY(32px);
-  transition: opacity var(--duration-hero) var(--ease), transform var(--duration-hero) var(--ease);
 }
 
-.preview-card.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
+
 
 .preview-card img {
   width: 100%;
@@ -148,15 +122,9 @@ section {
 .feature-carousel {
   max-width: 600px;
   margin: 0 auto;
-  opacity: 0;
-  transform: translateY(32px);
-  transition: opacity var(--duration-hero) var(--ease), transform var(--duration-hero) var(--ease);
 }
 
-.feature-carousel.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
+
 
 .feature-carousel-container {
   position: relative;
@@ -170,15 +138,14 @@ section {
 .feature-carousel-slide {
   position: absolute;
   inset: 0;
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity 300ms ease;
+  display: none;
 }
 
 .feature-carousel-slide.active {
-  visibility: visible;
-  opacity: 1;
+  display: block;
 }
+
+
 
 .feature-carousel-slide img,
 .feature-carousel-slide video {
@@ -244,16 +211,10 @@ section {
 
 .feature-carousel-content {
   text-align: center;
-  margin-top: var(--space-6);
-  opacity: 0;
-  transform: translateY(32px);
-  transition: opacity var(--duration-hero) var(--ease), transform var(--duration-hero) var(--ease));
+  margin-top: 1.5rem;
 }
 
-.feature-carousel-content.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
+
 
 .feature-carousel-label {
   display: inline-block;
@@ -287,14 +248,6 @@ section {
 .models-carousel {
   max-width: 500px;
   margin: 0 auto;
-  opacity: 0;
-  transform: translateY(32px);
-  transition: opacity var(--duration-hero) var(--ease), transform var(--duration-hero) var(--ease);
-}
-
-.models-carousel.visible {
-  opacity: 1;
-  transform: translateY(0);
 }
 
 .models-carousel-container {
@@ -307,13 +260,12 @@ section {
 
 .models-carousel-slide {
   position: relative;
-  opacity: 0;
-  transition: opacity var(--duration-normal) var(--ease);
   padding: 2rem;
+  display: none;
 }
 
 .models-carousel-slide.active {
-  opacity: 1;
+  display: block;
 }
 
 .models-grid-2 {
@@ -368,9 +320,6 @@ section {
 
 /* ── Video Container ── */
 .video-container {
-  opacity: 0;
-  transform: translateY(32px);
-  transition: opacity var(--duration-hero) var(--ease), transform var(--duration-hero) var(--ease));
   max-width: 800px;
   margin: 0 auto;
   position: relative;
@@ -380,16 +329,14 @@ section {
   background: var(--color-bg);
 }
 
-.video-container.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
+
 
 .video-container video {
   width: 100%;
   height: auto;
   display: block;
   object-fit: contain;
+  animation: videoZoom 10s ease-in-out infinite;
 }
 
 /* ── Grids ── */
@@ -422,15 +369,9 @@ section {
   flex-direction: column;
   align-items: center;
   gap: var(--space-2);
-  opacity: 0;
-  transform: translateY(24px);
-  transition: opacity var(--duration-hero) var(--ease), transform var(--duration-hero) var(--ease));
 }
 
-.model-item.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
+
 
 .model-icon {
   width: 3.5rem;
@@ -472,15 +413,9 @@ section {
 
 .faq-item {
   border-bottom: 1px solid var(--color-border);
-  opacity: 0;
-  transform: translateY(24px);
-  transition: opacity var(--duration-hero) var(--ease), transform var(--duration-hero) var(--ease));
 }
 
-.faq-item.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
+
 
 .faq-question {
   display: flex;
@@ -528,18 +463,12 @@ section {
   margin: 0 auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-2xl);
   padding: 2.5rem;
   text-align: center;
-  opacity: 0;
-  transform: translateY(24px);
-  transition: opacity var(--duration-hero) var(--ease), transform var(--duration-hero) var(--ease));
 }
 
-.pricing-card.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
+
 
 .pricing-price {
   font-family: var(--font-display);
@@ -667,16 +596,6 @@ section {
 }
 
 /* ── Animations (Reveal) ── */
-@keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 @keyframes videoZoom {
   0%, 100% {
@@ -708,7 +627,7 @@ section {
 .preloader-inner {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  justify-content: center;
 }
 
 .preloader-box {

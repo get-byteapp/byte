@@ -12,7 +12,6 @@
 }
 
 html {
-  scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -129,6 +128,18 @@ code {
   background-repeat: repeat;
   background-size: 256px 256px;
   opacity: 0.015;
+}
+
+/* ── Background Gradient Overlay ── */
+.bg-gradient-overlay {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50vh;
+  pointer-events: none;
+  z-index: 0;
+  background-image: linear-gradient(0deg, #009EFF 0%, rgba(0, 158, 255, 0.6) 33%, rgba(51, 184, 255, 0.4) 66%, rgba(0, 158, 255, 0.00) 100%);
 }
 
 /* ── Skip Link ── */
