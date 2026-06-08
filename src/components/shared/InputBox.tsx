@@ -17,6 +17,7 @@ import { ModelPicker } from "./ModelPicker";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import type { SlashCommand } from "./SlashCommandMenu";
 import type { ResponseStyleId, Attachment, ImageAttachment, FileAttachment, ImageMode } from "../../types";
+import { VisionUnsupportedModal } from "./VisionUnsupportedModal";
 
 interface InputBoxProps {
   variant: "home" | "chat";
@@ -61,6 +62,7 @@ export function InputBox({
   const [isDragging, setIsDragging] = useState(false);
   const [showFilesHelp, setShowFilesHelp] = useState(false);
   const [showNoVisionWarning, setShowNoVisionWarning] = useState(false);
+  const [showVisionUnsupported, setShowVisionUnsupported] = useState(false);
   const [pdfErrorMsg, setPdfErrorMsg] = useState<string | null>(null);
   const [hoveredImageId, setHoveredImageId] = useState<string | null>(null);
   const [visionModalAttId, setVisionModalAttId] = useState<string | null>(null);
@@ -81,7 +83,7 @@ export function InputBox({
     activeProjectId,
     setActiveProjectId,
     visionDefaultMode,
-    ocrEnabled,
+    activeOcrEngineId,
     imageDescriptionModelId,
   } = useStore();
 
@@ -189,7 +191,15 @@ export function InputBox({
 
   const handleSend = useCallback(async () => {
     if ((!text.trim() && attachments.length === 0) || isStreaming) return;
-    
+
+    const hasVisionModeAttachment = attachments.some(
+      (a) => a.type === 'image' && (a as ImageAttachment).mode === 'vision'
+    );
+    if (hasVisionModeAttachment && !model?.capabilities?.supportsVision) {
+      setShowVisionUnsupported(true);
+      return;
+    }
+
     // Separate image and file attachments
     const imageAttachments = attachments.filter((a) => a.type === "image") as ImageAttachment[];
     const fileAttachments = attachments.filter((a) => a.type === "file") as FileAttachment[];
@@ -233,7 +243,7 @@ export function InputBox({
             enabledModelIds.includes(makeModelKey(p.id, m.id)),
         ),
     );
-    return hasVisionModel || ocrEnabled || imageDescriptionModelId;
+    return hasVisionModel || activeOcrEngineId !== null || imageDescriptionModelId;
   };
 
   const handleAddFiles = () => {
@@ -489,14 +499,14 @@ export function InputBox({
     if (model?.capabilities?.supportsVision) {
       modes.push("vision");
     }
-    if (ocrEnabled) {
+    if (activeOcrEngineId !== null) {
       modes.push("ocr");
     }
     if (imageDescriptionModelId) {
       modes.push("describe");
     }
     return modes;
-  }, [model, ocrEnabled, imageDescriptionModelId]);
+  }, [model, activeOcrEngineId !== null, imageDescriptionModelId]);
 
   const setAttachmentMode = (id: string, newMode: ImageMode) => {
     if (visionDefaultMode !== "changeable") return;
@@ -1286,6 +1296,17 @@ export function InputBox({
         </div>
       )}
 
+      {showVisionUnsupported && (
+        <VisionUnsupportedModal
+          modelName={model?.name || model?.id || 'This model'}
+          onGoToSettings={() => {
+            setShowVisionUnsupported(false);
+            useStore.getState().setActiveView('settings');
+          }}
+          onCancel={() => setShowVisionUnsupported(false)}
+        />
+      )}
+
       {/* No Vision Processing Warning Modal */}
       {showNoVisionWarning &&
         (() => {
@@ -1536,12 +1557,12 @@ export function InputBox({
                         <strong>Status:</strong>{" "}
                         <span
                           style={{
-                            color: ocrEnabled
+                            color: activeOcrEngineId !== null
                               ? "var(--success)"
                               : "var(--warning)",
                           }}
                         >
-                          {ocrEnabled ? "Enabled ✓" : "Disabled"}
+                          {activeOcrEngineId !== null ? "Enabled ✓" : "Disabled"}
                         </span>
                       </div>
                     </div>

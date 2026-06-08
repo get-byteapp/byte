@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
+use tauri_plugin_shell::ShellExt;
+use sysinfo::System;
 
 fn get_project_dir(app: &tauri::AppHandle, project_id: &str) -> PathBuf {
     let app_dir = app
@@ -92,9 +94,68 @@ fn list_project_files(app: tauri::AppHandle, project_id: String) -> Result<Vec<S
     Ok(files)
 }
 
+#[tauri::command]
+fn get_system_specs() -> serde_json::Value {
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    let total_ram_gb = sys.total_memory() as f64 / 1_073_741_824.0;
+    let cpu_cores = sys.cpus().len();
+
+    let free_storage_gb = {
+        let disks = sysinfo::Disks::new_with_refreshed_list();
+        #[cfg(target_os = "windows")]
+        let root = std::path::Path::new("C:\\");
+        #[cfg(not(target_os = "windows"))]
+        let root = std::path::Path::new("/");
+        disks.iter()
+            .find(|d| root.starts_with(d.mount_point()))
+            .map(|d| d.available_space() as f64 / 1_073_741_824.0)
+            .unwrap_or(0.0)
+    };
+
+    let platform = if cfg!(target_os = "macos") { "macos" }
+        else if cfg!(target_os = "windows") { "windows" }
+        else { "linux" };
+
+    serde_json::json!({
+        "totalRamGb": (total_ram_gb * 10.0).round() / 10.0,
+        "freeStorageGb": (free_storage_gb * 10.0).round() / 10.0,
+        "cpuCores": cpu_cores,
+        "platform": platform,
+    })
+}
+
+#[tauri::command]
+async fn convert_file_markitdown(
+    app: tauri::AppHandle,
+    file_path: String,
+) -> Result<String, String> {
+    let sidecar_command = app
+        .shell()
+        .sidecar("markitdown-sidecar")
+        .map_err(|e| format!("Failed to find sidecar: {}", e))?
+        .args([&file_path]);
+
+    let output = sidecar_command
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run sidecar: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Sidecar exited with error: {}", stderr));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    Ok(stdout)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
@@ -116,6 +177,8 @@ pub fn run() {
             delete_project_file,
             list_project_files,
             get_ollama_model_details,
+            convert_file_markitdown,
+            get_system_specs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

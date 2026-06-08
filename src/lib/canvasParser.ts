@@ -6,14 +6,24 @@ export type ParserEvent =
   | { type: 'canvasChunk'; id: string; text: string }
   | { type: 'canvasEnd'; id: string }
 
-const OPEN_FENCE_RE = /^```(document|codefile)\s+(.+)$/
+// Matches any ```<keyword> ... line — we filter on title= presence to distinguish builds from normal fences
+const OPEN_FENCE_RE = /^```([\w-]+)\s+(.+)$/
 const CANVAS_LINK_RE = /^<canvas-link\s+title="[^"]+"\s*\/?>/
 
-function parseAttrs(type: string, attrStr: string): { title: string; lang: string } {
+function parseAttrs(type: string, attrStr: string): { title: string; lang: string } | null {
   const titleMatch = /title="([^"]+)"/.exec(attrStr)
+  if (!titleMatch) return null  // no title= means it's a normal code fence, not a build
   const langMatch = /lang="([^"]+)"/.exec(attrStr)
-  const title = titleMatch ? titleMatch[1] : 'Untitled'
-  const lang = type === 'document' ? (langMatch?.[1] ?? 'markdown') : (langMatch?.[1] ?? 'text')
+  const title = titleMatch[1]
+  let lang: string
+  if (type === 'document') {
+    lang = langMatch?.[1] ?? 'markdown'
+  } else if (type === 'codefile') {
+    lang = langMatch?.[1] ?? 'text'
+  } else {
+    // type is the language itself e.g. ```html title="..." or ```tsx title="..."
+    lang = langMatch?.[1] ?? type
+  }
   return { title, lang }
 }
 
@@ -80,15 +90,18 @@ export class StreamingCanvasParser {
     const fenceMatch = OPEN_FENCE_RE.exec(line.trim())
     if (fenceMatch) {
       const [, type, attrStr] = fenceMatch
-      const { title, lang } = parseAttrs(type, attrStr)
-      const existingId = this.seenTitles.get(title)
-      const id = existingId ?? crypto.randomUUID()
-      this.seenTitles.set(title, id)
-      this.currentDocId = id
-      this.mode = 'in-canvas'
-      events.push({ type: 'canvasStart', id, title, lang })
-      events.push({ type: 'chatChunk', text: `CANVAS_PREVIEW_${id}\n` })
-      return events
+      const attrs = parseAttrs(type, attrStr)
+      if (attrs) {
+        const { title, lang } = attrs
+        const existingId = this.seenTitles.get(title)
+        const id = existingId ?? crypto.randomUUID()
+        this.seenTitles.set(title, id)
+        this.currentDocId = id
+        this.mode = 'in-canvas'
+        events.push({ type: 'canvasStart', id, title, lang })
+        events.push({ type: 'chatChunk', text: `CANVAS_PREVIEW_${id}\n` })
+        return events
+      }
     }
 
     // Drop canvas-link lines silently

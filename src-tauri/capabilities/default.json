@@ -5,6 +5,12 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "shell:allow-execute",
+    "shell:allow-open",
+    "fs:default",
+    "fs:allow-write-file",
+    "fs:allow-remove",
+    "fs:allow-app-write-recursive",
     "updater:default",
     "updater:allow-check",
     "updater:allow-download-and-install",
@@ -30,7 +36,9 @@
         { "url": "https://ollama.com/**" },
         { "url": "https://api.cerebras.ai/**" },
         { "url": "https://api.langsearch.com/**" },
-        { "url": "https://r.jina.ai/**" }
+        { "url": "https://r.jina.ai/**" },
+        { "url": "https://api.ocr.space/**" },
+        { "url": "https://vision.googleapis.com/**" }
       ]
     }
   ]

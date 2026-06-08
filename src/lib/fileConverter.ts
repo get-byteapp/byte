@@ -1,3 +1,33 @@
+import { invoke } from '@tauri-apps/api/core'
+import { appDataDir } from '@tauri-apps/api/path'
+import { writeFile, remove } from '@tauri-apps/plugin-fs'
+
+interface MarkitdownResult {
+  success: boolean
+  content?: string
+  error?: string
+}
+
+export async function convertFileWithMarkitdown(file: File): Promise<string | null> {
+  try {
+    const dataDir = await appDataDir()
+    const tempPath = `${dataDir}/tmp_${Date.now()}_${file.name}`
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    await writeFile(tempPath, bytes)
+    const raw = await invoke<string>('convert_file_markitdown', { filePath: tempPath })
+    await remove(tempPath).catch(() => {})
+    const result: MarkitdownResult = JSON.parse(raw)
+    if (!result.success) {
+      console.warn('[MarkItDown] Conversion failed:', result.error)
+      return null
+    }
+    return result.content ?? null
+  } catch (err) {
+    console.warn('[MarkItDown] Sidecar unavailable, falling back to JS:', err)
+    return null
+  }
+}
+
 // Polyfill Map.getOrInsertComputed for environments that don't support ES2025 (e.g. Tauri/WKWebView)
 const MapProto = Map.prototype as any;
 if (typeof MapProto.getOrInsertComputed === "undefined") {
@@ -35,6 +65,8 @@ if (
 pdfjsLib.GlobalWorkerOptions.workerSrc = `/pdf.worker.min.mjs`;
 
 export async function convertPdfToMarkdown(file: File): Promise<string> {
+  const markitdownResult = await convertFileWithMarkitdown(file)
+  if (markitdownResult) return markitdownResult
   const arrayBuffer = await file.arrayBuffer();
   return extractPdfText(arrayBuffer, file.name);
 }
@@ -121,6 +153,14 @@ export function hasPdfText(textContent: string): boolean {
 
 export async function convertFileToText(file: File): Promise<string> {
   const name = file.name.toLowerCase();
+
+  const isOfficeFile = name.endsWith('.xlsx') || name.endsWith('.xls') ||
+    name.endsWith('.docx') || name.endsWith('.pptx') || name.endsWith('.pdf')
+
+  if (isOfficeFile) {
+    const markitdownResult = await convertFileWithMarkitdown(file)
+    if (markitdownResult) return markitdownResult
+  }
 
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
     return convertExcelToMarkdown(file);

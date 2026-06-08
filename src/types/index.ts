@@ -1,5 +1,20 @@
 export type ImageMode = "vision" | "ocr" | "describe" | "pdf";
 
+export type OcrEngineId = 'tesseract' | 'ocrspace' | 'google-vision' | 'azure'
+
+export interface OcrApiConfig {
+  engineId: OcrEngineId
+  apiKey: string
+  endpoint?: string
+}
+
+export interface SystemSpecs {
+  totalRamGb: number
+  freeStorageGb: number
+  cpuCores: number
+  platform: 'macos' | 'windows' | 'linux'
+}
+
 export interface ImageAttachment {
   id: string;
   type: "image";

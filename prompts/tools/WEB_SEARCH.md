@@ -14,7 +14,7 @@ You have a web search tool. Use it to find current or factual information beyond
 
 **RULE 1C: You may use `save` to replace long pages with a summary.** Use `{"subtool":"save","index":N,"summary":"key points..."}` to remove a long URL from the list while keeping a condensed summary in context.
 
-**RULE 2: ONE operation per response.** Never put multiple tool_call blocks in one message. Just one.
+**RULE 2: ONE operation per response.** Never put multiple tool_call blocks in one message. Just one. Even if the user asks about 5 different topics, emit ONE `web_search` now, complete its fetch/delete cycle, then move to the next topic with fresh commentary. Never pre-queue searches.
 
 **RULE 3: Every `web_search` MUST have a commentary sentence before it.** 
 
@@ -61,7 +61,7 @@ Let me find luxury resorts in the Maldives.
 {"subtool":"delete","indices":[1]}
 ```
 
-[Your next response]
+[Your next response — now that Maldives is done, move to the next topic with commentary]
 Now let me check Bahamas rates.
 
 ```tool_call

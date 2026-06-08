@@ -54,10 +54,11 @@ interface AppState {
   setImageDescriptionModelId: (id: string | null) => void;
 
   // OCR Settings
-  ocrInstalled: boolean;
-  ocrEnabled: boolean;
-  setOcrInstalled: (installed: boolean) => void;
-  setOcrEnabled: (enabled: boolean) => void;
+  activeOcrEngineId: string | null;
+  ocrApiConfigs: Record<string, { apiKey: string; endpoint?: string }>;
+  setActiveOcrEngineId: (id: string | null) => void;
+  setOcrApiConfig: (engineId: string, config: { apiKey: string; endpoint?: string }) => void;
+  removeOcrApiConfig: (engineId: string) => void;
 
   // Vision Default Mode
   visionDefaultMode: "changeable" | "vision" | "ocr" | "describe";
@@ -252,8 +253,8 @@ export const useStore = create<AppState>()(
       langSearchApiKey: "",
       langSearchEnabled: false,
       imageDescriptionModelId: null,
-      ocrInstalled: false,
-      ocrEnabled: false,
+      activeOcrEngineId: null,
+      ocrApiConfigs: {},
       visionDefaultMode: "changeable",
       disableAttachmentSwap: false,
       memories: [],
@@ -422,8 +423,15 @@ export const useStore = create<AppState>()(
       setLangSearchEnabled: (langSearchEnabled) => set({ langSearchEnabled }),
       setImageDescriptionModelId: (imageDescriptionModelId) =>
         set({ imageDescriptionModelId }),
-        setOcrInstalled: (ocrInstalled) => set({ ocrInstalled }),
-        setOcrEnabled: (ocrEnabled) => set({ ocrEnabled }),
+        setActiveOcrEngineId: (activeOcrEngineId) => set({ activeOcrEngineId }),
+        setOcrApiConfig: (engineId, config) =>
+          set(state => ({ ocrApiConfigs: { ...state.ocrApiConfigs, [engineId]: config } })),
+        removeOcrApiConfig: (engineId) =>
+          set(state => {
+            const next = { ...state.ocrApiConfigs }
+            delete next[engineId]
+            return { ocrApiConfigs: next }
+          }),
        setVisionDefaultMode: (visionDefaultMode) => set({ visionDefaultMode }),
        setDisableAttachmentSwap: (disableAttachmentSwap) =>
          set({ disableAttachmentSwap }),

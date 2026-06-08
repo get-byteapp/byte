@@ -19,3 +19,5 @@ research/
 AGENTS.md
 SKILL.md
 .superpowers/
+.vite/
+src-tauri/sidecar/build/

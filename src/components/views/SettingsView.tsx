@@ -14,9 +14,10 @@ import {
   Plus,
   Pen,
   Image as ImageIcon,
-  Loader2,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
+import { OcrPickerModal } from "../shared/OcrPickerModal";
+import { getEngineById } from "../../lib/ocrEngines";
 import {
   fetchModels,
   getDisplayName,
@@ -1358,9 +1359,7 @@ function ConnectionsPanel() {
     setImageDescriptionModelId,
     providers,
     enabledModelIds,
-    ocrInstalled,
-    setOcrInstalled,
-    setOcrEnabled,
+    activeOcrEngineId,
     visionDefaultMode,
     setVisionDefaultMode,
   } = useStore();
@@ -1371,26 +1370,7 @@ function ConnectionsPanel() {
     codeRunner: true,
   });
   const [showVisionDropdown, setShowVisionDropdown] = useState(false);
-  const [isInstallingOCR, setIsInstallingOCR] = useState(false);
-
-  const handleInstallOCR = async () => {
-    setIsInstallingOCR(true);
-    try {
-      const { preloadTesseract } = await import("../../lib/ocr");
-      const success = await preloadTesseract();
-      if (success) {
-        setOcrInstalled(true);
-        setOcrEnabled(true);
-      } else {
-        alert("Failed to install OCR. Please check your internet connection and try again.");
-      }
-    } catch (error) {
-      console.error("[OCR] Installation error:", error);
-      alert("Failed to install OCR. Please try again.");
-    } finally {
-      setIsInstallingOCR(false);
-    }
-  };
+  const [showOcrPicker, setShowOcrPicker] = useState(false);
 
   // Get all vision-capable models from providers with API keys or local providers (Ollama/LM Studio)
   // Note: We show ALL vision models, not just enabled ones, so users can select
@@ -1951,51 +1931,22 @@ function ConnectionsPanel() {
           >
             <div>
               <div style={{ fontSize: "var(--fs)", color: "var(--tx)", fontWeight: 500 }}>OCR Engine</div>
-              <div style={{ fontSize: "calc(var(--fs) - 2px)", color: "var(--tx3)" }}>
-                Tesseract.js — Extracts text from images & scanned PDFs
+              <div style={{ fontSize: "calc(var(--fs) - 2px)", color: "var(--tx3)", marginTop: 2 }}>
+                {activeOcrEngineId
+                  ? (getEngineById(activeOcrEngineId)?.name ?? activeOcrEngineId)
+                  : "No engine selected"}
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              {!ocrInstalled ? (
-                <button
-                  className="btn btn-sm"
-                  onClick={handleInstallOCR}
-                  disabled={isInstallingOCR}
-                  style={{ display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  {isInstallingOCR ? (
-                    <><Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Installing...</>
-                  ) : (
-                    "Install"
-                  )}
-                </button>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: "calc(var(--fs) - 2px)", color: "var(--success)", fontWeight: 500 }}>Active</span>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => {
-                      setOcrInstalled(false);
-                      setOcrEnabled(false);
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "var(--danger)",
-                      width: 28,
-                      height: 28,
-                      padding: 0,
-                    }}
-                    title="Remove OCR engine"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              className="btn btn-sm"
+              onClick={() => setShowOcrPicker(true)}
+            >
+              Change
+            </button>
           </div>
         )}
+
+        {showOcrPicker && <OcrPickerModal onClose={() => setShowOcrPicker(false)} />}
 
         {/* Describe inline config */}
         {(visionDefaultMode === "describe" || visionDefaultMode === "changeable") && (

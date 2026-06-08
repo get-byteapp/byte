@@ -61,7 +61,8 @@ export function ChatView({
     setDefaultWebSearchEnabled,
     setDefaultCodeExecutionEnabled,
     projects,
-    ocrEnabled,
+    activeOcrEngineId,
+    ocrApiConfigs,
   } = useStore();
   const effectiveLangSearchApiKey = langSearchEnabled ? langSearchApiKey : "";
   const [isLoading, setIsLoading] = useState(false);
@@ -587,7 +588,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
           role: "user",
           content: `[Web search results for "${query}"]\n\n${searchResults
             .map((r: any, i: number) => `${i + 1}. **${r.name || r.displayUrl}**\n   URL: ${r.url}\n   ${r.snippet || ""}`)
-            .join("\n\n")}\n\nHIGHLY RECOMMENDED: Fetch at least 1 URL with {"subtool":"fetch","indices":[0]} to get full page content before answering. After fetching, synthesize the results and provide your answer — do not ask the user more questions unless you have to. Subtools (fetch/delete/save) must not have any commentary text before them — just the bare fenced block.`,
+            .join("\n\n")}\n\nHIGHLY RECOMMENDED: Fetch at least 1 URL with {"subtool":"fetch","indices":[0]} to get full page content before answering. ${pendingOpsRef.current.length > 0 ? `After fetching, continue with your next search — there ${pendingOpsRef.current.length === 1 ? "is 1 more search" : `are ${pendingOpsRef.current.length} more searches`} to complete. Write a brief commentary sentence introducing the next search, then emit the tool_call block. Do not give a final answer until all searches are done.` : `After fetching, synthesize the results and provide your answer — do not ask the user more questions unless you have to.`} Subtools (fetch/delete/save) must not have any commentary text before them — just the bare fenced block.`,
           timestamp: Date.now(),
           status: "sent",
           hidden: true,
@@ -769,7 +770,9 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
             console.log("[FOLLOWUP] Next operations found:", nextOps.length, "| pending:", pendingOpsRef.current.length);
             if (nextOps.length > 0) {
               console.log("[FOLLOWUP] Recursing with next op from follow-up:", nextOps[0].type, nextOps[0].header || "");
-              pendingOpsRef.current = [];
+              // Only clear pending if the model is driving a new web_search; subtools (fetch/delete/save) are part of the current search flow
+              const isSubtoolOnly = nextOps.every(op => op.type === "fetch" || op.type === "delete" || op.type === "save");
+              if (!isSubtoolOnly) pendingOpsRef.current = [];
               executeOneOp(chatId, toolMsgId, nextOps[0], c.messages);
             } else if (pendingOpsRef.current.length > 0) {
               const nextPend = pendingOpsRef.current.shift()!;
@@ -2265,7 +2268,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               } catch { return attachment; }
             }
             if (attachment.mode === "ocr") {
-              if (!ocrEnabled) { console.warn("[BYTE] OCR requested but not enabled"); return attachment; }
+              if (!activeOcrEngineId) { console.warn("[BYTE] OCR requested but no engine configured"); return attachment; }
               try {
                 const imgAtt = attachment as ImageAttachment;
 
@@ -2294,7 +2297,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
                       });
                     }
 
-                    const text = await extractTextOCR(pages[i].dataUri, () => {});
+                    const text = await extractTextOCR(pages[i].dataUri, { engineId: activeOcrEngineId, apiConfigs: ocrApiConfigs, onProgress: () => {} });
                     pageTexts.push(text);
                   }
 
@@ -2318,13 +2321,21 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
                   const fullText = pageTexts.map((t, i) => `--- Page ${i + 1} ---\n${t}`).join("\n\n");
                   ocrResults.push({ text: fullText });
-                  return { ...imgAttNoPdf, description: fullText, describedBy: "Tesseract OCR" } as ImageAttachment;
+                  const ocrLabel = activeOcrEngineId === 'ocrspace' ? 'OCR.space'
+                    : activeOcrEngineId === 'google-vision' ? 'Google Vision'
+                    : activeOcrEngineId === 'azure' ? 'Azure OCR'
+                    : 'Tesseract OCR'
+                  return { ...imgAttNoPdf, description: fullText, describedBy: ocrLabel } as ImageAttachment;
                 }
 
                 // Single image OCR
-                const extractedText = await extractTextOCR(attachment.dataUri, () => {});
+                const extractedText = await extractTextOCR(attachment.dataUri, { engineId: activeOcrEngineId, apiConfigs: ocrApiConfigs, onProgress: () => {} });
                 ocrResults.push({ text: extractedText });
-                return { ...attachment, description: extractedText, describedBy: "Tesseract OCR" };
+                const ocrLabelSingle = activeOcrEngineId === 'ocrspace' ? 'OCR.space'
+                  : activeOcrEngineId === 'google-vision' ? 'Google Vision'
+                  : activeOcrEngineId === 'azure' ? 'Azure OCR'
+                  : 'Tesseract OCR'
+                return { ...attachment, description: extractedText, describedBy: ocrLabelSingle };
               } catch { return attachment; }
             }
             return attachment;

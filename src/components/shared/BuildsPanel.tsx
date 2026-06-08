@@ -65,9 +65,9 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
   return (
     <div
       style={{
-        width: '46%',
-        minWidth: 340,
-        maxWidth: 700,
+        width: viewMode === 'gallery' ? '23%' : '46%',
+        minWidth: viewMode === 'gallery' ? 200 : 340,
+        maxWidth: viewMode === 'gallery' ? 340 : 700,
         display: 'flex',
         flexDirection: 'column',
         borderLeft: '1px solid var(--bd)',
@@ -198,12 +198,10 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
             style={{
               flex: 1,
               overflow: 'auto',
-              padding: '16px',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-              gap: 12,
-              maxWidth: '100%',
-              margin: '0 auto',
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
             }}
           >
             {documents.map(doc => {
@@ -216,17 +214,18 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
                     setViewMode('single')
                   }}
                   style={{
-                    padding: '12px',
+                    padding: '10px 14px',
                     borderRadius: 'var(--r-sm)',
                     border: '1px solid var(--bd)',
                     background: 'var(--sf2)',
                     cursor: 'pointer',
                     display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                    alignItems: 'flex-start',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
                     textAlign: 'left',
                     transition: 'all 140ms ease',
+                    width: '100%',
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.background = 'var(--sf3)'
@@ -237,14 +236,17 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
                     e.currentTarget.style.borderColor = 'var(--bd)'
                   }}
                 >
-                  <div style={{ width: '100%' }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx)', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {doc.title}
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 4 }}>
+                    <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
                       {docIsMarkdown ? 'Document' : doc.lang === 'html' ? 'Website' : 'Code'} · {docIsMarkdown ? 'MD' : doc.lang.toUpperCase()}
                     </div>
                   </div>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: 'var(--tx3)', flexShrink: 0 }}>
+                    <path d="M5 2l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </button>
               )
             })}

@@ -1,0 +1,9 @@
+{
+  "configs": {
+    "default": {
+      "concurrency": 4,
+      "maxRetries": 3,
+      "imageFormat": "png"
+    }
+  }
+}
