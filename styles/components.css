@@ -557,12 +557,6 @@ html.dark .navbar {
   color: var(--color-text-secondary);
 }
 
-@media (max-width: 480px) {
-  .waitlist-form {
-    flex-direction: column;
-  }
-}
-
 /* ── Divider ── */
 .divider {
   height: 1px;
