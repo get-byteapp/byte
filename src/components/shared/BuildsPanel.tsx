@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { MarkdownRenderer } from '../../lib/markdown'
 import { CodeBlock } from './CodeBlock'
+import { ArtifactFrame } from './ArtifactFrame'
 import type { BuildsDocument } from '../../types'
 
 interface BuildsPanelProps {
@@ -46,6 +47,7 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
   const active = documents.find(d => d.id === activeId) ?? (documents.length > 0 ? documents[0] : null)
   const isStreaming = active?.isStreaming ?? false
   const isMarkdown = active?.lang === 'markdown' || active?.lang === 'md'
+  const isHtml = active?.lang === 'html'
 
   const handleBack = () => {
     setViewMode('gallery')
@@ -240,7 +242,7 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
                       {doc.title}
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 4 }}>
-                      {docIsMarkdown ? 'Document' : 'Code'} · {docIsMarkdown ? 'MD' : doc.lang.toUpperCase()}
+                      {docIsMarkdown ? 'Document' : doc.lang === 'html' ? 'Website' : 'Code'} · {docIsMarkdown ? 'MD' : doc.lang.toUpperCase()}
                     </div>
                   </div>
                 </button>
@@ -454,13 +456,13 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
           {/* Content */}
           <div
             className="builds-panel-content"
-            style={{ flex: 1, overflow: 'auto', padding: '24px 28px' }}
+            style={{ flex: 1, overflow: 'auto', padding: displayMode === 'preview' && isHtml ? 0 : '24px 28px' }}
           >
             {!active ? null : isStreaming ? (
               <pre style={{ margin: 0, fontFamily: 'var(--font-mono, monospace)', fontSize: 13, color: 'var(--tx)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>
                 {active.content}<span className="builds-cursor" />
               </pre>
-            ) : displayMode === 'raw' || !isMarkdown ? (
+            ) : displayMode === 'raw' || (!isMarkdown && !isHtml) ? (
               <pre style={{ margin: 0, fontFamily: 'var(--font-mono, monospace)', fontSize: 13, color: 'var(--tx)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6, background: 'var(--sf2)', padding: 12, borderRadius: 'var(--r-sm)' }}>
                 {active.content}
               </pre>
@@ -475,6 +477,8 @@ export function BuildsPanel({ documents, activeId, onSetActive, onClose, onSideb
               >
                 <MarkdownRenderer content={active.content} />
               </div>
+            ) : isHtml && displayMode === 'preview' ? (
+              <ArtifactFrame html={active.content} />
             ) : (
               <CodeBlock language={active.lang} code={active.content} noRun />
             )}

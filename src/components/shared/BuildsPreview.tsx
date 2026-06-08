@@ -30,7 +30,8 @@ function CodeIcon() {
 
 export function BuildsPreview({ title, lang, onOpen, isStreaming }: BuildsPreviewProps) {
   const isMarkdown = lang === 'markdown' || lang === 'md'
-  const typeLabel = isMarkdown ? 'Document' : 'Code'
+  const isHtml = lang === 'html'
+  const typeLabel = isMarkdown ? 'Document' : isHtml ? 'Website' : 'Code'
   const langLabel = isMarkdown ? 'MD' : lang.toUpperCase()
 
   return (

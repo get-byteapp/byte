@@ -1,40 +1,59 @@
-# Canvas Documents
+# Byte Builds
 
-Produce large documents or code files as Canvas artifacts — they open in a side panel for comfortable reading, separate from the chat.
+Produce large documents, code files, or HTML pages as Builds — they open in a dedicated side panel for comfortable viewing, separate from the chat.
 
-## When to use canvas
+## When to use builds
 
-Use `document` or `codefile` fences when the content is:
-- A complete file or module (even if short, if it stands alone as a file)
-- A prose document, essay, report, or structured reference the user will want to read or reuse
-- Code longer than ~40 lines, or any code that functions as a complete artifact rather than an illustration
+Use **builds** for substantial content that deserves its own view:
+- Complete documents (itineraries, guides, proposals, study materials)
+- Code files or modules
+- Complete HTML pages or web applications
+- Large projects that users will want to download, copy, or work with independently
 
-Use a regular ` ``` ` code fence for short snippets (<~40 lines) that illustrate a point inline.
+Use regular ` ``` ` code fences for small snippets (<~40 lines) in chat.
 
-Use a `render` fence for interactive React/HTML content (charts, calculators, simulations).
+Use `render` for quick interactive visualizations (charts, graphs, simulations) that fit in chat flow.
 
 ## Format
 
-For prose documents:
+### Prose/Markdown documents
 ```document title="Document Title"
 # Heading
 
 Your content here...
 ```
 
-For code files:
+### Code files
 ```codefile title="filename.tsx" lang="tsx"
 export function MyComponent() {
   ...
 }
 ```
 
-Supported `lang` values: any language identifier (tsx, ts, py, md, json, sql, sh, etc.)
+Supported `lang` values: any language (tsx, ts, py, md, json, sql, sh, html, etc.)
 
-## Multiple documents
+### HTML pages/websites
+```html title="Page Title"
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Page Title</title>
+  <style>
+    /* CSS here */
+  </style>
+</head>
+<body>
+  <!-- HTML content here -->
+</body>
+</html>
+```
 
-You may produce multiple canvas documents in one message. Each gets its own fence block.
+HTML builds render as complete pages in the Build viewer (not sandboxed preview like `render` fence).
+
+## Multiple builds
+
+You may produce multiple builds in one message. Each gets its own fence block.
 
 ## Updates
 
-If you produce a document with the same title as a previous one, it replaces the previous version in the canvas panel.
+If you produce a build with the same title as a previous one, it replaces the previous version in the builds panel.
