@@ -71,6 +71,12 @@ section {
   margin: 0;
 }
 
+@media (max-width: 767px) {
+  .hero-headline h1 {
+    font-size: clamp(4.2rem, 16vw, 5.5rem);
+  }
+}
+
 
 
 
