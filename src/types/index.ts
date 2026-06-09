@@ -1,6 +1,6 @@
 export type ImageMode = "vision" | "ocr" | "describe" | "pdf";
 
-export type OcrEngineId = 'tesseract' | 'ocrspace' | 'google-vision' | 'azure'
+export type OcrEngineId = 'tesseract' | 'paddleocr' | 'scribe' | 'ocrspace' | 'google-vision' | 'azure'
 
 export interface OcrApiConfig {
   engineId: OcrEngineId

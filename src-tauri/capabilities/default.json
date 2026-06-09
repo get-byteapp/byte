@@ -38,7 +38,8 @@
         { "url": "https://api.langsearch.com/**" },
         { "url": "https://r.jina.ai/**" },
         { "url": "https://api.ocr.space/**" },
-        { "url": "https://vision.googleapis.com/**" }
+        { "url": "https://vision.googleapis.com/**" },
+        { "url": "https://cdn.jsdelivr.net/**" }
       ]
     }
   ]

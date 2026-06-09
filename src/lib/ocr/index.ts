@@ -1,9 +1,10 @@
 import { runTesseractOCR, preloadTesseract, isTesseractLoaded } from './tesseract'
+import { runPaddleOCR, preloadPaddleOCR } from './paddleocr'
 import { runOcrSpaceOCR } from './ocrspace'
 import { runGoogleVisionOCR } from './google-vision'
 import { runAzureOCR } from './azure'
 
-export { preloadTesseract, isTesseractLoaded }
+export { preloadTesseract, isTesseractLoaded, preloadPaddleOCR }
 
 export async function extractTextOCR(
   imageData: string,
@@ -20,6 +21,9 @@ export async function extractTextOCR(
   switch (engineId) {
     case 'tesseract':
       return runTesseractOCR(imageData, onProgress)
+
+    case 'paddleocr':
+      return runPaddleOCR(imageData, onProgress)
 
     case 'ocrspace': {
       const cfg = apiConfigs['ocrspace']

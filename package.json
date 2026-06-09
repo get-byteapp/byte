@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@gutenye/ocr-browser": "^1.4.8",
     "@tauri-apps/api": "~2.10.0",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-http": "~2.5.0",

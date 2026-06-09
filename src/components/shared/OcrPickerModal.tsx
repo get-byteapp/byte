@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { getOfflineEngines, getApiEngines, getRecommendedEngineId } from '../../lib/ocrEngines'
+import { preloadTesseract, preloadPaddleOCR } from '../../lib/ocr'
 import type { OcrEngineId, SystemSpecs } from '../../types'
 import { useStore } from '../../store/useStore'
 
@@ -9,7 +10,7 @@ interface OcrPickerModalProps {
 }
 
 export function OcrPickerModal({ onClose }: OcrPickerModalProps) {
-  const { activeOcrEngineId, setActiveOcrEngineId, ocrApiConfigs, setOcrApiConfig, removeOcrApiConfig } = useStore()
+  const { activeOcrEngineId, setActiveOcrEngineId, ocrApiConfigs, setOcrApiConfig, removeOcrApiConfig, installedOfflineEngines, addInstalledOfflineEngine, removeInstalledOfflineEngine } = useStore()
   const [tab, setTab] = useState<'offline' | 'api'>('offline')
   const [specs, setSpecs] = useState<SystemSpecs | null>(null)
   const [recommendedId, setRecommendedId] = useState<OcrEngineId | null>(null)
@@ -30,12 +31,16 @@ export function OcrPickerModal({ onClose }: OcrPickerModalProps) {
     setApiKeyInputs(inputs)
   }, [])
 
-  const handleInstallTesseract = async () => {
-    setInstallingId('tesseract')
+  const handleInstallEngine = async (id: string) => {
+    setInstallingId(id)
     try {
-      const { preloadTesseract } = await import('../../lib/ocr')
-      const ok = await preloadTesseract()
-      if (ok) setActiveOcrEngineId('tesseract')
+      let ok = false
+      if (id === 'tesseract') ok = await preloadTesseract()
+      else if (id === 'paddleocr') ok = await preloadPaddleOCR()
+      if (ok) {
+        addInstalledOfflineEngine(id)
+        setActiveOcrEngineId(id)
+      }
     } finally {
       setInstallingId(null)
     }
@@ -60,6 +65,10 @@ export function OcrPickerModal({ onClose }: OcrPickerModalProps) {
     if (activeOcrEngineId === id) setActiveOcrEngineId(null)
   }
 
+  const handleRemoveOfflineEngine = (id: string) => {
+    removeInstalledOfflineEngine(id)
+  }
+
   const offlineEngines = getOfflineEngines()
   const apiEngines = getApiEngines()
 
@@ -67,131 +76,180 @@ export function OcrPickerModal({ onClose }: OcrPickerModalProps) {
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '16px',
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div style={{
-        width: 520, maxHeight: '80vh',
-        background: 'var(--bg)', border: '1px solid var(--bd)',
-        borderRadius: 'var(--r)', overflow: 'hidden',
+        width: '100%', maxWidth: 520, maxHeight: '85vh',
+        background: 'var(--sf)', border: '1px solid var(--bd)',
+        borderRadius: 'var(--r-lg)', overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+        boxShadow: '0 20px 80px rgba(0,0,0,0.25)',
       }}>
         {/* Header */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '16px 20px', borderBottom: '1px solid var(--bd)',
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '20px 24px', borderBottom: '1px solid var(--bd)',
           flexShrink: 0,
         }}>
-          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--tx)', flex: 1 }}>OCR Engine</span>
+          <div style={{ flex: 1 }}>
+            <h2 style={{
+              margin: 0, fontSize: 16, fontWeight: 600,
+              color: 'var(--tx)', lineHeight: 1.3,
+            }}>Choose OCR Engine</h2>
+            <p style={{
+              margin: '4px 0 0 0', fontSize: 12, color: 'var(--tx3)',
+            }}>Select an offline or API-based engine for text recognition</p>
+          </div>
           <button
             onClick={onClose}
             style={{
-              width: 28, height: 28, borderRadius: 'var(--r-sm)',
-              border: '1px solid transparent', background: 'none',
+              width: 32, height: 32, borderRadius: 'var(--r-sm)',
+              border: 'none', background: 'var(--sf2)',
               color: 'var(--tx3)', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 140ms ease', flexShrink: 0,
+              padding: 0,
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 2l12 12M14 2L2 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           </button>
         </div>
 
         {/* Tabs */}
         <div style={{
-          display: 'flex', padding: '0 20px',
-          borderBottom: '1px solid var(--bd)', flexShrink: 0,
+          display: 'flex', gap: 0,
+          padding: '0', borderBottom: '1px solid var(--bd)', flexShrink: 0,
+          background: 'var(--sf2)',
         }}>
           {(['offline', 'api'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               style={{
-                padding: '10px 16px', fontSize: 13, fontWeight: 500,
+                flex: 1, padding: '12px 16px', fontSize: 13, fontWeight: 500,
                 background: 'none', border: 'none', cursor: 'pointer',
                 color: tab === t ? 'var(--tx)' : 'var(--tx3)',
                 borderBottom: tab === t ? '2px solid var(--acc)' : '2px solid transparent',
-                marginBottom: -1, transition: 'all 140ms ease',
+                marginBottom: tab === t ? -1 : 0,
+                transition: 'color 140ms ease, border-color 140ms ease',
+                position: 'relative',
               }}
             >
-              {t === 'offline' ? 'Offline' : 'API'}
+              {t === 'offline' ? 'Offline Engines' : 'API Services'}
             </button>
           ))}
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {tab === 'offline' && offlineEngines.map(engine => {
             const isActive = activeOcrEngineId === engine.id
-            const isInstalled = engine.id === 'tesseract'
+            const isInstalled = installedOfflineEngines.includes(engine.id)
             const isRecommended = recommendedId === engine.id
 
             return (
               <div
                 key={engine.id}
                 style={{
-                  padding: '14px 16px', borderRadius: 'var(--r-sm)',
+                  padding: '16px', borderRadius: 'var(--r-md)',
                   border: `1px solid ${isActive ? 'var(--acc)' : 'var(--bd)'}`,
-                  background: isActive ? 'var(--acc-soft, var(--sf2))' : 'var(--sf2)',
-                  display: 'flex', flexDirection: 'column', gap: 10,
+                  background: isActive ? 'var(--acc-soft)' : 'var(--sf)',
+                  display: 'flex', flexDirection: 'column', gap: 12,
+                  transition: 'all 140ms ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{engine.name}</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--tx)' }}>{engine.name}</span>
                       {isRecommended && (
                         <span style={{
-                          fontSize: 10, fontWeight: 600, padding: '2px 6px',
-                          background: 'var(--acc)', color: '#fff', borderRadius: 99,
+                          fontSize: 11, fontWeight: 600, padding: '3px 8px',
+                          background: 'var(--ocr-color)', color: '#fff', borderRadius: '4px',
+                          whiteSpace: 'nowrap',
                         }}>Recommended</span>
                       )}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--tx2)', marginBottom: 4 }}>{engine.description}</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <span style={{ fontSize: 11, color: 'var(--tx3)' }}>~{engine.storageMb} MB</span>
-                      {specs && (
-                        <span style={{ fontSize: 11, color: engine.minRamGb <= specs.totalRamGb ? 'var(--tx3)' : 'var(--err, red)' }}>
-                          {engine.minRamGb}GB RAM min
+                    <p style={{ margin: '0 0 8px 0', fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4 }}>
+                      {engine.description}
+                    </p>
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: 10, color: 'var(--tx3)' }}>Storage</span>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx)' }}>~{engine.storageMb} MB</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: 10, color: 'var(--tx3)' }}>RAM Required</span>
+                        <span style={{
+                          fontSize: 12, fontWeight: 500,
+                          color: specs && engine.minRamGb <= specs.totalRamGb ? 'var(--tx)' : 'var(--danger)',
+                        }}>
+                          {engine.minRamGb}GB minimum
                         </span>
-                      )}
-                      <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{'⭐'.repeat(engine.quality)}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: 10, color: 'var(--tx3)' }}>Quality</span>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx)' }}>{engine.quality}/5</span>
+                      </div>
                     </div>
                   </div>
 
-                  {isInstalled ? (
-                    <button
-                      onClick={() => handleToggleEngine(engine.id)}
-                      style={{
-                        padding: '6px 14px', borderRadius: 'var(--r-sm)',
-                        border: `1px solid ${isActive ? 'var(--acc)' : 'var(--bd)'}`,
-                        background: isActive ? 'var(--acc)' : 'var(--sf)',
-                        color: isActive ? '#fff' : 'var(--tx2)',
-                        fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                        whiteSpace: 'nowrap', flexShrink: 0,
-                      }}
-                    >
-                      {isActive ? 'Active' : 'Use'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleInstallTesseract}
-                      disabled={installingId === engine.id}
-                      style={{
-                        padding: '6px 14px', borderRadius: 'var(--r-sm)',
-                        border: '1px solid var(--bd)',
-                        background: 'var(--sf)', color: 'var(--tx2)',
-                        fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                        whiteSpace: 'nowrap', flexShrink: 0,
-                      }}
-                    >
-                      {installingId === engine.id ? 'Loading…' : 'Download'}
-                    </button>
-                  )}
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {isInstalled ? (
+                      <>
+                        <button
+                          onClick={() => handleToggleEngine(engine.id)}
+                          style={{
+                            padding: '8px 14px', borderRadius: 'var(--r-sm)',
+                            border: `1px solid ${isActive ? 'var(--acc)' : 'var(--bd)'}`,
+                            background: isActive ? 'var(--acc)' : 'var(--sf2)',
+                            color: isActive ? '#fff' : 'var(--tx)',
+                            fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                            whiteSpace: 'nowrap', transition: 'all 140ms ease',
+                          }}
+                        >
+                          {isActive ? 'Active' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={() => handleRemoveOfflineEngine(engine.id)}
+                          title="Delete this engine"
+                          style={{
+                            width: 32, height: 32, padding: 0, borderRadius: 'var(--r-sm)',
+                            border: '1px solid var(--bd)',
+                            background: 'none', color: 'var(--tx3)',
+                            cursor: 'pointer',
+                            transition: 'all 140ms ease',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M2 4h12M6.5 7v4M9.5 7v4M3 4l0.5 10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1L13 4M6 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleInstallEngine(engine.id)}
+                        disabled={installingId === engine.id}
+                        style={{
+                          padding: '8px 14px', borderRadius: 'var(--r-sm)',
+                          border: '1px solid var(--acc)',
+                          background: 'var(--acc)', color: '#fff',
+                          fontSize: 12, fontWeight: 500, cursor: installingId === engine.id ? 'default' : 'pointer',
+                          whiteSpace: 'nowrap', transition: 'all 140ms ease',
+                          opacity: installingId === engine.id ? 0.7 : 1,
+                        }}
+                      >
+                        {installingId === engine.id ? 'Downloading…' : 'Download'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )
@@ -207,19 +265,30 @@ export function OcrPickerModal({ onClose }: OcrPickerModalProps) {
               <div
                 key={engine.id}
                 style={{
-                  padding: '14px 16px', borderRadius: 'var(--r-sm)',
+                  padding: '16px', borderRadius: 'var(--r-md)',
                   border: `1px solid ${isActive ? 'var(--acc)' : 'var(--bd)'}`,
-                  background: isActive ? 'var(--acc-soft, var(--sf2))' : 'var(--sf2)',
-                  display: 'flex', flexDirection: 'column', gap: 10,
+                  background: isActive ? 'var(--acc-soft)' : 'var(--sf)',
+                  display: 'flex', flexDirection: 'column', gap: 12,
+                  transition: 'all 140ms ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', marginBottom: 3 }}>{engine.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--tx2)', marginBottom: 4 }}>{engine.description}</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <span style={{ fontSize: 11, color: 'var(--tx3)' }}>API</span>
-                      <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{'⭐'.repeat(engine.quality)}</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: 14, fontWeight: 600, color: 'var(--tx)' }}>
+                      {engine.name}
+                    </h3>
+                    <p style={{ margin: '0 0 8px 0', fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4 }}>
+                      {engine.description}
+                    </p>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: 10, color: 'var(--tx3)' }}>Type</span>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx)' }}>Cloud API</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: 10, color: 'var(--tx3)' }}>Quality</span>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--tx)' }}>{engine.quality}/5</span>
+                      </div>
                     </div>
                   </div>
 
@@ -227,21 +296,21 @@ export function OcrPickerModal({ onClose }: OcrPickerModalProps) {
                     <button
                       onClick={() => handleToggleEngine(engine.id)}
                       style={{
-                        padding: '6px 14px', borderRadius: 'var(--r-sm)',
+                        padding: '8px 14px', borderRadius: 'var(--r-sm)',
                         border: `1px solid ${isActive ? 'var(--acc)' : 'var(--bd)'}`,
-                        background: isActive ? 'var(--acc)' : 'var(--sf)',
-                        color: isActive ? '#fff' : 'var(--tx2)',
+                        background: isActive ? 'var(--acc)' : 'var(--sf2)',
+                        color: isActive ? '#fff' : 'var(--tx)',
                         fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                        whiteSpace: 'nowrap', flexShrink: 0,
+                        whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 140ms ease',
                       }}
                     >
-                      {isActive ? 'Active' : 'Use'}
+                      {isActive ? 'Active' : 'Activate'}
                     </button>
                   )}
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
                     <input
                       type="password"
                       placeholder={engine.apiKeyPlaceholder ?? 'API Key'}
@@ -251,21 +320,24 @@ export function OcrPickerModal({ onClose }: OcrPickerModalProps) {
                         [engine.id]: { ...prev[engine.id] ?? { apiKey: '', endpoint: '' }, apiKey: e.target.value }
                       }))}
                       style={{
-                        flex: 1, padding: '7px 10px', fontSize: 12,
-                        background: 'var(--sf)', border: '1px solid var(--bd)',
+                        flex: 1, padding: '9px 12px', fontSize: 12,
+                        background: 'var(--sf2)', border: '1px solid var(--bd)',
                         borderRadius: 'var(--r-sm)', color: 'var(--tx)',
-                        fontFamily: 'var(--font-mono, monospace)',
+                        fontFamily: 'var(--font)',
+                        outline: 'none', transition: 'all 140ms ease',
                       }}
                     />
                     <button
                       onClick={() => handleSaveApiKey(engine.id)}
                       disabled={!inputVal.apiKey}
                       style={{
-                        padding: '7px 12px', borderRadius: 'var(--r-sm)',
-                        border: '1px solid var(--bd)',
-                        background: 'var(--sf)', color: 'var(--tx2)',
-                        fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                        whiteSpace: 'nowrap',
+                        padding: '9px 16px', borderRadius: 'var(--r-sm)',
+                        border: '1px solid var(--acc)',
+                        background: inputVal.apiKey ? 'var(--acc)' : 'var(--sf2)',
+                        color: inputVal.apiKey ? '#fff' : 'var(--tx3)',
+                        fontSize: 12, fontWeight: 500, cursor: inputVal.apiKey ? 'pointer' : 'not-allowed',
+                        whiteSpace: 'nowrap', transition: 'all 140ms ease',
+                        opacity: inputVal.apiKey ? 1 : 0.6,
                       }}
                     >
                       {savingId === engine.id ? 'Saved ✓' : 'Save'}
@@ -273,14 +345,19 @@ export function OcrPickerModal({ onClose }: OcrPickerModalProps) {
                     {isConfigured && (
                       <button
                         onClick={() => handleRemoveApiKey(engine.id)}
+                        title="Delete this API key"
                         style={{
-                          padding: '7px 10px', borderRadius: 'var(--r-sm)',
+                          width: 32, height: 32, padding: 0, borderRadius: 'var(--r-sm)',
                           border: '1px solid var(--bd)',
                           background: 'none', color: 'var(--tx3)',
-                          fontSize: 12, cursor: 'pointer',
+                          cursor: 'pointer',
+                          transition: 'all 140ms ease',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}
                       >
-                        Remove
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <path d="M2 4h12M6.5 7v4M9.5 7v4M3 4l0.5 10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1L13 4M6 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
                       </button>
                     )}
                   </div>
@@ -295,9 +372,10 @@ export function OcrPickerModal({ onClose }: OcrPickerModalProps) {
                         [engine.id]: { ...prev[engine.id] ?? { apiKey: '', endpoint: '' }, endpoint: e.target.value }
                       }))}
                       style={{
-                        padding: '7px 10px', fontSize: 12,
-                        background: 'var(--sf)', border: '1px solid var(--bd)',
+                        padding: '9px 12px', fontSize: 12,
+                        background: 'var(--sf2)', border: '1px solid var(--bd)',
                         borderRadius: 'var(--r-sm)', color: 'var(--tx)',
+                        outline: 'none', transition: 'all 140ms ease',
                       }}
                     />
                   )}
@@ -307,7 +385,10 @@ export function OcrPickerModal({ onClose }: OcrPickerModalProps) {
                       href={engine.apiKeyLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ fontSize: 11, color: 'var(--acc)', textDecoration: 'none' }}
+                      style={{
+                        fontSize: 11, color: 'var(--acc)', textDecoration: 'none',
+                        fontWeight: 500, transition: 'color 140ms ease',
+                      }}
                     >
                       Get API key →
                     </a>

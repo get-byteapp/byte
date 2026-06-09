@@ -56,9 +56,12 @@ interface AppState {
   // OCR Settings
   activeOcrEngineId: string | null;
   ocrApiConfigs: Record<string, { apiKey: string; endpoint?: string }>;
+  installedOfflineEngines: string[];
   setActiveOcrEngineId: (id: string | null) => void;
   setOcrApiConfig: (engineId: string, config: { apiKey: string; endpoint?: string }) => void;
   removeOcrApiConfig: (engineId: string) => void;
+  addInstalledOfflineEngine: (id: string) => void;
+  removeInstalledOfflineEngine: (id: string) => void;
 
   // Vision Default Mode
   visionDefaultMode: "changeable" | "vision" | "ocr" | "describe";
@@ -255,6 +258,7 @@ export const useStore = create<AppState>()(
       imageDescriptionModelId: null,
       activeOcrEngineId: null,
       ocrApiConfigs: {},
+      installedOfflineEngines: [],
       visionDefaultMode: "changeable",
       disableAttachmentSwap: false,
       memories: [],
@@ -424,6 +428,20 @@ export const useStore = create<AppState>()(
       setImageDescriptionModelId: (imageDescriptionModelId) =>
         set({ imageDescriptionModelId }),
         setActiveOcrEngineId: (activeOcrEngineId) => set({ activeOcrEngineId }),
+        addInstalledOfflineEngine: (id) =>
+          set(state => ({
+            installedOfflineEngines: state.installedOfflineEngines.includes(id)
+              ? state.installedOfflineEngines
+              : [...state.installedOfflineEngines, id]
+          })),
+        removeInstalledOfflineEngine: (id) =>
+          set(state => {
+            const next = state.installedOfflineEngines.filter(engineId => engineId !== id)
+            return {
+              installedOfflineEngines: next,
+              activeOcrEngineId: state.activeOcrEngineId === id ? null : state.activeOcrEngineId
+            }
+          }),
         setOcrApiConfig: (engineId, config) =>
           set(state => ({ ocrApiConfigs: { ...state.ocrApiConfigs, [engineId]: config } })),
         removeOcrApiConfig: (engineId) =>

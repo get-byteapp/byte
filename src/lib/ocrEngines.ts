@@ -29,6 +29,17 @@ export const OCR_ENGINES: OcrEngineDefinition[] = [
     strengths: ['Clean text', 'Low resource usage', 'No internet needed'],
   },
   {
+    id: 'paddleocr',
+    name: 'PaddleOCR',
+    description: 'Neural network OCR by Baidu. Better accuracy on complex layouts and dense text.',
+    type: 'offline',
+    storageMb: 60,
+    minRamGb: 2,
+    quality: 4,
+    speed: 'medium',
+    strengths: ['Complex layouts', 'Dense text', 'Better accuracy'],
+  },
+  {
     id: 'ocrspace',
     name: 'OCR.space',
     description: 'Free OCR API. 25,000 requests/month free.',
@@ -41,20 +52,6 @@ export const OCR_ENGINES: OcrEngineDefinition[] = [
     apiKeyLabel: 'OCR.space API Key',
     apiKeyPlaceholder: 'K8...',
     apiKeyLink: 'https://ocr.space/ocrapi/freekey',
-  },
-  {
-    id: 'google-vision',
-    name: 'Google Vision',
-    description: 'Google Cloud Vision OCR. 1,000 free requests/month.',
-    type: 'api',
-    storageMb: 0,
-    minRamGb: 0,
-    quality: 5,
-    speed: 'fast',
-    strengths: ['Highest accuracy', 'Handwriting support', 'Table detection'],
-    apiKeyLabel: 'Google Cloud API Key',
-    apiKeyPlaceholder: 'AIza...',
-    apiKeyLink: 'https://console.cloud.google.com/apis/credentials',
   },
   {
     id: 'azure',
@@ -81,7 +78,8 @@ export function getApiEngines(): OcrEngineDefinition[] {
   return OCR_ENGINES.filter(e => e.type === 'api')
 }
 
-export function getRecommendedEngineId(_specs: SystemSpecs): OcrEngineId {
+export function getRecommendedEngineId(specs: SystemSpecs): OcrEngineId {
+  if (specs.totalRamGb >= 2) return 'paddleocr'
   return 'tesseract'
 }
 
