@@ -592,7 +592,7 @@ section {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--color-text);
+  color: #fff;
   text-decoration: none;
   font-weight: var(--font-weight-semibold);
 }
@@ -606,7 +606,7 @@ section {
 
 .footer-copy {
   font-size: var(--text-sm);
-  color: var(--color-text);
+  color: #fff;
 }
 
 @media (min-width: 768px) {
