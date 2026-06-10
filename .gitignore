@@ -16,6 +16,7 @@ tool-*.html
 *.jpg
 *.jpeg
 research/
+videos/
 AGENTS.md
 SKILL.md
 .superpowers/
