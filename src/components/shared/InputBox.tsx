@@ -107,7 +107,7 @@ export function InputBox({
 
   const effectiveLangSearchApiKey = langSearchEnabled ? langSearchApiKey : "";
   const navigateToConnections = () => {
-    useStore.getState().setSettingsSection("connections");
+    useStore.getState().setSettingsSection("models");
     useStore.getState().setActiveView("settings");
   };
 
@@ -715,6 +715,39 @@ export function InputBox({
                       >
                         <X size={11} />
                       </button>
+                      {availableModes.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isModeLocked || availableModes.length < 2) return;
+                            const idx = availableModes.indexOf(imgAtt.mode);
+                            const nextMode = availableModes[(idx + 1) % availableModes.length];
+                            setAttachmentMode(att.id, nextMode);
+                          }}
+                          style={{
+                            position: "absolute",
+                            bottom: 4,
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            fontSize: 9,
+                            fontWeight: 600,
+                            color: modeColor,
+                            background: "rgba(0,0,0,0.6)",
+                            padding: "2px 7px",
+                            borderRadius: 4,
+                            border: "none",
+                            cursor: isModeLocked || availableModes.length < 2 ? "default" : "pointer",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.3px",
+                            backdropFilter: "blur(4px)",
+                            transition: "background .15s",
+                            lineHeight: 1.3,
+                          }}
+                          title={isModeLocked ? "Mode locked in settings" : "Click to change mode"}
+                        >
+                          {imgAtt.mode === "vision" ? "Vision" : imgAtt.mode === "ocr" ? "OCR" : imgAtt.mode === "describe" ? "Describe" : imgAtt.mode === "pdf" ? "PDF" : imgAtt.mode}
+                        </button>
+                      )}
                     </div>
 
                     {/* Image preview modal with mode picker */}
@@ -1301,7 +1334,8 @@ export function InputBox({
           modelName={model?.name || model?.id || 'This model'}
           onGoToSettings={() => {
             setShowVisionUnsupported(false);
-            useStore.getState().setActiveView('settings');
+            useStore.getState().setSettingsSection("models");
+            useStore.getState().setActiveView("settings");
           }}
           onCancel={() => setShowVisionUnsupported(false)}
         />

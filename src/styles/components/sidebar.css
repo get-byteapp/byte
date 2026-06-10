@@ -145,16 +145,32 @@ body.ly-none #sidebar{width:0 !important;border-color:transparent}
 /* Recents - shorter height like mockup */
 .sb-rec-row {
   display: flex; align-items: center; gap: 8px;
-  padding: 2px 8px;
-  margin-bottom: 3px;
+  padding: 7px 8px;
+  margin-bottom: 2px;
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: background var(--ease);
-  min-height: 22px;
+  min-height: 36px;
+  position: relative;
 }
+.sb-rec-row::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%) scaleX(0);
+  width: 3px;
+  height: 24px;
+  border-radius: 0 3px 3px 0;
+  background: var(--acc);
+  transition: transform 180ms var(--ease-out-strong);
+}
+.sb-rec-row.on::before { transform: translateY(-50%) scaleX(1); }
 .sb-rec-row:hover { background: rgba(var(--acc-r),var(--acc-g),var(--acc-b),.07); }
 .sb-rec-row.on { background: rgba(var(--acc-r),var(--acc-g),var(--acc-b),.12); }
 .sb-rec-row.on:hover { background: rgba(var(--acc-r),var(--acc-g),var(--acc-b),.15); }
-.sb-rec-label { flex: 1; font-size: 12px; color: var(--tx3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--ease); }
-.sb-rec-row:hover .sb-rec-label, .sb-rec-row.on .sb-rec-label { color: var(--tx2); }
+.sb-rec-label { font-size: 12.5px; font-weight: 500; color: var(--tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--ease); }
+.sb-rec-preview { font-size: 10.5px; color: var(--tx4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; line-height: 1.3; }
+.sb-rec-row:hover .sb-rec-label, .sb-rec-row.on .sb-rec-label { color: var(--tx); }
+.sb-rec-row:hover .sb-rec-preview, .sb-rec-row.on .sb-rec-preview { color: var(--tx2); }
 .sb-rec-saved { color: var(--acc); flex-shrink: 0; }

@@ -39,6 +39,11 @@ interface AppState {
   // Settings
   disappearingMessages: boolean;
   disappearingInterval: number;
+  aiSearch: boolean;
+  userName: string;
+  autoSave: boolean;
+  telemetry: boolean;
+  hardwareAcceleration: boolean;
   defaultResponseStyle: ResponseStyleId;
   defaultMemoryEnabled: boolean;
   defaultWebSearchEnabled: boolean;
@@ -102,7 +107,14 @@ interface AppState {
   setActiveChatId: (id: string | null) => void;
   setActiveView: (view: ActiveView) => void;
   settingsSection: SettingsSection;
+  sidebarOrder: string[];
   setSettingsSection: (section: SettingsSection) => void;
+  setSidebarOrder: (order: string[]) => void;
+  setAiSearch: (val: boolean) => void;
+  setUserName: (name: string) => void;
+  setAutoSave: (val: boolean) => void;
+  setTelemetry: (val: boolean) => void;
+  setHardwareAcceleration: (val: boolean) => void;
   newChat: (initialMessage?: string, config?: Partial<ChatConfig>) => string;
   setDisappearingMessages: (val: boolean) => void;
   setDisappearingInterval: (hours: number) => void;
@@ -246,8 +258,14 @@ export const useStore = create<AppState>()(
       activeChatId: null,
       activeView: "home",
       settingsSection: "models" as SettingsSection,
+      sidebarOrder: ["chats", "projects", "council", "sparks", "agents", "customize"],
       disappearingMessages: true,
       disappearingInterval: 48,
+      aiSearch: false,
+      userName: "",
+      autoSave: true,
+      telemetry: false,
+      hardwareAcceleration: true,
       streamingEnabled: true,
       defaultResponseStyle: "normal",
       defaultMemoryEnabled: false,
@@ -354,6 +372,11 @@ export const useStore = create<AppState>()(
           headingFont: "'Instrument Serif',serif",
           disappearingMessages: true,
           disappearingInterval: 48,
+          aiSearch: false,
+          userName: "",
+          autoSave: true,
+          telemetry: false,
+          hardwareAcceleration: true,
           streamingEnabled: true,
           defaultResponseStyle: "normal",
           defaultMemoryEnabled: false,
@@ -364,6 +387,7 @@ export const useStore = create<AppState>()(
       setActiveChatId: (activeChatId) => set({ activeChatId }),
       setActiveView: (activeView) => set({ activeView }),
       setSettingsSection: (settingsSection) => set({ settingsSection }),
+      setSidebarOrder: (sidebarOrder) => set({ sidebarOrder }),
       newChat: (initialMessage?: string, config?: Partial<ChatConfig>) => {
         const defaultConfig = getDefaultChatConfig();
         defaultConfig.responseStyle = get().defaultResponseStyle;
@@ -407,6 +431,11 @@ export const useStore = create<AppState>()(
         set({ disappearingMessages }),
       setDisappearingInterval: (disappearingInterval) =>
         set({ disappearingInterval }),
+      setAiSearch: (aiSearch) => set({ aiSearch }),
+      setUserName: (userName) => set({ userName }),
+      setAutoSave: (autoSave) => set({ autoSave }),
+      setTelemetry: (telemetry) => set({ telemetry }),
+      setHardwareAcceleration: (hardwareAcceleration) => set({ hardwareAcceleration }),
       toggleSaved: (id) =>
         set((s) => ({
           chats: s.chats.map((c) =>

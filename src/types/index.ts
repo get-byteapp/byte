@@ -63,6 +63,10 @@ export interface Message {
   status: "sending" | "sent" | "streaming" | "done" | "error";
   pinned?: boolean;
   hidden?: boolean;
+  liked?: boolean;
+  disliked?: boolean;
+  versions?: { content: string; rawContent?: string; timestamp: number }[];
+  activeVersion?: number;
   attachments?: Attachment[];
   toolCalls?: ToolCallEntry[];
   // Legacy fields — kept for backward compat during transition
@@ -83,7 +87,8 @@ export type ToolId =
   | "FILE_READ"
   | "ASK_QUESTION"
   | "CONFIRM_ACTION"
-  | "CODE_EXECUTION";
+  | "CODE_EXECUTION"
+  | "CHANGE_CHAT_NAME";
 
 export type ModeId = "CANVAS" | "COUNCIL" | "OPERATION";
 
@@ -91,7 +96,7 @@ export type ResponseStyleId = "normal" | "concise" | "explanatory" | "learning";
 
 export type SettingsSection =
   | "models"
-  | "tabs"
+  | "sidebar"
   | "storage"
   | "general"
   | "database"

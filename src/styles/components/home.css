@@ -857,6 +857,22 @@
   border-color:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.5);
   background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.03);
 }
+.cp-item.selected{
+  border-color:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.4);
+  background:rgba(var(--acc-r),var(--acc-g),var(--acc-b),.06);
+}
+.cp-item-cb{
+  width:18px;
+  height:18px;
+  border-radius:4px;
+  border:2px solid var(--bd2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+  color:var(--acc);
+  transition:all var(--ease);
+}
 
 /* Item Main Row */
 .cp-item-main{
@@ -875,6 +891,7 @@
   justify-content:center;
   width:16px;
   height:16px;
+  user-select:auto;
 }
 .cp-drag-handle:active{
   cursor:grabbing;

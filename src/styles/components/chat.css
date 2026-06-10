@@ -55,7 +55,18 @@
 .msg-act{width:28px;height:28px;border-radius:6px;color:var(--tx4);display:flex;align-items:center;justify-content:center;transition:all var(--ease);background:transparent;border:none;cursor:pointer}
 .msg-act:hover{background:var(--sf2);color:var(--tx2)}
 
-.msg-time{font-size:calc(var(--fs) - 3px);color:var(--tx4);margin-right:auto;user-select:none}
+@keyframes regen-rotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.msg-act.regen svg{animation:regen-rotate .5s cubic-bezier(.23,1,.32,1)}
+
+.msg.leaving{opacity:0;transform:translateY(-8px);transition:opacity .3s ease,transform .3s ease}
+
+.msg-versions{display:flex;align-items:center;gap:6px;margin-left:auto}
+.msg-version-arrow{width:20px;height:20px;border-radius:4px;border:none;background:transparent;color:var(--tx4);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background var(--ease),color var(--ease)}
+.msg-version-arrow:hover:not(:disabled){background:var(--sf2);color:var(--tx2)}
+.msg-version-arrow:disabled{opacity:.3;cursor:default}
+.msg-version-label{font-size:calc(var(--fs) - 3px);color:var(--tx4);user-select:none}
+
+.msg-time{font-size:calc(var(--fs) - 1px);color:var(--tx4);margin-right:auto;user-select:none}
 
 /* Tooltip on action buttons */
 .tooltip-btn{position:relative}

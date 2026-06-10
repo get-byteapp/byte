@@ -4,16 +4,20 @@ import {
   Check,
   ThumbsUp,
   ThumbsDown,
-  Share2,
   RefreshCw,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
 } from "lucide-react";
 import { MarkdownRenderer } from "../../lib/markdown";
 import type { Message, ToolCallEntry } from "../../types";
+import { useStore } from "../../store/useStore";
 
 interface MessageBubbleProps {
   message: Message;
+  onRegenerate?: (messageId: string) => void;
+  regeneratingId?: string | null;
 }
 
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -299,8 +303,11 @@ function getAskQuestionDisplayText(content: string): string {
 
 export const MessageBubble = memo(function MessageBubble({
   message,
+  onRegenerate,
+  regeneratingId,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [toolCallExpanded, setToolCallExpanded] = useState<Record<string, boolean>>({});
 
   const handleCopy = async () => {
@@ -310,6 +317,46 @@ export const MessageBubble = memo(function MessageBubble({
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  const activeChatId = useStore((s) => s.activeChatId);
+  const updateChat = useStore((s) => s.updateChat);
+
+  function handleLike() {
+    if (!activeChatId) return;
+    const chat = useStore.getState().chats.find((c) => c.id === activeChatId);
+    if (!chat) return;
+    updateChat(activeChatId, {
+      messages: chat.messages.map((m) =>
+        m.id === message.id
+          ? { ...m, liked: !m.liked, disliked: m.liked ? m.disliked : false }
+          : m,
+      ),
+    });
+  }
+
+  function handleDislike() {
+    if (!activeChatId) return;
+    const chat = useStore.getState().chats.find((c) => c.id === activeChatId);
+    if (!chat) return;
+    updateChat(activeChatId, {
+      messages: chat.messages.map((m) =>
+        m.id === message.id
+          ? { ...m, disliked: !m.disliked, liked: m.disliked ? m.liked : false }
+          : m,
+      ),
+    });
+  }
+
+  function handleVersionChange(index: number) {
+    if (!activeChatId) return;
+    const chat = useStore.getState().chats.find((c) => c.id === activeChatId);
+    if (!chat) return;
+    updateChat(activeChatId, {
+      messages: chat.messages.map((m) =>
+        m.id === message.id ? { ...m, activeVersion: index >= (m.versions?.length ?? 0) ? undefined : index } : m,
+      ),
+    });
+  }
 
   const isUser = message.role === "user";
   const isGenerating = message.status === "streaming" && !message.content;
@@ -321,6 +368,13 @@ export const MessageBubble = memo(function MessageBubble({
 
   let displayContent = message.content;
   let showContent = true;
+
+  // Use version content when browsing history
+  const versionCount = message.versions?.length ?? 0;
+  const isViewingVersion = message.activeVersion !== undefined && versionCount > 0;
+  if (isViewingVersion && message.versions) {
+    displayContent = message.versions[message.activeVersion!].content;
+  }
 
 // Hidden messages (e.g., search results context) are not rendered
   if (message.hidden) return null;
@@ -494,17 +548,20 @@ export const MessageBubble = memo(function MessageBubble({
           // Only show image and PDF attachments in messages (files are embedded in text)
           if (att.type !== "image") return null;
           const isPdf = (att as any).mode === "pdf";
+          const hasLabel = !isPdf && ((att.mode === "describe" && att.description) || (att.mode === "ocr" && att.description));
           
           return (
             <div
               key={att.id}
               style={{
                 position: "relative",
-                width: 120,
-                borderRadius: 8,
+                width: 88,
+                height: 88,
+                borderRadius: "var(--r-md)",
                 overflow: "hidden",
-                border: `1px solid ${isPdf ? "#ef4444" : "var(--bd)"}`,
+                border: "1px solid var(--bd)",
                 background: "var(--sf2)",
+                flexShrink: 0,
               }}
             >
               <img
@@ -512,67 +569,85 @@ export const MessageBubble = memo(function MessageBubble({
                 alt={att.fileName}
                 style={{
                   width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
                   display: "block",
                   cursor: isPdf ? "default" : "pointer",
                 }}
                 onClick={() => !isPdf && window.open(att.dataUri, "_blank")}
               />
-              {isPdf ? (
-                <div
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  padding: "6px 8px",
+                  background: "linear-gradient(transparent, rgba(0,0,0,0.65))",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span
                   style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    padding: "4px 6px",
-                    background: "rgba(239, 68, 68, 0.9)",
-                    fontSize: "9px",
+                    fontSize: 10,
                     color: "#fff",
-                    textAlign: "center",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
+                    fontWeight: 500,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    flex: 1,
                   }}
                 >
-                  PDF
-                </div>
-              ) : ((att.mode === "describe" && att.description) ||
-                (att.mode === "ocr" && att.description)) && (
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    padding: "4px 6px",
-                    background:
+                  {att.fileName}
+                </span>
+                {isPdf && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 600,
+                      color: "#f87171",
+                      background: "rgba(0,0,0,0.4)",
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.3px",
+                    }}
+                  >
+                    PDF
+                  </span>
+                )}
+                {hasLabel && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 600,
+                      color: att.mode === "ocr" ? "#4ade80" : "#ccc",
+                      background: "rgba(0,0,0,0.4)",
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.3px",
+                    }}
+                    title={
                       att.mode === "ocr"
-                        ? "rgba(34, 197, 94, 0.9)"
-                        : "rgba(0,0,0,0.7)",
-                    fontSize: "9px",
-                    color: "#fff",
-                    textAlign: "center",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                  }}
-                  title={
-                    att.mode === "ocr"
-                      ? `Extracted text: ${att.description}`
-                      : `Described by ${att.describedBy}: ${att.description}`
-                  }
-                >
-                  {att.mode === "ocr" ? "OCR" : "Described"}
-                </div>
-              )}
+                        ? `Extracted text: ${att.description}`
+                        : `Described by ${att.describedBy}: ${att.description}`
+                    }
+                  >
+                    {att.mode === "ocr" ? "OCR" : "AI"}
+                  </span>
+                )}
+              </div>
             </div>
           );
         })}
       </div>
     ) : null;
 
-  return (
-    <div className={`msg${isUser ? " u" : ""}`}>
+    return (
+    <div className={`msg${isUser ? " u" : ""}${regeneratingId === message.id ? " leaving" : ""}`}>
       <div className="msg-body">
         <div className="msg-txt">
           {attachmentContent}
@@ -581,28 +656,56 @@ export const MessageBubble = memo(function MessageBubble({
           {mainContent}
         </div>
         <div className="msg-acts">
+          {isUser && (
+            <span className="msg-time">
+              {new Date(message.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+            </span>
+          )}
           <button
-            className="msg-act"
+            className="msg-act tooltip-btn"
             onClick={handleCopy}
-            title={copied ? "Copied!" : "Copy"}
+            data-tip={copied ? "Copied!" : "Copy"}
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}
           </button>
           {!isUser && (
             <>
-              <button className="msg-act" title="Like">
+              <button
+                className={`msg-act tooltip-btn${message.liked ? " active-like" : ""}`}
+                data-tip="Like"
+                onClick={handleLike}
+              >
                 <ThumbsUp size={13} />
               </button>
-              <button className="msg-act" title="Dislike">
+              <button
+                className={`msg-act tooltip-btn${message.disliked ? " active-dislike" : ""}`}
+                data-tip="Dislike"
+                onClick={handleDislike}
+              >
                 <ThumbsDown size={13} />
               </button>
-              <button className="msg-act" title="Share">
-                <Share2 size={13} />
-              </button>
-              <button className="msg-act" title="Regenerate">
+              <button
+                className={`msg-act tooltip-btn${regenerating ? " regen" : ""}`}
+                data-tip="Regenerate"
+                onClick={() => {
+                  setRegenerating(true);
+                  onRegenerate?.(message.id);
+                }}
+              >
                 <RefreshCw size={13} />
               </button>
             </>
+          )}
+          {!isUser && versionCount > 0 && (
+            <div className="msg-versions">
+              <button className="msg-version-arrow" onClick={() => handleVersionChange(isViewingVersion ? message.activeVersion! - 1 : versionCount - 1)} disabled={isViewingVersion && message.activeVersion! <= 0}>
+                <ChevronLeft size={12} />
+              </button>
+              <span className="msg-version-label">{isViewingVersion ? `${message.activeVersion! + 1}/${versionCount + 1}` : `${versionCount + 1}/${versionCount + 1}`}</span>
+              <button className="msg-version-arrow" onClick={() => handleVersionChange(isViewingVersion ? message.activeVersion! + 1 : versionCount)} disabled={!isViewingVersion || message.activeVersion! >= versionCount}>
+                <ChevronRight size={12} />
+              </button>
+            </div>
           )}
         </div>
       </div>

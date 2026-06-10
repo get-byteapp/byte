@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '../../store/useStore'
-import { Trash2, Plus, ChevronDown, X, GripVertical, Edit2, Check, Search, Wand2, Brain, Palette, Keyboard, Zap, Sliders, RotateCcw, Download, FileDown, Database, HardDrive, Link, Upload, Copy } from 'lucide-react'
+import { Trash2, Plus, ChevronDown, X, GripVertical, Edit2, Check, Search, Wand2, Brain, Palette, Keyboard, Zap, Sliders, RotateCcw, Download, FileDown, Upload, Copy } from 'lucide-react'
 import { ICON_MAP, DEFAULT_QUICK_PROMPTS, AVAILABLE_ICONS, type Prompt } from '../../lib/quickPrompts'
 import type { ThemeId, Skill } from '../../types'
 
@@ -438,6 +438,8 @@ export function CustomizeView() {
   const [memoryName, setMemoryName] = useState('')
   const [memoryContent, setMemoryContent] = useState('')
   const [expandedMemory, setExpandedMemory] = useState<string | null>(null)
+  const [memorySelectMode, setMemorySelectMode] = useState(false)
+  const [selectedMemoryIds, setSelectedMemoryIds] = useState<Set<string>>(new Set())
   const [designerMode, setDesignerMode] = useState(false)
   const [customTokens, setCustomTokens] = useState<Record<string, string>>({})
   const [showSaveThemeModal, setShowSaveThemeModal] = useState(false)
@@ -927,6 +929,12 @@ export function CustomizeView() {
     }
   }
 
+  const handleDeleteSelectedMemories = () => {
+    selectedMemoryIds.forEach((id) => removeMemory(id))
+    setSelectedMemoryIds(new Set())
+    setMemorySelectMode(false)
+  }
+
   const openAddMemoryModal = () => {
     setEditingMemory(null)
     setMemoryName('')
@@ -997,7 +1005,9 @@ export function CustomizeView() {
   }
 
   // Drag and drop handlers
-  const handleDragStart = (id: string) => {
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", id);
     setDraggedId(id)
   }
 
@@ -1049,9 +1059,6 @@ export function CustomizeView() {
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
     { id: 'quick-prompts', label: 'Quick Prompts', icon: Zap },
-    { id: 'connections', label: 'Connections', icon: Link },
-    { id: 'database', label: 'Database', icon: Database },
-    { id: 'storage', label: 'Storage', icon: HardDrive },
   ]
 
   return (
@@ -1171,18 +1178,20 @@ export function CustomizeView() {
                     const isEditing = editingCategoryId === cat.id
 
                     return (
-                      <div
-                        key={cat.id}
-                        className={`cp-item${cat.enabled ? '' : ' disabled'}${isDragOver ? ' drag-over' : ''}${isDragging ? ' dragging' : ''}`}
-                        draggable
-                        onDragStart={() => handleDragStart(cat.id)}
-                        onDragOver={(e) => handleDragOver(e, cat.id)}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, cat.id)}
-                        onDragEnd={handleDragEnd}
-                      >
-                        <div className="cp-item-main" onClick={() => handleToggleExpand(cat.id)}>
-                          <div className="cp-drag-handle">
+                       <div
+                         key={cat.id}
+                         className={`cp-item${cat.enabled ? '' : ' disabled'}${isDragOver ? ' drag-over' : ''}${isDragging ? ' dragging' : ''}`}
+                         onDragOver={(e) => handleDragOver(e, cat.id)}
+                         onDragLeave={handleDragLeave}
+                         onDrop={(e) => handleDrop(e, cat.id)}
+                         onDragEnd={handleDragEnd}
+                       >
+                         <div className="cp-item-main" onClick={() => handleToggleExpand(cat.id)}>
+                           <div
+                             className="cp-drag-handle"
+                             draggable
+                             onDragStart={(e) => handleDragStart(e, cat.id)}
+                           >
                             <GripVertical size={16} />
                           </div>
                           <div className="cp-item-icon">
@@ -1363,10 +1372,25 @@ export function CustomizeView() {
                 </div>
 
                 <div className="cp-toolbar">
-                  <span className="cp-hint">{memories.length} memory{memories.length !== 1 ? 'ies' : 'y'} saved</span>
-                  <button className="cp-btn primary" onClick={openAddMemoryModal}>
-                    <Plus size={14} /> Add Memory
-                  </button>
+                  <span className="cp-hint">{memories.length} {memories.length === 1 ? 'memory' : 'memories'} saved</span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {memorySelectMode && (
+                      <>
+                        <button className="cp-btn danger" onClick={handleDeleteSelectedMemories} disabled={selectedMemoryIds.size === 0}>
+                          <Trash2 size={14} /> Delete ({selectedMemoryIds.size})
+                        </button>
+                        <button className="cp-btn secondary" onClick={() => { setMemorySelectMode(false); setSelectedMemoryIds(new Set()) }}>
+                          Cancel
+                        </button>
+                      </>
+                    )}
+                    <button className={`cp-btn ${memorySelectMode ? 'secondary' : 'secondary'}`} onClick={() => setMemorySelectMode(!memorySelectMode)}>
+                      {memorySelectMode ? 'Done' : 'Select'}
+                    </button>
+                    <button className="cp-btn primary" onClick={openAddMemoryModal}>
+                      <Plus size={14} /> Add Memory
+                    </button>
+                  </div>
                 </div>
 
                 <div className="cp-list">
@@ -1383,12 +1407,26 @@ export function CustomizeView() {
                     return (
                       <div 
                         key={mem.id} 
-                        className={`cp-item${isExpanded ? ' expanded' : ''}`}
+                        className={`cp-item${isExpanded ? ' expanded' : ''}${selectedMemoryIds.has(mem.id) ? ' selected' : ''}`}
                       >
                         <div 
                           className="cp-item-main"
-                          onClick={() => setExpandedMemory(isExpanded ? null : mem.id)}
+                          onClick={() => {
+                            if (memorySelectMode) {
+                              const next = new Set(selectedMemoryIds)
+                              if (next.has(mem.id)) next.delete(mem.id)
+                              else next.add(mem.id)
+                              setSelectedMemoryIds(next)
+                            } else {
+                              setExpandedMemory(isExpanded ? null : mem.id)
+                            }
+                          }}
                         >
+                          {memorySelectMode && (
+                            <div className="cp-item-cb">
+                              {selectedMemoryIds.has(mem.id) && <Check size={10} />}
+                            </div>
+                          )}
                           <div className="cp-item-icon">
                             <Brain size={14} />
                           </div>
@@ -2230,43 +2268,7 @@ export function CustomizeView() {
             )}
 
             {section === 'shortcuts' && (
-              <div className="cust-sec on">
-                <h2 className="cp-title-main"><Keyboard size={20} /> Shortcuts</h2>
-                <p className="cp-desc">Keyboard shortcuts for quick access.</p>
-                <div className="customize-empty">
-                  <p>Shortcuts coming soon...</p>
-                </div>
-              </div>
-            )}
-
-            {section === 'connections' && (
-              <div className="cust-sec on">
-                <h2 className="cp-title-main"><Link size={20} /> Connections</h2>
-                <p className="cp-desc">Manage external service connections and integrations.</p>
-                <div className="customize-empty">
-                  <p>Coming soon...</p>
-                </div>
-              </div>
-            )}
-
-            {section === 'database' && (
-              <div className="cust-sec on">
-                <h2 className="cp-title-main"><Database size={20} /> Database</h2>
-                <p className="cp-desc">Configure database connections and settings.</p>
-                <div className="customize-empty">
-                  <p>Coming soon...</p>
-                </div>
-              </div>
-            )}
-
-            {section === 'storage' && (
-              <div className="cust-sec on">
-                <h2 className="cp-title-main"><HardDrive size={20} /> Storage</h2>
-                <p className="cp-desc">Manage storage providers and file settings.</p>
-                <div className="customize-empty">
-                  <p>Coming soon...</p>
-                </div>
-              </div>
+              <ShortcutsPanel />
             )}
           </div>
         </div>

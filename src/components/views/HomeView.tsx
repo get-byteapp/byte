@@ -91,7 +91,18 @@ export function HomeView() {
 
   const tokenPercent =
     contextWindow > 0 ? (tokenCount / contextWindow) * 100 : 0;
-  const greeting = getGreeting();
+  const [greeting] = useState(() => getGreeting());
+  const userName = useStore((s) => s.userName);
+  const [useAltGreeting] = useState(() => Math.random() > 0.5);
+  const [altGreeting] = useState(() => {
+    const name = useStore.getState().userName;
+    const pool = [
+      `Coffee and Byte time${name ? `, ${name}` : ""}`,
+      `What are we building today${name ? `, ${name}` : ""}?`,
+      `another day, another Byte session${name ? `, ${name}` : ""}`,
+    ];
+    return pool[Math.floor(Math.random() * pool.length)];
+  });
 
   const handleSend = (text: string, attachments?: ImageAttachment[]) => {
     if (!text.trim()) return;
@@ -286,9 +297,10 @@ export function HomeView() {
       <div className="home-stage">
         <div className="home-greet">
           <div className="home-name">
-            {greeting}, <em>friend</em>
+            {useAltGreeting
+              ? altGreeting
+              : `${greeting}${userName ? `, ${userName}` : ""}`}
           </div>
-          <div className="home-sub">What can Byte help with today?</div>
         </div>
 
         <div style={{ width: "100%", maxWidth: 680 }}>
@@ -439,8 +451,11 @@ export function HomeView() {
 
 function getGreeting() {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  if (hour < 21) return "Good evening";
-  return "Good night";
+  const morning = ["Good morning", "Ready to build"];
+  const afternoon = ["Good afternoon", "Ready to build"];
+  const evening = ["Good evening", "Ready to build"];
+  const night = ["Late night coding?", "Still going?", "Ready to build"];
+
+  const pool = hour < 12 ? morning : hour < 17 ? afternoon : hour < 21 ? evening : night;
+  return pool[Math.floor(Math.random() * pool.length)];
 }

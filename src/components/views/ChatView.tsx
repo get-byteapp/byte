@@ -66,6 +66,7 @@ export function ChatView({
   } = useStore();
   const effectiveLangSearchApiKey = langSearchEnabled ? langSearchApiKey : "";
   const [isLoading, setIsLoading] = useState(false);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamAbortRef = useRef<(() => void) | null>(null);
   const canvasParserRef = useRef<StreamingCanvasParser | null>(null);
@@ -77,6 +78,7 @@ export function ChatView({
   const executedOpsRef = useRef<Set<string>>(new Set());
   const pendingOpsRef = useRef<Op[]>([]);
   const titleGeneratedRef = useRef<Set<string>>(new Set());
+  const pendingVersionRef = useRef<{ content: string; rawContent?: string; timestamp: number } | null>(null);
   const chat = chats.find((c) => c.id === activeChatId);
 
   const buildsDocuments: BuildsDocument[] = chat?.buildsDocuments ?? []
@@ -1418,6 +1420,10 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               : [];
           if (webSearches.length > 0) console.log("[BYTE] Tool detected:", webSearches.map(w => ({ q: w.query.slice(0, 40), h: w.header })));
 
+          const changeChatName = !askQuestion && !confirmAction && !fileRead && !suggestMemory && !codeExec && webSearches.length === 0
+            ? parseChangeChatNameTool(lastMsg?.rawContent || lastMsg?.content || "")
+            : null;
+
           const rawResponse = lastMsg?.rawContent || lastMsg?.content || "";
 
           // Finalize canvas parser — handles any unclosed canvas block
@@ -1536,6 +1542,10 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
               }
             };
             runSearches().catch((err) => console.error("[BYTE] Web search error:", err));
+          }
+
+          if (changeChatName) {
+            handleChangeChatName(activeChatId, changeChatName.name);
           }
 
           setIsLoading(false);
@@ -2061,6 +2071,41 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     header?: string;
   }
 
+  const parseChangeChatNameTool = (content: string): { name: string } | null => {
+    if (!content || content.trim().length < 10) return null;
+    const cleaned = content.replace(/\\```[\w-]*\n?/g, "").replace(/```[\w-]*\n?/g, "").trim();
+    try {
+      const jsonMatch = cleaned.match(/\{[\s\S]*"tool"\s*:\s*"change_chat_name"[\s\S]*\}/);
+      if (jsonMatch) {
+        const payload = JSON.parse(jsonMatch[0]);
+        if (payload.tool === "change_chat_name" && payload.name) {
+          return { name: payload.name };
+        }
+      }
+    } catch {}
+    return null;
+  };
+
+  const handleChangeChatName = useCallback((chatId: string, name: string) => {
+    const chat = useStore.getState().chats.find((c) => c.id === chatId);
+    if (!chat) return;
+    const lastMsg = chat.messages[chat.messages.length - 1];
+    if (!lastMsg || lastMsg.role !== "assistant") return;
+    const toolCallEntry: ToolCallEntry = {
+      id: crypto.randomUUID(),
+      tool: "change_chat_name",
+      header: `Changed chat name to "${name}"`,
+      params: { name },
+      status: "done" as const,
+    };
+    updateChat(chatId, {
+      title: name,
+      messages: chat.messages.map((m) =>
+        m.id === lastMsg.id ? { ...m, toolCalls: [...(m.toolCalls || []), toolCallEntry] } : m,
+      ),
+    });
+  }, [updateChat]);
+
   const parseFileReadTool = (content: string): FileReadParams | null => {
     if (!content || content.trim().length < 10) return null;
     let cleaned = content
@@ -2233,7 +2278,9 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
 
       const genId = () => crypto.randomUUID();
       const userMsg: Message = { id: genId(), role: "user", content: text.trim(), timestamp: Date.now(), status: "sent", attachments };
-      const assistantMsg: Message = { id: genId(), role: "assistant", content: "", rawContent: "", timestamp: Date.now(), status: "streaming" };
+      const savedVersion = pendingVersionRef.current;
+      pendingVersionRef.current = null;
+      const assistantMsg: Message = { id: genId(), role: "assistant", content: "", rawContent: "", timestamp: Date.now(), status: "streaming", versions: savedVersion ? [savedVersion] : undefined, activeVersion: undefined };
 
       if (hasOCR) {
         assistantMsg.ocrPhase = "extracting";
@@ -2840,6 +2887,102 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
     );
   }
 
+  const handleRegenerate = useCallback((messageId: string) => {
+    if (!activeChatId || !chat) return;
+    const msgIndex = chat.messages.findIndex((m) => m.id === messageId);
+    if (msgIndex < 0) return;
+    const currentMsg = chat.messages[msgIndex];
+    // Save current message as a version
+    const savedVersion = { content: currentMsg.content, rawContent: currentMsg.rawContent, timestamp: currentMsg.timestamp };
+    const currentVersions = currentMsg.versions || [];
+    const newVersions = [...currentVersions, savedVersion];
+    // Replace this message with a fresh streaming assistant message that carries version history
+    setRegeneratingId(messageId);
+    updateChat(activeChatId, {
+      messages: chat.messages.map((m) =>
+        m.id === messageId
+          ? { ...m, content: "", rawContent: "", status: "streaming" as const, versions: newVersions, activeVersion: undefined }
+          : m,
+      ),
+    });
+    // Now stream a new response into this message
+    executedOpsRef.current.clear();
+    let { provider, model } = resolveModel(providers, selectedModelId);
+    if ((!provider || !model) && enabledModels.length > 0) {
+      model = enabledModels[0];
+      provider = providers.find((p) => p.id === model?.providerId) || null;
+    }
+    if (!provider || !model) return;
+    setRegeneratingId(messageId);
+    const { systemPrompt: simplifiedSystemPrompt } = getSlashCommandPrompt(currentMsg.content.trim());
+    const projectHasFiles = activeChatId && projects.some((p) => p.chatIds.includes(activeChatId) && p.files.length > 0);
+    const webSearchCanRun = model?.capabilities?.webSearch || !!effectiveLangSearchApiKey;
+    const baseTools = (chat?.config?.enabledTools || []).filter((t) => t !== "WEB_SEARCH" || webSearchCanRun);
+    const effectiveConfig = projectHasFiles && chat?.config
+      ? { ...chat.config, enabledTools: [...new Set([...baseTools, "FILE_READ" as ToolId])] }
+      : chat?.config ? { ...chat.config, enabledTools: baseTools } : chat?.config;
+    const streamMessages = chat.messages.slice(0, msgIndex);
+    setIsLoading(true);
+    if (streamingEnabled) {
+      canvasParserRef.current = new StreamingCanvasParser();
+      canvasChatBufferRef.current = '';
+      const handle = streamChat(
+        provider, model, streamMessages,
+        (chunk) => {
+          const currentChat = useStore.getState().chats.find((c) => c.id === activeChatId);
+          if (!currentChat) return;
+          const existingMsg = currentChat.messages.find((m) => m.id === messageId);
+          const currentRaw = existingMsg?.rawContent || existingMsg?.content || "";
+          const accumulatedContent = currentRaw + chunk;
+          if (canvasParserRef.current) {
+            const events = canvasParserRef.current.feed(chunk);
+            for (const ev of events) {
+              if (ev.type === 'chatChunk') canvasChatBufferRef.current += ev.text;
+            }
+          }
+          const chatBuffer = canvasChatBufferRef.current;
+          const hasAnyFence = /```tool_calls?\b/.test(accumulatedContent);
+          const isSubtool = hasAnyFence && /"subtool"\s*:/.test(accumulatedContent);
+          const displayContent = hasAnyFence ? (isSubtool ? "" : commentaryBeforeFence(chatBuffer)) : chatBuffer;
+          updateChat(activeChatId, {
+            messages: currentChat.messages.map((m) =>
+              m.id === messageId ? { ...m, content: displayContent, rawContent: accumulatedContent } : m,
+            ),
+          });
+        },
+        () => {
+          const currentChat = useStore.getState().chats.find((c) => c.id === activeChatId);
+          if (!currentChat) return;
+          const lastMsg = currentChat.messages.find((m) => m.id === messageId);
+          if (lastMsg) {
+            updateChat(activeChatId, {
+              messages: currentChat.messages.map((m) =>
+                m.id === messageId ? { ...m, status: "done" as const } : m,
+              ),
+            });
+          }
+          setRegeneratingId(null);
+          setIsLoading(false);
+          streamAbortRef.current = null;
+        },
+        (error: Error) => {
+          const currentChat = useStore.getState().chats.find((c) => c.id === activeChatId);
+          if (!currentChat) return;
+          updateChat(activeChatId, {
+            messages: currentChat.messages.map((m) =>
+              m.id === messageId ? { ...m, content: m.content || `Error: ${error.message}`, status: "error" as const } : m,
+            ),
+          });
+          setRegeneratingId(null);
+          setIsLoading(false);
+          streamAbortRef.current = null;
+        },
+        effectiveConfig, memories, simplifiedSystemPrompt, getProjectContext(lastUserMessage(streamMessages)),
+      );
+      streamAbortRef.current = handle.abort;
+    }
+  }, [activeChatId, chat, updateChat, providers, selectedModelId, enabledModelIds, effectiveLangSearchApiKey, streamingEnabled, memories, projects, resolveModel, getSlashCommandPrompt, lastUserMessage, commentaryBeforeFence]);
+
   return (
     <div className="view on" style={{ flexDirection: 'row', overflow: 'hidden' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
@@ -2847,7 +2990,7 @@ Check that your provider settings point to the correct Ollama URL.</details>`;
         <div className="chat-msgs-inner">
           <BuildsContext.Provider value={{ documents: buildsDocuments, onOpen: handleBuildsOpen }}>
             {chat.messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+              <MessageBubble key={msg.id} message={msg} onRegenerate={handleRegenerate} regeneratingId={regeneratingId} />
             ))}
           </BuildsContext.Provider>
           <div ref={messagesEndRef} />

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import {
-  MessageCircle,
+  MessageSquare,
   Plus,
   Search,
   Check,
@@ -21,6 +21,7 @@ export function ChatsListView() {
     removeChat,
     updateChat,
     toggleSaved,
+    aiSearch,
   } = useStore();
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -58,7 +59,20 @@ export function ChatsListView() {
   const filteredChats = useMemo(() => {
     if (!searchQuery) return chats;
     const q = searchQuery.toLowerCase();
-    return chats.filter((c) => c.title?.toLowerCase().includes(q));
+
+    // First pass: search by title
+    const titleMatches = chats.filter((c) =>
+      c.title?.toLowerCase().includes(q),
+    );
+
+    // Second pass: search through message content
+    if (titleMatches.length > 0) return titleMatches;
+
+    const contentMatches = chats.filter((c) =>
+      c.messages.some((m) => m.content?.toLowerCase().includes(q)),
+    );
+
+    return contentMatches;
   }, [chats, searchQuery]);
 
   const starredChats = useMemo(
@@ -221,7 +235,7 @@ export function ChatsListView() {
                       color: "var(--tx2)",
                     }}
                   >
-                    <MessageCircle size={14} />
+                    <MessageSquare size={14} />
                   </span>
                   Chats
                 </span>
@@ -354,11 +368,25 @@ export function ChatsListView() {
                   }}
                 >
                   <div style={{ marginBottom: 12 }}>
-                    <MessageCircle size={32} />
+                    <MessageSquare size={32} />
                   </div>
-                  No chats yet.
-                  <br />
-                  Start a new conversation.
+                  {searchQuery ? (
+                    <>
+                      No chats match "{searchQuery}".
+                      <br />
+                      <span style={{ fontSize: "calc(var(--fs) - 1px)" }}>
+                        {aiSearch
+                          ? "AI search is enabled — try a different description of what you're looking for."
+                          : "Try a different search term or browse all chats."}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      No chats yet.
+                      <br />
+                      Start a new conversation.
+                    </>
+                  )}
                 </div>
               ) : (
                 <>

@@ -13,6 +13,9 @@ import {
   X,
   Plus,
   Pen,
+  MessageSquare,
+  Users,
+  Palette,
   Image as ImageIcon,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
@@ -78,16 +81,10 @@ export function SettingsView() {
               Models
             </button>
             <button
-              className={`cust-si ${settingsSection === "tabs" ? "on" : ""}`}
-              onClick={() => setSettingsSection("tabs")}
+              className={`cust-si ${settingsSection === "sidebar" ? "on" : ""}`}
+              onClick={() => setSettingsSection("sidebar")}
             >
-              Tabs
-            </button>
-            <button
-              className={`cust-si ${settingsSection === "storage" ? "on" : ""}`}
-              onClick={() => setSettingsSection("storage")}
-            >
-              Storage
+              Sidebar
             </button>
             <button
               className={`cust-si ${settingsSection === "general" ? "on" : ""}`}
@@ -96,16 +93,22 @@ export function SettingsView() {
               Preferences
             </button>
             <button
+              className={`cust-si ${settingsSection === "connections" ? "on" : ""}`}
+              onClick={() => setSettingsSection("connections")}
+            >
+              Connections
+            </button>
+            <button
               className={`cust-si ${settingsSection === "database" ? "on" : ""}`}
               onClick={() => setSettingsSection("database")}
             >
               Database
             </button>
             <button
-              className={`cust-si ${settingsSection === "connections" ? "on" : ""}`}
-              onClick={() => setSettingsSection("connections")}
+              className={`cust-si ${settingsSection === "storage" ? "on" : ""}`}
+              onClick={() => setSettingsSection("storage")}
             >
-              Connections
+              Storage
             </button>
             <button
               className={`cust-si ${settingsSection === "about" ? "on" : ""}`}
@@ -124,21 +127,22 @@ export function SettingsView() {
                 enabledModelIds={enabledModelIds}
               />
             )}
-            {settingsSection === "tabs" && <TabsPanel />}
+            {settingsSection === "sidebar" && <SidebarPanel />}
+
+            {settingsSection === "general" && (
+              <GeneralPanel
+                streamingEnabled={streamingEnabled}
+                onStreamingChange={setStreamingEnabled}
+              />
+            )}
             {settingsSection === "storage" && (
               <StoragePanel
                 disappearingMessages={disappearingMessages}
                 disappearingInterval={disappearingInterval}
                 onDisappearingChange={setDisappearingMessages}
                 onIntervalChange={setDisappearingInterval}
-                onClearChats={clearAllChats}
-                onResetEverything={clearAllData}
-              />
-            )}
-            {settingsSection === "general" && (
-              <GeneralPanel
-                streamingEnabled={streamingEnabled}
-                onStreamingChange={setStreamingEnabled}
+                onClearChats={() => clearAllChats()}
+                onResetEverything={() => clearAllData()}
               />
             )}
             {settingsSection === "database" && <DatabasePanel />}
@@ -797,46 +801,131 @@ function ModelsPanel({
   );
 }
 
-function TabsPanel() {
-  const [tabs, setTabs] = useState({
-    council: true,
-    sparks: true,
-    projects: true,
-  });
+function SidebarPanel() {
+  const { sidebarOrder, setSidebarOrder } = useStore();
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const defaultOrder = ["chats", "projects", "council", "sparks", "agents", "customize"];
+
+  const allItems: { id: string; label: string; icon: React.ReactNode; sub: string }[] = [
+    { id: "chats", label: "Chats", icon: <MessageSquare size={16} />, sub: "Conversation history" },
+    { id: "projects", label: "Projects", icon: <Folder size={16} />, sub: "Group chats into folders" },
+    { id: "council", label: "Council", icon: <Zap size={16} />, sub: "Multi-model discussion" },
+    { id: "sparks", label: "Sparks", icon: <Zap size={16} />, sub: "Saved AI visualizations" },
+    { id: "agents", label: "Agents", icon: <Users size={16} />, sub: "AI agent configurations" },
+    { id: "customize", label: "Customize", icon: <Palette size={16} />, sub: "Theme and appearance" },
+  ];
+
+  const itemMap = new Map(allItems.map((i) => [i.id, i]));
+  const enabled = new Set(sidebarOrder);
+  const orderedItems = sidebarOrder.map((id) => itemMap.get(id)).filter(Boolean) as typeof allItems;
+  const disabledItems = allItems.filter((i) => !enabled.has(i.id));
+
+  const toggle = (id: string) => {
+    if (enabled.has(id)) {
+      setSidebarOrder(sidebarOrder.filter((i) => i !== id));
+    } else {
+      setSidebarOrder([...sidebarOrder, id]);
+    }
+  };
+
+  const resetToDefault = () => {
+    setSidebarOrder(defaultOrder);
+  };
+
+  const handleDragStart = (id: string) => setDraggedId(id);
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (id !== draggedId) setDragOverId(id);
+  };
+  const handleDragLeave = () => setDragOverId(null);
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    setDragOverId(null);
+    if (!draggedId || draggedId === targetId) return;
+    const fromIndex = sidebarOrder.indexOf(draggedId);
+    const toIndex = sidebarOrder.indexOf(targetId);
+    if (fromIndex !== -1 && toIndex !== -1) {
+      const items = [...sidebarOrder];
+      const [moved] = items.splice(fromIndex, 1);
+      items.splice(toIndex, 0, moved);
+      setSidebarOrder(items);
+    }
+    setDraggedId(null);
+  };
+  const handleDragEnd = () => { setDraggedId(null); setDragOverId(null); };
 
   return (
     <div>
-      <div className="set-h">Optional tabs</div>
-      <div className="set-row">
-        <div>
-          <div className="set-rl">Council</div>
-          <div className="set-rsub">Multi-model discussion</div>
-        </div>
-        <button
-          className={`tog ${tabs.council ? "on" : ""}`}
-          onClick={() => setTabs({ ...tabs, council: !tabs.council })}
-        />
+      <div className="set-h">Sidebar Items</div>
+      <div className="set-rsub" style={{ marginBottom: 12, padding: "0 4px" }}>
+        Drag the handle to reorder. Toggle to show/hide items.
       </div>
-      <div className="set-row">
-        <div>
-          <div className="set-rl">Sparks</div>
-          <div className="set-rsub">Saved AI visualizations</div>
-        </div>
-        <button
-          className={`tog ${tabs.sparks ? "on" : ""}`}
-          onClick={() => setTabs({ ...tabs, sparks: !tabs.sparks })}
-        />
+      <div className="cp-list" style={{ marginTop: 4 }}>
+        {orderedItems.map((item) => {
+          const isDragging = draggedId === item.id;
+          const isDragOver = dragOverId === item.id;
+          return (
+            <div
+              key={item.id}
+              className={`cp-item${isDragOver ? ' drag-over' : ''}${isDragging ? ' dragging' : ''}`}
+              draggable
+              onDragStart={() => handleDragStart(item.id)}
+              onDragOver={(e) => handleDragOver(e, item.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, item.id)}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="cp-item-main" style={{ cursor: "grab" }}>
+                <div className="cp-item-icon" style={{ cursor: "grab" }}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: "var(--tx4)" }}>
+                    <circle cx="6" cy="4" r="1.5" fill="currentColor" />
+                    <circle cx="10" cy="4" r="1.5" fill="currentColor" />
+                    <circle cx="6" cy="8" r="1.5" fill="currentColor" />
+                    <circle cx="10" cy="8" r="1.5" fill="currentColor" />
+                    <circle cx="6" cy="12" r="1.5" fill="currentColor" />
+                    <circle cx="10" cy="12" r="1.5" fill="currentColor" />
+                  </svg>
+                </div>
+                <span className="cp-item-name">{item.label}</span>
+                <span className="cp-item-meta">{item.sub}</span>
+                <button
+                  className={`tog ${enabled.has(item.id) ? "on" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); toggle(item.id); }}
+                  style={{ flexShrink: 0 }}
+                />
+              </div>
+            </div>
+          );
+        })}
+        {disabledItems.length > 0 && (
+          <>
+            <div className="set-h" style={{ marginTop: 20, marginBottom: 8 }}>Hidden Items</div>
+            {disabledItems.map((item) => (
+              <div key={item.id} className="cp-item disabled">
+                <div className="cp-item-main" style={{ opacity: 0.5 }}>
+                  <div style={{ width: 28, flexShrink: 0 }} />
+                  <span className="cp-item-name">{item.label}</span>
+                  <span className="cp-item-meta">{item.sub}</span>
+                  <button
+                    className="tog"
+                    onClick={() => toggle(item.id)}
+                    style={{ flexShrink: 0 }}
+                  />
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </div>
-      <div className="set-row" style={{ border: "none" }}>
-        <div>
-          <div className="set-rl">Projects</div>
-          <div className="set-rsub">Group chats into folders</div>
-        </div>
-        <button
-          className={`tog ${tabs.projects ? "on" : ""}`}
-          onClick={() => setTabs({ ...tabs, projects: !tabs.projects })}
-        />
-      </div>
+      <button
+        className="cp-btn secondary"
+        onClick={resetToDefault}
+        style={{ marginTop: 16 }}
+      >
+        <RefreshCw size={14} /> Reset to default
+      </button>
     </div>
   );
 }
@@ -1137,13 +1226,17 @@ function GeneralPanel({
 }) {
   const autoUpdateEnabled = useStore((s) => s.autoUpdateEnabled);
   const setAutoUpdateEnabled = useStore((s) => s.setAutoUpdateEnabled);
+  const aiSearch = useStore((s) => s.aiSearch);
+  const setAiSearch = useStore((s) => s.setAiSearch);
+  const userName = useStore((s) => s.userName);
+  const setUserName = useStore((s) => s.setUserName);
+  const autoSave = useStore((s) => s.autoSave);
+  const setAutoSave = useStore((s) => s.setAutoSave);
+  const telemetry = useStore((s) => s.telemetry);
+  const setTelemetry = useStore((s) => s.setTelemetry);
+  const hardwareAcceleration = useStore((s) => s.hardwareAcceleration);
+  const setHardwareAcceleration = useStore((s) => s.setHardwareAcceleration);
   const isMac = navigator.userAgent.toLowerCase().includes("mac");
-  const [name, setName] = useState("");
-  const [settings, setSettings] = useState({
-    autoSave: true,
-    telemetry: false,
-    hardware: true,
-  });
 
   return (
     <div>
@@ -1158,8 +1251,8 @@ function GeneralPanel({
         <input
           type="text"
           placeholder="Enter your name…"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={userName}
+          onChange={(e) => setUserName(e.target.value)}
           style={{
             width: 160,
             background: "var(--sf2)",
@@ -1190,14 +1283,22 @@ function GeneralPanel({
       </div>
       <div className="set-row">
         <div>
+          <div className="set-rl">AI-powered search</div>
+          <div className="set-rsub">Use AI to find chats by meaning, not just keywords</div>
+        </div>
+        <button
+          className={`tog ${aiSearch ? "on" : ""}`}
+          onClick={() => setAiSearch(!aiSearch)}
+        />
+      </div>
+      <div className="set-row">
+        <div>
           <div className="set-rl">Auto-save conversations</div>
           <div className="set-rsub">Save chats automatically as you type</div>
         </div>
         <button
-          className={`tog ${settings.autoSave ? "on" : ""}`}
-          onClick={() =>
-            setSettings({ ...settings, autoSave: !settings.autoSave })
-          }
+          className={`tog ${autoSave ? "on" : ""}`}
+          onClick={() => setAutoSave(!autoSave)}
         />
       </div>
       <div className="set-row">
@@ -1206,10 +1307,8 @@ function GeneralPanel({
           <div className="set-rsub">Anonymous usage stats to improve Byte</div>
         </div>
         <button
-          className={`tog ${settings.telemetry ? "on" : ""}`}
-          onClick={() =>
-            setSettings({ ...settings, telemetry: !settings.telemetry })
-          }
+          className={`tog ${telemetry ? "on" : ""}`}
+          onClick={() => setTelemetry(!telemetry)}
         />
       </div>
       <div className="set-row" style={{ opacity: isMac ? 0.5 : 1 }}>
@@ -1242,10 +1341,8 @@ function GeneralPanel({
           <div className="set-rsub">Use GPU for rendering when available</div>
         </div>
         <button
-          className={`tog ${settings.hardware ? "on" : ""}`}
-          onClick={() =>
-            setSettings({ ...settings, hardware: !settings.hardware })
-          }
+          className={`tog ${hardwareAcceleration ? "on" : ""}`}
+          onClick={() => setHardwareAcceleration(!hardwareAcceleration)}
         />
       </div>
     </div>
